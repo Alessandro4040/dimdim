@@ -1,13 +1,12 @@
 // ============================================
 // Configurações globais
 // ============================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbyGEwyqJHIp2F-aO1YcmvbctXm0OSMiYnsArapnWHgEWbQklEP64X3_ea5VhAt4IN-r/exec'; // substitua pelo seu
+const API_URL = 'https://script.google.com/macros/s/AKfycbweYsdwHphUf1hdNjr9ZJGxR6TlNG27C1w45lI-164s2FhSH7LUAMZk6-_GpnN_cXGE/exec'; // substitua pelo seu
 const DB_NAME = 'financas_familiar_v2';
 const STORE_TRANSACOES = 'transacoes';
 const STORE_CONTAS = 'contas';
 const STORE_CATEGORIAS = 'categorias';
 const STORE_METAS = 'metas';
-const SENHA_MESTRA = 'Ale..andro@2026'; // pode alterar
 
 let db;
 let transacoes = [], contas = [], categorias = [], metas = [];
@@ -25,7 +24,6 @@ let temaAtual = localStorage.getItem('tema') || 'claro';
 const request = indexedDB.open(DB_NAME, 1);
 request.onupgradeneeded = (e) => {
     const db = e.target.result;
-    // Stores
     if (!db.objectStoreNames.contains(STORE_TRANSACOES)) {
         const store = db.createObjectStore(STORE_TRANSACOES, { keyPath: 'id' });
         store.createIndex('data', 'data');
@@ -37,7 +35,6 @@ request.onupgradeneeded = (e) => {
     }
     if (!db.objectStoreNames.contains(STORE_CATEGORIAS)) {
         const storeCat = db.createObjectStore(STORE_CATEGORIAS, { keyPath: 'id' });
-        // categorias padrão
         storeCat.put({ id: 'cat1', nome: 'Salário', tipo: 'receita', icone: '💰' });
         storeCat.put({ id: 'cat2', nome: 'Alimentação', tipo: 'despesa', icone: '🍔' });
         storeCat.put({ id: 'cat3', nome: 'Transporte', tipo: 'despesa', icone: '🚗' });
@@ -53,15 +50,75 @@ request.onupgradeneeded = (e) => {
 request.onsuccess = (e) => {
     db = e.target.result;
     document.getElementById('filtroMes').value = mesAtual;
-    carregarTudo();
-    sincronizar();
+    if (localStorage.getItem('logado') === 'true') {
+        carregarTudo();
+        sincronizar();
+    }
     verificarNotificacoes();
-    setInterval(verificarNotificacoes, 3600000); // a cada hora
+    setInterval(verificarNotificacoes, 3600000); 
 };
 request.onerror = (e) => console.error('Erro IndexedDB', e);
 
 // ============================================
-// Carregar todos os dados do IndexedDB
+// Login Seguro via API
+// ============================================
+async function fazerLogin() {
+    const senha = document.getElementById('inputSenha').value;
+    const btn = document.getElementById('btnLogin');
+    const erroMsg = document.getElementById('loginErro');
+    
+    if(!senha) return;
+    
+    erroMsg.style.display = 'none';
+
+    if (!navigator.onLine) {
+        if (localStorage.getItem('tokenOffline') === btoa(senha)) {
+            entrarNoApp();
+        } else {
+            erroMsg.innerText = 'Offline: Senha incorreta ou não salva no dispositivo.';
+            erroMsg.style.display = 'block';
+        }
+        return;
+    }
+
+    btn.innerText = 'Verificando...';
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch(`${API_URL}?action=login&token=${encodeURIComponent(senha)}`);
+        const data = await resp.json();
+        
+        if (data.error) {
+            erroMsg.innerText = 'Senha incorreta.';
+            erroMsg.style.display = 'block';
+        } else {
+            localStorage.setItem('tokenOffline', btoa(senha));
+            localStorage.setItem('logado', 'true');
+            entrarNoApp();
+        }
+    } catch (e) {
+        erroMsg.innerText = 'Erro ao conectar. Tente novamente.';
+        erroMsg.style.display = 'block';
+    } finally {
+        btn.innerText = 'Entrar';
+        btn.disabled = false;
+    }
+}
+
+function entrarNoApp() {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appMain').style.display = 'block';
+    carregarTudo();
+    sincronizar();
+}
+
+if (localStorage.getItem('logado') === 'true') {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appMain').style.display = 'block';
+}
+
+// ============================================
+// Carregar e Atualizar Interface
 // ============================================
 function carregarTudo() {
     const tx = db.transaction([STORE_TRANSACOES, STORE_CONTAS, STORE_CATEGORIAS, STORE_METAS], 'readonly');
@@ -80,9 +137,6 @@ function carregarTudo() {
     };
 }
 
-// ============================================
-// Atualizar toda a interface
-// ============================================
 function atualizarInterface() {
     atualizarContasGrid();
     atualizarSelects();
@@ -114,26 +168,31 @@ function atualizarContasGrid() {
 }
 
 function atualizarSelects() {
-    const selectContaTrans = document.getElementById('transacaoConta');
-    const selectFiltroConta = document.getElementById('filtroConta');
-    const selectGraficoConta = document.getElementById('filtroGraficoConta');
-    const selectMetaConta = document.getElementById('metaConta');
+    const selects = {
+        conta: ['transacaoConta', 'filtroConta', 'filtroGraficoConta', 'metaConta']
+    };
     
-    let options = '<option value="">Selecione uma conta</option>';
-    contas.forEach(c => options += `<option value="${c.id}">${c.nome}</option>`);
-    selectContaTrans.innerHTML = options;
-    
-    let filterOptions = '<option value="">Todas contas</option>';
-    contas.forEach(c => filterOptions += `<option value="${c.id}">${c.nome}</option>`);
-    selectFiltroConta.innerHTML = filterOptions;
-    selectGraficoConta.innerHTML = filterOptions;
-    selectMetaConta.innerHTML = filterOptions;
+    let optionsConta = '<option value="">Selecione uma conta</option>';
+    let optionsFiltro = '<option value="">Todas contas</option>';
+    contas.forEach(c => {
+        optionsConta += `<option value="${c.id}">${c.nome}</option>`;
+        optionsFiltro += `<option value="${c.id}">${c.nome}</option>`;
+    });
+
+    document.getElementById('transacaoConta').innerHTML = optionsConta;
+    document.getElementById('metaConta').innerHTML = optionsConta;
+    document.getElementById('filtroConta').innerHTML = optionsFiltro;
+    document.getElementById('filtroGraficoConta').innerHTML = optionsFiltro;
+
+    const selectCategoria = document.getElementById('transacaoCategoria');
+    let optionsCat = '<option value="">Selecione uma categoria</option>';
+    categorias.forEach(c => optionsCat += `<option value="${c.id}">${c.icone} ${c.nome}</option>`);
+    selectCategoria.innerHTML = optionsCat;
 }
 
 function atualizarListaTransacoes() {
     const busca = document.getElementById('busca').value.toLowerCase();
     const contaFiltro = document.getElementById('filtroConta').value;
-    const [ano, mes] = mesAtual.split('-');
     
     const filtradas = transacoes.filter(t => {
         if (t.data.slice(0,7) !== mesAtual) return false;
@@ -185,7 +244,7 @@ function atualizarResumo() {
 
 function calcularSaldoConta(contaId) {
     return transacoes.reduce((acc, t) => {
-        if (t.conta_id === contaId && t.pago !== false) { // considera pago ou não futuro
+        if (t.conta_id === contaId && t.pago !== false) {
             const v = parseFloat(t.valor) || 0;
             return acc + (t.tipo === 'receita' ? v : -v);
         }
@@ -197,17 +256,21 @@ function atualizarMetasLista() {
     const div = document.getElementById('metasLista');
     div.innerHTML = '';
     metas.forEach(m => {
-        const progresso = (m.valor_atual / m.valor_objetivo * 100).toFixed(1);
+        const progresso = m.valor_objetivo > 0 ? (m.valor_atual / m.valor_objetivo * 100).toFixed(1) : 0;
         div.innerHTML += `
-            <div style="background: var(--card); border-radius: 20px; padding: 16px; margin-bottom: 12px;">
-                <h4>${m.nome}</h4>
-                <div style="display: flex; justify-content: space-between;">
+            <div style="background: var(--card); border-radius: 20px; padding: 16px; margin-bottom: 12px; border: 1px solid var(--border);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h4 style="margin: 0;">${m.nome}</h4>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="editarMeta('${m.id}')" style="background: none; border: none; font-size: 16px;">✏️</button>
+                        <button onclick="excluirMeta('${m.id}')" style="background: none; border: none; font-size: 16px;">🗑️</button>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 8px;">
                     <span>R$ ${m.valor_atual} / R$ ${m.valor_objetivo}</span>
                     <span>${progresso}%</span>
                 </div>
-                <progress value="${m.valor_atual}" max="${m.valor_objetivo}" style="width:100%; height:20px;"></progress>
-                <button onclick="editarMeta('${m.id}')">Editar</button>
-                <button onclick="excluirMeta('${m.id}')">Excluir</button>
+                <progress value="${m.valor_atual}" max="${m.valor_objetivo}" style="width:100%; height:12px; border-radius: 10px;"></progress>
             </div>
         `;
     });
@@ -277,7 +340,7 @@ function salvarTransacao() {
                 data: new Date(new Date(data).setMonth(new Date(data).getMonth() + i - 1)).toISOString().slice(0,10),
                 descricao: `${descricao} (${i}/${parcelas})`,
                 valor: valorParcela,
-                pago: i === 1 ? pago : false, // só a primeira pode estar paga
+                pago: i === 1 ? pago : false,
                 parcela_num: i,
                 parcela_total: parcelas,
                 id_original: idBase,
@@ -320,9 +383,9 @@ function editarTransacao(id) {
     document.getElementById('transacaoDescricao').value = t.descricao;
     document.getElementById('transacaoValor').value = t.valor;
     document.getElementById('transacaoPago').checked = t.pago !== false;
-    if (t.parcela_total) {
-        document.getElementById('parcelasNum').value = t.parcela_total;
-    }
+    
+    if (t.parcela_total) document.getElementById('parcelasNum').value = t.parcela_total;
+    
     if (t.foto) {
         fotoBase64 = t.foto;
         document.getElementById('fotoPreview').src = t.foto;
@@ -380,7 +443,6 @@ function excluirConta(id) {
     if (confirm('Remover conta? Todas as transações associadas serão perdidas.')) {
         const tx = db.transaction([STORE_CONTAS, STORE_TRANSACOES], 'readwrite');
         tx.objectStore(STORE_CONTAS).delete(id);
-        // remover transações da conta
         transacoes.filter(t => t.conta_id === id).forEach(t => {
             tx.objectStore(STORE_TRANSACOES).delete(t.id);
         });
@@ -389,16 +451,25 @@ function excluirConta(id) {
 }
 
 // ============================================
-// Metas
+// CRUD Metas
 // ============================================
 document.getElementById('btnSalvarMeta').onclick = salvarMeta;
+
+function abrirModalMeta() {
+    editMetaId = null;
+    document.getElementById('metaNome').value = '';
+    document.getElementById('metaValorObjetivo').value = '';
+    document.getElementById('metaDataLimite').value = '';
+    document.getElementById('metaConta').value = '';
+    abrirModal('modalMeta');
+}
 
 function salvarMeta() {
     const meta = {
         id: editMetaId || 'meta_' + Date.now(),
         nome: document.getElementById('metaNome').value,
         valor_objetivo: parseFloat(document.getElementById('metaValorObjetivo').value) || 0,
-        valor_atual: 0,
+        valor_atual: editMetaId ? (metas.find(m => m.id === editMetaId)?.valor_atual || 0) : 0,
         data_limite: document.getElementById('metaDataLimite').value,
         conta_id: document.getElementById('metaConta').value,
         sinc: 0
@@ -409,14 +480,31 @@ function salvarMeta() {
     tx.oncomplete = () => {
         fecharModal('modalMeta');
         carregarTudo();
+        sincronizar();
     };
 }
 
-function editarMeta(id) { /* similar */ alert('implementar edição'); }
-function excluirMeta(id) { /* similar */ }
+function editarMeta(id) {
+    const m = metas.find(m => m.id === id);
+    if (!m) return;
+    editMetaId = id;
+    document.getElementById('metaNome').value = m.nome;
+    document.getElementById('metaValorObjetivo').value = m.valor_objetivo;
+    document.getElementById('metaDataLimite').value = m.data_limite || '';
+    document.getElementById('metaConta').value = m.conta_id || '';
+    abrirModal('modalMeta');
+}
+
+function excluirMeta(id) {
+    if(confirm('Tem certeza que deseja remover esta meta?')) {
+        const tx = db.transaction(STORE_METAS, 'readwrite');
+        tx.objectStore(STORE_METAS).delete(id);
+        tx.oncomplete = () => carregarTudo();
+    }
+}
 
 // ============================================
-// Foto
+// Tratamento de Fotos e UX
 // ============================================
 document.getElementById('fotoInput').onchange = (e) => {
     const reader = new FileReader();
@@ -438,8 +526,60 @@ document.getElementById('fotoInput').onchange = (e) => {
     reader.readAsDataURL(e.target.files[0]);
 };
 
+function abrirZoom(src) {
+    if (src && src.startsWith('data:image')) {
+        document.getElementById('zoomedImg').src = src;
+        document.getElementById('zoomOverlay').classList.add('active');
+    }
+}
+
+function fecharZoom() {
+    document.getElementById('zoomOverlay').classList.remove('active');
+}
+
+function alternarTema() {
+    temaAtual = temaAtual === 'claro' ? 'escuro' : 'claro';
+    document.documentElement.setAttribute('data-theme', temaAtual);
+    localStorage.setItem('tema', temaAtual);
+}
+if (temaAtual === 'escuro') document.documentElement.setAttribute('data-theme', 'escuro');
+
 // ============================================
-// Navegação entre views
+// Relatórios Personalizados
+// ============================================
+document.getElementById('btnConfirmarExportar').onclick = () => {
+    const dataIni = document.getElementById('exportDataIni').value;
+    const dataFim = document.getElementById('exportDataFim').value;
+
+    if (!dataIni || !dataFim) {
+        alert('Selecione as datas para continuar!');
+        return;
+    }
+
+    const transacoesFiltradas = transacoes.filter(t => t.data >= dataIni && t.data <= dataFim);
+    
+    if (transacoesFiltradas.length === 0) {
+        alert('Nenhuma transação encontrada no período.');
+        return;
+    }
+
+    const linhas = transacoesFiltradas.map(t => {
+        const conta = contas.find(c => c.id === t.conta_id)?.nome || '';
+        const cat = categorias.find(c => c.id === t.categoria_id)?.nome || '';
+        return `${t.data},${cat},${t.descricao},${t.valor},${t.tipo},${conta}`;
+    }).join('\n');
+    
+    const blob = new Blob(['data,categoria,descricao,valor,tipo,conta\n' + linhas], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `relatorio_${dataIni}_ate_${dataFim}.csv`;
+    a.click();
+    
+    fecharModal('modalExportar');
+};
+
+// ============================================
+// Navegação e Modais Globais
 // ============================================
 document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -459,6 +599,9 @@ document.getElementById('fabAdd').onclick = () => {
     document.getElementById('fotoPreview').style.display = 'none';
     document.getElementById('parcelasContainer').style.display = 'none';
     document.getElementById('transacaoPago').checked = true;
+    document.getElementById('transacaoDescricao').value = '';
+    document.getElementById('transacaoValor').value = '';
+    document.getElementById('transacaoData').value = new Date().toISOString().slice(0, 10);
     abrirModal('modalTransacao');
 };
 
@@ -466,76 +609,68 @@ document.getElementById('transacaoTipo').addEventListener('change', (e) => {
     document.getElementById('parcelasContainer').style.display = e.target.value === 'despesa' ? 'block' : 'none';
 });
 
-// ============================================
-// Modais
-// ============================================
 function abrirModal(id) {
     document.getElementById(id).classList.add('active');
     document.getElementById('overlay').classList.add('active');
 }
+
 function fecharModal(id) {
     document.getElementById(id).classList.remove('active');
     document.getElementById('overlay').classList.remove('active');
 }
-function fecharTudo() {
-    document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
-    document.getElementById('overlay').classList.remove('active');
-}
+
+document.getElementById('filtroMes').addEventListener('change', (e) => {
+    mesAtual = e.target.value;
+    atualizarInterface();
+});
+document.getElementById('busca').addEventListener('input', atualizarListaTransacoes);
+document.getElementById('filtroConta').addEventListener('change', atualizarListaTransacoes);
+document.getElementById('filtroGraficoConta').addEventListener('change', desenharGrafico);
 
 // ============================================
-// Login
-// ============================================
-function fazerLogin() {
-    const senha = document.getElementById('inputSenha').value;
-    if (senha === SENHA_MESTRA) {
-        document.getElementById('loginScreen').style.display = 'none';
-        document.getElementById('appMain').style.display = 'block';
-        localStorage.setItem('logado', 'true');
-    } else {
-        document.getElementById('loginErro').style.display = 'block';
-    }
-}
-if (localStorage.getItem('logado') === 'true') {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('appMain').style.display = 'block';
-}
-
-// ============================================
-// Tema escuro/claro
-// ============================================
-function alternarTema() {
-    temaAtual = temaAtual === 'claro' ? 'escuro' : 'claro';
-    document.documentElement.setAttribute('data-theme', temaAtual);
-    localStorage.setItem('tema', temaAtual);
-}
-if (temaAtual === 'escuro') document.documentElement.setAttribute('data-theme', 'escuro');
-
-// ============================================
-// Zoom na foto
-// ============================================
-function abrirZoom(src) {
-    if (src && src.startsWith('data:image')) {
-        document.getElementById('zoomedImg').src = src;
-        document.getElementById('zoomOverlay').classList.add('active');
-    }
-}
-function fecharZoom() {
-    document.getElementById('zoomOverlay').classList.remove('active');
-}
-
-// ============================================
-// Sincronização com Google Sheets
+// Sincronização Google Sheets / Notificações
 // ============================================
 async function sincronizar() {
     if (!navigator.onLine) return;
-    // Implementar sincronização bidirecional (igual ao original, mas com novos stores)
-    // ... (código similar ao original, adaptado para transações, contas, categorias, metas)
-    // Por brevidade, mantemos a estrutura original, mas você precisará expandir.
+    const tokenOffline = localStorage.getItem('tokenOffline');
+    if (!tokenOffline) return;
+
+    try {
+        const token = atob(tokenOffline);
+        document.getElementById('statusLabel').innerText = '🔄 Sincronizando...';
+        
+        const pendentesTrans = transacoes.filter(t => t.sinc === 0);
+        const pendentesContas = contas.filter(c => c.sinc === 0);
+        const pendentesMetas = metas.filter(m => m.sinc === 0);
+
+        if(pendentesTrans.length > 0 || pendentesContas.length > 0 || pendentesMetas.length > 0) {
+            const postData = {
+                token: token,
+                transacoes: pendentesTrans,
+                contas: pendentesContas,
+                categorias: [],
+                metas: pendentesMetas
+            };
+
+            await fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify(postData)
+            });
+
+            const tx = db.transaction([STORE_TRANSACOES, STORE_CONTAS, STORE_METAS], 'readwrite');
+            pendentesTrans.forEach(t => { t.sinc = 1; tx.objectStore(STORE_TRANSACOES).put(t); });
+            pendentesContas.forEach(c => { c.sinc = 1; tx.objectStore(STORE_CONTAS).put(c); });
+            pendentesMetas.forEach(m => { m.sinc = 1; tx.objectStore(STORE_METAS).put(m); });
+        }
+
+        document.getElementById('statusLabel').innerText = '🌐 Online';
+        document.getElementById('statusLabel').className = 'status online';
+    } catch (err) {
+        document.getElementById('statusLabel').innerText = '⚠️ Erro Sinc';
+        document.getElementById('statusLabel').className = 'status offline';
+    }
 }
 
-// ============================================
-// Notificações de pendências
-// ============================================
 function verificarNotificacoes() {
     if (!("Notification" in window) || Notification.permission !== 'granted') return;
     const hoje = new Date().toISOString().slice(0,10);
@@ -546,32 +681,3 @@ function verificarNotificacoes() {
     });
 }
 if (Notification.permission === 'default') Notification.requestPermission();
-
-// ============================================
-// Exportar relatório
-// ============================================
-document.getElementById('btnExportar').onclick = () => {
-    const linhas = transacoes
-        .filter(t => t.data.slice(0,7) === mesAtual)
-        .map(t => {
-            const conta = contas.find(c => c.id === t.conta_id)?.nome || '';
-            const cat = categorias.find(c => c.id === t.categoria_id)?.nome || '';
-            return `${t.data},${cat},${t.descricao},${t.valor},${t.tipo},${conta}`;
-        }).join('\n');
-    const blob = new Blob(['data,categoria,descricao,valor,tipo,conta\n' + linhas], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `relatorio_${mesAtual}.csv`;
-    a.click();
-};
-
-// ============================================
-// Eventos de UI
-// ============================================
-document.getElementById('filtroMes').addEventListener('change', (e) => {
-    mesAtual = e.target.value;
-    atualizarInterface();
-});
-document.getElementById('busca').addEventListener('input', atualizarListaTransacoes);
-document.getElementById('filtroConta').addEventListener('change', atualizarListaTransacoes);
-document.getElementById('filtroGraficoConta').addEventListener('change', desenharGrafico);
