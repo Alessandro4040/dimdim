@@ -6,7 +6,7 @@
     <title>Finanças Familiar</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830283.png"> <!-- ícone de nota de dinheiro -->
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830283.png">
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -30,182 +30,70 @@
             --placeholder: #64748b;
             --shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
         }
-        body {
-            background: var(--bg);
-            color: var(--txt);
-            padding: 16px 16px 90px;
-            transition: background 0.3s, color 0.3s;
-        }
+        body { background: var(--bg); color: var(--txt); padding: 16px 16px 90px; transition: background 0.3s, color 0.3s; }
         .container { max-width: 500px; margin: 0 auto; }
-
-        /* Tela de login */
-        #loginScreen {
-            position: fixed; inset: 0; background: var(--bg); display: flex;
-            justify-content: center; align-items: center; z-index: 2000; padding: 20px;
-        }
-        .login-box {
-            background: var(--card); padding: 32px; border-radius: 32px;
-            width: 100%; max-width: 360px; box-shadow: var(--shadow);
-        }
+        #loginScreen { position: fixed; inset: 0; background: var(--bg); display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
+        .login-box { background: var(--card); padding: 32px; border-radius: 32px; width: 100%; max-width: 360px; box-shadow: var(--shadow); }
         .login-box img { width: 80px; display: block; margin: 0 auto 20px; }
         .login-box h3 { text-align: center; margin-bottom: 8px; }
         .login-box p { text-align: center; color: var(--placeholder); margin-bottom: 24px; }
-
-        /* Header */
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
-        }
-        .periodo {
-            display: flex; gap: 8px; align-items: center;
-            background: var(--card); padding: 6px 12px; border-radius: 40px;
-            border: 1px solid var(--border);
-        }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .periodo { display: flex; gap: 8px; align-items: center; background: var(--card); padding: 6px 12px; border-radius: 40px; border: 1px solid var(--border); }
         .periodo input[type="month"] { border: none; background: transparent; color: var(--txt); }
-        .status {
-            font-size: 12px; padding: 6px 12px; border-radius: 40px;
-            background: var(--card); border: 1px solid var(--border);
-        }
+        .status { font-size: 12px; padding: 6px 12px; border-radius: 40px; background: var(--card); border: 1px solid var(--border); }
         .online { color: var(--s); } .offline { color: var(--d); }
-
-        /* Cards de saldo e contas */
-        .saldo-geral {
-            background: linear-gradient(145deg, var(--p), #1d4ed8);
-            color: white; padding: 24px; border-radius: 32px;
-            margin-bottom: 20px; box-shadow: 0 10px 20px -5px rgba(37,99,235,0.3);
-        }
+        .saldo-geral { background: linear-gradient(145deg, var(--p), #1d4ed8); color: white; padding: 24px; border-radius: 32px; margin-bottom: 20px; box-shadow: 0 10px 20px -5px rgba(37,99,235,0.3); }
         .saldo-geral small { opacity: 0.9; font-size: 14px; }
         .saldo-geral h1 { font-size: 2.5rem; margin: 8px 0 16px; }
         .resumo-rapido { display: flex; justify-content: space-between; }
         .badge { background: rgba(255,255,255,0.2); padding: 8px 12px; border-radius: 40px; }
-
-        .contas-grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-            gap: 12px; margin-bottom: 20px;
-        }
-        .conta-card {
-            background: var(--card); border-radius: 20px; padding: 16px;
-            border: 1px solid var(--border); box-shadow: var(--shadow);
-        }
+        .contas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px; }
+        .conta-card { background: var(--card); border-radius: 20px; padding: 16px; border: 1px solid var(--border); box-shadow: var(--shadow); }
         .conta-card .tipo { font-size: 12px; color: var(--placeholder); }
         .conta-card .saldo { font-size: 1.4rem; font-weight: bold; margin: 8px 0; }
         .conta-card .vencimento { font-size: 11px; color: var(--d); }
-
-        /* Busca e filtros */
-        .busca-filtros {
-            display: flex; gap: 8px; margin-bottom: 20px;
-        }
-        .busca-filtros input {
-            flex: 1; padding: 14px; border-radius: 40px; border: 1px solid var(--border);
-            background: var(--card); color: var(--txt);
-        }
-        .busca-filtros select {
-            padding: 0 16px; border-radius: 40px; border: 1px solid var(--border);
-            background: var(--card); color: var(--txt);
-        }
-
-        /* Lista de transações */
-        .transacao-item {
-            background: var(--card); border-radius: 20px; padding: 16px;
-            margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
-            border: 1px solid var(--border);
-        }
-        .mini-foto {
-            width: 50px; height: 50px; border-radius: 16px; object-fit: cover;
-            background: var(--border); cursor: pointer;
-        }
+        .busca-filtros { display: flex; gap: 8px; margin-bottom: 20px; }
+        .busca-filtros input { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid var(--border); background: var(--card); color: var(--txt); }
+        .busca-filtros select { padding: 0 16px; border-radius: 40px; border: 1px solid var(--border); background: var(--card); color: var(--txt); }
+        .transacao-item { background: var(--card); border-radius: 20px; padding: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); }
+        .mini-foto { width: 50px; height: 50px; border-radius: 16px; object-fit: cover; background: var(--border); cursor: pointer; }
         .info { flex: 1; }
         .info .desc { font-weight: 600; margin-bottom: 4px; }
         .info .categoria { font-size: 12px; color: var(--placeholder); }
-        .valor {
-            font-weight: 700; font-size: 1.2rem;
-        }
+        .valor { font-weight: 700; font-size: 1.2rem; }
         .valor.receita { color: var(--s); } .valor.despesa { color: var(--d); }
-
-        /* Botão flutuante de adicionar */
-        .fab {
-            position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px;
-            border-radius: 30px; background: var(--p); color: white;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 28px; box-shadow: 0 10px 20px rgba(37,99,235,0.4);
-            border: none; cursor: pointer; z-index: 100;
-        }
-
-        /* Navegação inferior */
-        .nav-bottom {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            background: var(--card); border-top: 1px solid var(--border);
-            display: flex; justify-content: space-around; padding: 12px 0;
-            backdrop-filter: blur(10px);
-        }
-        .nav-item {
-            background: none; border: none; color: var(--placeholder);
-            font-size: 12px; text-align: center; transition: 0.2s;
-        }
+        .fab { position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px; border-radius: 30px; background: var(--p); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 10px 20px rgba(37,99,235,0.4); border: none; cursor: pointer; z-index: 100; }
+        .nav-bottom { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 12px 0; backdrop-filter: blur(10px); }
+        .nav-item { background: none; border: none; color: var(--placeholder); font-size: 12px; text-align: center; transition: 0.2s; }
         .nav-item.active { color: var(--p); font-weight: 600; }
-
-        /* Modais */
-        .modal {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 90%; max-width: 420px; max-height: 85vh; overflow-y: auto;
-            background: var(--card); border-radius: 32px; padding: 24px;
-            z-index: 1001; display: none; box-shadow: var(--shadow);
-        }
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 420px; max-height: 85vh; overflow-y: auto; background: var(--card); border-radius: 32px; padding: 24px; z-index: 1001; display: none; box-shadow: var(--shadow); }
         .modal.active { display: block; }
-        .overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.6);
-            z-index: 1000; display: none; backdrop-filter: blur(4px);
-        }
+        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; backdrop-filter: blur(4px); }
         .overlay.active { display: flex; align-items: center; justify-content: center; }
-
-        /* Formulários */
-        input, select, textarea {
-            width: 100%; padding: 16px; margin: 8px 0; border-radius: 24px;
-            border: 1px solid var(--border); background: var(--card); color: var(--txt);
-            font-size: 16px;
-        }
-        .btn {
-            width: 100%; padding: 16px; border: none; border-radius: 40px;
-            font-weight: 600; font-size: 16px; margin-top: 12px; cursor: pointer;
-        }
+        input, select, textarea { width: 100%; padding: 16px; margin: 8px 0; border-radius: 24px; border: 1px solid var(--border); background: var(--card); color: var(--txt); font-size: 16px; }
+        .btn { width: 100%; padding: 16px; border: none; border-radius: 40px; font-weight: 600; font-size: 16px; margin-top: 12px; cursor: pointer; }
         .btn.primary { background: var(--p); color: white; }
         .btn.secondary { background: transparent; border: 1px solid var(--border); color: var(--txt); }
-
-        /* Gráfico */
-        #graficoContainer {
-            background: var(--card); border-radius: 32px; padding: 20px;
-            margin: 20px 0; border: 1px solid var(--border);
-        }
-
-        /* Zoom de foto */
-        #zoomOverlay img {
-            max-width: 95%; max-height: 90%; border-radius: 24px;
-        }
-
-        /* Botão de modo escuro/claro no header */
-        .theme-toggle {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: 40px; padding: 8px 16px; cursor: pointer;
-        }
+        #graficoContainer { background: var(--card); border-radius: 32px; padding: 20px; margin: 20px 0; border: 1px solid var(--border); }
+        #zoomOverlay img { max-width: 95%; max-height: 90%; border-radius: 24px; }
+        .theme-toggle { background: var(--card); border: 1px solid var(--border); border-radius: 40px; padding: 8px 16px; cursor: pointer; }
+        .flex-row { display: flex; gap: 8px; align-items: center; }
     </style>
 </head>
 <body>
-    <!-- TELA DE LOGIN -->
     <div id="loginScreen">
         <div class="login-box">
             <img src="https://cdn-icons-png.flaticon.com/512/2830/2830283.png" alt="Logo">
             <h3>Bem‑vindo de volta</h3>
             <p>Digite sua senha mestra</p>
             <input type="password" id="inputSenha" placeholder="Senha">
-            <p id="loginErro" style="color: var(--d); font-size: 14px; display: none;">Senha incorreta</p>
-            <button class="btn primary" onclick="fazerLogin()">Entrar</button>
+            <p id="loginErro" style="color: var(--d); font-size: 14px; display: none;"></p>
+            <button class="btn primary" id="btnLogin" onclick="fazerLogin()">Entrar</button>
         </div>
     </div>
 
-    <!-- APLICATIVO PRINCIPAL (inicialmente oculto) -->
     <div id="appMain" style="display: none;">
         <div class="container">
-            <!-- HEADER -->
             <div class="header">
                 <div class="periodo">
                     <input type="month" id="filtroMes" value="">
@@ -214,7 +102,6 @@
                 <div class="theme-toggle" onclick="alternarTema()">🌓</div>
             </div>
 
-            <!-- VISÃO RESUMO -->
             <div id="viewResumo">
                 <div class="saldo-geral">
                     <small>Saldo total</small>
@@ -225,10 +112,9 @@
                     </div>
                 </div>
 
-                <!-- CONTAS (cards) -->
                 <div class="contas-grid" id="contasGrid"></div>
+                <button class="btn secondary" onclick="abrirModal('modalConta')" style="margin-bottom: 20px; padding: 12px; font-size: 14px;">+ Adicionar Nova Conta</button>
 
-                <!-- BUSCA E FILTRO -->
                 <div class="busca-filtros">
                     <input type="search" id="busca" placeholder="🔍 Buscar...">
                     <select id="filtroConta">
@@ -236,14 +122,11 @@
                     </select>
                 </div>
 
-                <!-- LISTA DE TRANSAÇÕES -->
                 <div id="listaTransacoes"></div>
 
-                <!-- BOTÃO EXPORTAR -->
-                <button class="btn secondary" id="btnExportar">📥 Exportar relatório</button>
+                <button class="btn secondary" onclick="abrirModal('modalExportar')">📥 Exportar relatório personalizado</button>
             </div>
 
-            <!-- VISÃO GRÁFICO -->
             <div id="viewGrafico" style="display: none;">
                 <div id="graficoContainer">
                     <canvas id="meuGrafico"></canvas>
@@ -255,7 +138,6 @@
                 </div>
             </div>
 
-            <!-- VISÃO METAS (cofrinho) -->
             <div id="viewMetas" style="display: none;">
                 <h3 style="margin-bottom: 16px;">🎯 Minhas metas</h3>
                 <div id="metasLista"></div>
@@ -263,10 +145,8 @@
             </div>
         </div>
 
-        <!-- BOTÃO FLUTUANTE ADICIONAR -->
         <button class="fab" id="fabAdd">+</button>
 
-        <!-- NAVEGAÇÃO INFERIOR -->
         <nav class="nav-bottom">
             <button class="nav-item active" data-view="resumo">🏠<br>Início</button>
             <button class="nav-item" data-view="grafico">📊<br>Gráfico</button>
@@ -274,24 +154,19 @@
         </nav>
     </div>
 
-    <!-- MODAL DE TRANSAÇÃO (LANÇAMENTO) -->
     <div class="modal" id="modalTransacao">
         <h4 id="modalTransacaoTitle">Nova transação</h4>
         <select id="transacaoTipo">
             <option value="receita">Receita</option>
             <option value="despesa">Despesa</option>
         </select>
-        <select id="transacaoConta">
-            <!-- preenchido via js -->
-        </select>
-        <select id="transacaoCategoria">
-            <!-- preenchido via js -->
-        </select>
+        <select id="transacaoConta"></select>
+        <select id="transacaoCategoria"></select>
         <input type="date" id="transacaoData">
         <input type="text" id="transacaoDescricao" placeholder="Descrição">
         <input type="number" id="transacaoValor" step="0.01" placeholder="Valor R$">
         <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
-            <input type="checkbox" id="transacaoPago"> <span>Já pago? (deixe desmarcado para lançamento futuro)</span>
+            <input type="checkbox" id="transacaoPago"> <span>Já pago? (desmarque para o futuro)</span>
         </label>
         <div id="parcelasContainer" style="display: none;">
             <input type="number" id="parcelasNum" placeholder="Nº de parcelas" min="1" value="1">
@@ -303,7 +178,6 @@
         <button class="btn secondary" onclick="fecharModal('modalTransacao')">Cancelar</button>
     </div>
 
-    <!-- MODAL DE CONTA -->
     <div class="modal" id="modalConta">
         <h4>Nova conta / cartão</h4>
         <input type="text" id="contaNome" placeholder="Nome (ex: Nubank, Dinheiro)">
@@ -320,20 +194,26 @@
         <button class="btn secondary" onclick="fecharModal('modalConta')">Cancelar</button>
     </div>
 
-    <!-- MODAL DE META -->
     <div class="modal" id="modalMeta">
         <h4>Nova meta</h4>
         <input type="text" id="metaNome" placeholder="Nome da meta">
         <input type="number" id="metaValorObjetivo" step="0.01" placeholder="Valor objetivo R$">
         <input type="date" id="metaDataLimite">
-        <select id="metaConta">
-            <!-- contas disponíveis -->
-        </select>
-        <button class="btn primary" id="btnSalvarMeta">Criar meta</button>
+        <select id="metaConta"></select>
+        <button class="btn primary" id="btnSalvarMeta">Salvar meta</button>
         <button class="btn secondary" onclick="fecharModal('modalMeta')">Cancelar</button>
     </div>
 
-    <!-- ZOOM DE FOTO -->
+    <div class="modal" id="modalExportar">
+        <h4>Exportar Relatório</h4>
+        <div class="flex-row">
+            <div style="flex:1"><label>Data Inicial:</label><input type="date" id="exportDataIni"></div>
+            <div style="flex:1"><label>Data Final:</label><input type="date" id="exportDataFim"></div>
+        </div>
+        <button class="btn primary" id="btnConfirmarExportar">Baixar CSV</button>
+        <button class="btn secondary" onclick="fecharModal('modalExportar')">Cancelar</button>
+    </div>
+
     <div class="overlay" id="zoomOverlay" onclick="fecharZoom()">
         <img id="zoomedImg" src="">
     </div>
