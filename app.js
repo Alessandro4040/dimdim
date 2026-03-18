@@ -1,7 +1,7 @@
 // ============================================
 // Configurações globais
 // ============================================
-const API_URL = 'https://script.google.com/macros/s/SEU_SCRIPT_ID/exec'; // substitua pelo seu
+const API_URL = 'https://script.google.com/macros/s/AKfycbyGEwyqJHIp2F-aO1YcmvbctXm0OSMiYnsArapnWHgEWbQklEP64X3_ea5VhAt4IN-r/exec'; // substitua pelo seu
 const DB_NAME = 'financas_familiar_v2';
 const STORE_TRANSACOES = 'transacoes';
 const STORE_CONTAS = 'contas';
