@@ -1,7 +1,7 @@
 // ============================================
 // Configurações globais
 // ============================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbxD2Tz0xth8R8B308U3f8BNqsSuVq__LEZSFqsHofk5S68PEwV3ewVEczNCNSgasHiW/exec'; // substitua pelo seu
+const API_URL = 'https://script.google.com/macros/s/AKfycbyl0uUcvw7iZlAEdjaIhb3NCfUZVxCKQE28DAnvg5_S-qCGknPYfF54GsndcpRwiz9v/exec'; // substitua pelo seu
 const DB_NAME = 'financas_familiar_v2';
 const STORE_TRANSACOES = 'transacoes';
 const STORE_CONTAS = 'contas';
@@ -17,47 +17,112 @@ let editContaId = null;
 let editMetaId = null;
 let mesAtual = new Date().toISOString().slice(0, 7);
 let temaAtual = localStorage.getItem('tema') || 'claro';
+let token = localStorage.getItem('app_token'); // token armazenado após login
+
+// ============================================
+// Inicialização
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+    if (token) {
+        // Tenta validar o token (opcional, pode pular para ir direto ao app)
+        validarToken();
+    } else {
+        document.getElementById('loginScreen').style.display = 'flex';
+    }
+});
+
+async function validarToken() {
+    try {
+        const response = await fetch(`${API_URL}?token=${encodeURIComponent(token)}`);
+        const data = await response.json();
+        if (data.valid) {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('appMain').style.display = 'block';
+            iniciarDB();
+        } else {
+            // Token inválido, remove e mostra login
+            localStorage.removeItem('app_token');
+            token = null;
+            document.getElementById('loginScreen').style.display = 'flex';
+        }
+    } catch (e) {
+        // Se falhar (offline), mesmo assim entra (modo offline)
+        console.warn('Offline ou erro ao validar token', e);
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appMain').style.display = 'block';
+        iniciarDB();
+    }
+}
+
+// ============================================
+// Login
+// ============================================
+async function fazerLogin() {
+    const senha = document.getElementById('inputSenha').value;
+    const erroEl = document.getElementById('loginErro');
+    erroEl.style.display = 'none';
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'login', senha: senha })
+        });
+        const data = await response.json();
+        if (data.token) {
+            token = data.token;
+            localStorage.setItem('app_token', token);
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('appMain').style.display = 'block';
+            iniciarDB();
+        } else {
+            erroEl.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Erro no login:', error);
+        erroEl.style.display = 'block';
+    }
+}
 
 // ============================================
 // Inicialização do IndexedDB
 // ============================================
-const request = indexedDB.open(DB_NAME, 1);
-request.onupgradeneeded = (e) => {
-    const db = e.target.result;
-    // Stores
-    if (!db.objectStoreNames.contains(STORE_TRANSACOES)) {
-        const store = db.createObjectStore(STORE_TRANSACOES, { keyPath: 'id' });
-        store.createIndex('data', 'data');
-        store.createIndex('conta_id', 'conta_id');
-        store.createIndex('pago', 'pago');
-    }
-    if (!db.objectStoreNames.contains(STORE_CONTAS)) {
-        db.createObjectStore(STORE_CONTAS, { keyPath: 'id' });
-    }
-    if (!db.objectStoreNames.contains(STORE_CATEGORIAS)) {
-        const storeCat = db.createObjectStore(STORE_CATEGORIAS, { keyPath: 'id' });
-        // categorias padrão
-        storeCat.put({ id: 'cat1', nome: 'Salário', tipo: 'receita', icone: '💰' });
-        storeCat.put({ id: 'cat2', nome: 'Alimentação', tipo: 'despesa', icone: '🍔' });
-        storeCat.put({ id: 'cat3', nome: 'Transporte', tipo: 'despesa', icone: '🚗' });
-        storeCat.put({ id: 'cat4', nome: 'Lazer', tipo: 'despesa', icone: '🎬' });
-        storeCat.put({ id: 'cat5', nome: 'Moradia', tipo: 'despesa', icone: '🏠' });
-        storeCat.put({ id: 'cat6', nome: 'Investimentos', tipo: 'receita', icone: '📈' });
-        storeCat.put({ id: 'cat7', nome: 'Outros', tipo: 'ambos', icone: '📦' });
-    }
-    if (!db.objectStoreNames.contains(STORE_METAS)) {
-        db.createObjectStore(STORE_METAS, { keyPath: 'id' });
-    }
-};
-request.onsuccess = (e) => {
-    db = e.target.result;
-    document.getElementById('filtroMes').value = mesAtual;
-    carregarTudo();
-    sincronizar();
-    verificarNotificacoes();
-    setInterval(verificarNotificacoes, 3600000); // a cada hora
-};
-request.onerror = (e) => console.error('Erro IndexedDB', e);
+function iniciarDB() {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_TRANSACOES)) {
+            const store = db.createObjectStore(STORE_TRANSACOES, { keyPath: 'id' });
+            store.createIndex('data', 'data');
+            store.createIndex('conta_id', 'conta_id');
+            store.createIndex('pago', 'pago');
+        }
+        if (!db.objectStoreNames.contains(STORE_CONTAS)) {
+            db.createObjectStore(STORE_CONTAS, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORE_CATEGORIAS)) {
+            const storeCat = db.createObjectStore(STORE_CATEGORIAS, { keyPath: 'id' });
+            storeCat.put({ id: 'cat1', nome: 'Salário', tipo: 'receita', icone: '💰' });
+            storeCat.put({ id: 'cat2', nome: 'Alimentação', tipo: 'despesa', icone: '🍔' });
+            storeCat.put({ id: 'cat3', nome: 'Transporte', tipo: 'despesa', icone: '🚗' });
+            storeCat.put({ id: 'cat4', nome: 'Lazer', tipo: 'despesa', icone: '🎬' });
+            storeCat.put({ id: 'cat5', nome: 'Moradia', tipo: 'despesa', icone: '🏠' });
+            storeCat.put({ id: 'cat6', nome: 'Investimentos', tipo: 'receita', icone: '📈' });
+            storeCat.put({ id: 'cat7', nome: 'Outros', tipo: 'ambos', icone: '📦' });
+        }
+        if (!db.objectStoreNames.contains(STORE_METAS)) {
+            db.createObjectStore(STORE_METAS, { keyPath: 'id' });
+        }
+    };
+    request.onsuccess = (e) => {
+        db = e.target.result;
+        document.getElementById('filtroMes').value = mesAtual;
+        carregarTudo();
+        sincronizar();
+        verificarNotificacoes();
+        setInterval(verificarNotificacoes, 3600000);
+    };
+    request.onerror = (e) => console.error('Erro IndexedDB', e);
+}
 
 // ============================================
 // Carregar todos os dados do IndexedDB
@@ -132,7 +197,6 @@ function atualizarSelects() {
 function atualizarListaTransacoes() {
     const busca = document.getElementById('busca').value.toLowerCase();
     const contaFiltro = document.getElementById('filtroConta').value;
-    const [ano, mes] = mesAtual.split('-');
     
     const filtradas = transacoes.filter(t => {
         if (t.data.slice(0,7) !== mesAtual) return false;
@@ -184,7 +248,7 @@ function atualizarResumo() {
 
 function calcularSaldoConta(contaId) {
     return transacoes.reduce((acc, t) => {
-        if (t.conta_id === contaId && t.pago !== false) { // considera pago ou não futuro
+        if (t.conta_id === contaId && t.pago !== false) {
             const v = parseFloat(t.valor) || 0;
             return acc + (t.tipo === 'receita' ? v : -v);
         }
@@ -276,7 +340,7 @@ function salvarTransacao() {
                 data: new Date(new Date(data).setMonth(new Date(data).getMonth() + i - 1)).toISOString().slice(0,10),
                 descricao: `${descricao} (${i}/${parcelas})`,
                 valor: valorParcela,
-                pago: i === 1 ? pago : false, // só a primeira pode estar paga
+                pago: i === 1 ? pago : false,
                 parcela_num: i,
                 parcela_total: parcelas,
                 id_original: idBase,
@@ -379,7 +443,6 @@ function excluirConta(id) {
     if (confirm('Remover conta? Todas as transações associadas serão perdidas.')) {
         const tx = db.transaction([STORE_CONTAS, STORE_TRANSACOES], 'readwrite');
         tx.objectStore(STORE_CONTAS).delete(id);
-        // remover transações da conta
         transacoes.filter(t => t.conta_id === id).forEach(t => {
             tx.objectStore(STORE_TRANSACOES).delete(t.id);
         });
@@ -482,37 +545,6 @@ function fecharTudo() {
 }
 
 // ============================================
-// Login (agora com validação via servidor)
-// ============================================
-async function fazerLogin() {
-    const senha = document.getElementById('inputSenha').value;
-    const erroEl = document.getElementById('loginErro');
-    erroEl.style.display = 'none';
-
-    try {
-        // Faz uma requisição para o script para validar a senha
-        const response = await fetch(`${API_URL}?action=login&senha=${encodeURIComponent(senha)}`);
-        const data = await response.json();
-        if (data.success) {
-            document.getElementById('loginScreen').style.display = 'none';
-            document.getElementById('appMain').style.display = 'block';
-            localStorage.setItem('logado', 'true');
-        } else {
-            erroEl.style.display = 'block';
-        }
-    } catch (error) {
-        console.error('Erro ao validar senha:', error);
-        erroEl.style.display = 'block';
-    }
-}
-
-// Verifica se já está logado
-if (localStorage.getItem('logado') === 'true') {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('appMain').style.display = 'block';
-}
-
-// ============================================
 // Tema escuro/claro
 // ============================================
 function alternarTema() {
@@ -536,13 +568,54 @@ function fecharZoom() {
 }
 
 // ============================================
-// Sincronização com Google Sheets
+// Sincronização com Google Sheets (com token)
 // ============================================
 async function sincronizar() {
-    if (!navigator.onLine) return;
-    // Implementar sincronização bidirecional (igual ao original, mas com novos stores)
-    // ... (código similar ao original, adaptado para transações, contas, categorias, metas)
-    // Por brevidade, mantemos a estrutura original, mas você precisará expandir.
+    if (!navigator.onLine || !token) return;
+
+    // Coletar itens não sincronizados (sinc == 0)
+    const pendentes = {
+        transacoes: await getPendentes(STORE_TRANSACOES),
+        contas: await getPendentes(STORE_CONTAS),
+        categorias: await getPendentes(STORE_CATEGORIAS),
+        metas: await getPendentes(STORE_METAS)
+    };
+
+    if (Object.values(pendentes).every(arr => arr.length === 0)) return;
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ token, ...pendentes })
+        });
+        const result = await response.json();
+        if (result.status === 'ok') {
+            // Marcar como sincronizados
+            const tx = db.transaction([STORE_TRANSACOES, STORE_CONTAS, STORE_CATEGORIAS, STORE_METAS], 'readwrite');
+            pendentes.transacoes.forEach(t => { t.sinc = 1; tx.objectStore(STORE_TRANSACOES).put(t); });
+            pendentes.contas.forEach(c => { c.sinc = 1; tx.objectStore(STORE_CONTAS).put(c); });
+            pendentes.categorias.forEach(c => { c.sinc = 1; tx.objectStore(STORE_CATEGORIAS).put(c); });
+            pendentes.metas.forEach(m => { m.sinc = 1; tx.objectStore(STORE_METAS).put(m); });
+        }
+    } catch (e) {
+        console.error('Erro na sincronização', e);
+    }
+}
+
+function getPendentes(storeName) {
+    return new Promise((resolve) => {
+        const tx = db.transaction(storeName, 'readonly');
+        const items = [];
+        tx.objectStore(storeName).openCursor().onsuccess = (e) => {
+            const cursor = e.target.result;
+            if (cursor) {
+                if (cursor.value.sinc === 0) items.push(cursor.value);
+                cursor.continue();
+            } else {
+                resolve(items);
+            }
+        };
+    });
 }
 
 // ============================================
