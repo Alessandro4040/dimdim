@@ -7,27 +7,18 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830283.png">
-    <link rel="manifest" href="manifest.json">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; }
         :root {
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --txt: #0f172a;
-            --p: #2563eb;
-            --s: #16a34a;
-            --d: #dc2626;
-            --border: #e2e8f0;
-            --placeholder: #94a3b8;
+            --bg: #f8fafc; --card: #ffffff; --txt: #0f172a;
+            --p: #2563eb; --s: #16a34a; --d: #dc2626;
+            --border: #e2e8f0; --placeholder: #94a3b8;
             --shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
         }
         [data-theme="dark"] {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --txt: #f1f5f9;
-            --border: #334155;
-            --placeholder: #64748b;
+            --bg: #0f172a; --card: #1e293b; --txt: #f1f5f9;
+            --border: #334155; --placeholder: #64748b;
             --shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
         }
         body { background: var(--bg); color: var(--txt); padding: 16px 16px 90px; transition: background 0.3s, color 0.3s; }
@@ -49,7 +40,7 @@
         .badge { background: rgba(255,255,255,0.2); padding: 8px 12px; border-radius: 40px; }
         .contas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .conta-card { background: var(--card); border-radius: 20px; padding: 16px; border: 1px solid var(--border); box-shadow: var(--shadow); }
-        .conta-card .tipo { font-size: 12px; color: var(--placeholder); }
+        .conta-card .tipo { font-size: 12px; color: var(--placeholder); text-transform: capitalize; }
         .conta-card .saldo { font-size: 1.4rem; font-weight: bold; margin: 8px 0; }
         .conta-card .vencimento { font-size: 11px; color: var(--d); }
         .busca-filtros { display: flex; gap: 8px; margin-bottom: 20px; }
@@ -64,7 +55,7 @@
         .valor.receita { color: var(--s); } .valor.despesa { color: var(--d); }
         .fab { position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px; border-radius: 30px; background: var(--p); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 10px 20px rgba(37,99,235,0.4); border: none; cursor: pointer; z-index: 100; }
         .nav-bottom { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 12px 0; backdrop-filter: blur(10px); }
-        .nav-item { background: none; border: none; color: var(--placeholder); font-size: 12px; text-align: center; transition: 0.2s; }
+        .nav-item { background: none; border: none; color: var(--placeholder); font-size: 12px; text-align: center; transition: 0.2s; cursor: pointer; }
         .nav-item.active { color: var(--p); font-weight: 600; }
         .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 420px; max-height: 85vh; overflow-y: auto; background: var(--card); border-radius: 32px; padding: 24px; z-index: 1001; display: none; box-shadow: var(--shadow); }
         .modal.active { display: block; }
@@ -104,27 +95,27 @@
 
             <div id="viewResumo">
                 <div class="saldo-geral">
-                    <small>Saldo total</small>
+                    <small>Saldo Total das Contas</small>
                     <h1 id="saldoTotal">R$ 0,00</h1>
                     <div class="resumo-rapido">
-                        <span class="badge">📈 Receitas <span id="totalRec">0</span></span>
-                        <span class="badge">📉 Despesas <span id="totalDes">0</span></span>
+                        <span class="badge">📈 Mês: R$ <span id="totalRec">0,00</span></span>
+                        <span class="badge">📉 Mês: R$ <span id="totalDes">0,00</span></span>
                     </div>
                 </div>
 
                 <div class="contas-grid" id="contasGrid"></div>
-                <button class="btn secondary" onclick="abrirModal('modalConta')" style="margin-bottom: 20px; padding: 12px; font-size: 14px;">+ Adicionar Nova Conta</button>
+                <button class="btn secondary" onclick="abrirModal('modalConta')" style="margin-bottom: 20px; padding: 12px; font-size: 14px;">+ Nova Conta</button>
 
                 <div class="busca-filtros">
-                    <input type="search" id="busca" placeholder="🔍 Buscar...">
+                    <input type="search" id="busca" placeholder="🔍 Buscar transação...">
                     <select id="filtroConta">
                         <option value="">Todas contas</option>
                     </select>
                 </div>
 
                 <div id="listaTransacoes"></div>
-
-                <button class="btn secondary" onclick="abrirModal('modalExportar')">📥 Exportar relatório personalizado</button>
+                
+                <button class="btn secondary" onclick="abrirModal('modalExportar')" style="margin-top: 10px;">📥 Exportar CSV</button>
             </div>
 
             <div id="viewGrafico" style="display: none;">
@@ -166,7 +157,7 @@
         <input type="text" id="transacaoDescricao" placeholder="Descrição">
         <input type="number" id="transacaoValor" step="0.01" placeholder="Valor R$">
         <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
-            <input type="checkbox" id="transacaoPago"> <span>Já pago? (desmarque para o futuro)</span>
+            <input type="checkbox" id="transacaoPago"> <span>Já pago / recebido?</span>
         </label>
         <div id="parcelasContainer" style="display: none;">
             <input type="number" id="parcelasNum" placeholder="Nº de parcelas" min="1" value="1">
@@ -174,22 +165,21 @@
         <button class="btn secondary" onclick="document.getElementById('fotoInput').click()">📸 Adicionar foto</button>
         <input type="file" id="fotoInput" accept="image/*" style="display: none;">
         <img id="fotoPreview" style="width: 100%; max-height: 120px; object-fit: cover; border-radius: 16px; margin: 8px 0; display: none;">
-        <button class="btn primary" id="btnSalvarTransacao">Salvar</button>
+        <button class="btn primary" id="btnSalvarTransacao">Salvar Transação</button>
         <button class="btn secondary" onclick="fecharModal('modalTransacao')">Cancelar</button>
     </div>
 
     <div class="modal" id="modalConta">
         <h4>Nova conta / cartão</h4>
-        <input type="text" id="contaNome" placeholder="Nome (ex: Nubank, Dinheiro)">
+        <input type="text" id="contaNome" placeholder="Nome (ex: Nubank, Carteira)">
         <select id="contaTipo">
             <option value="banco">Banco</option>
             <option value="cartao">Cartão de crédito</option>
             <option value="dinheiro">Dinheiro físico</option>
-            <option value="poupanca">Poupança / Cofrinho</option>
+            <option value="poupanca">Cofrinho / Poupança</option>
         </select>
         <input type="number" id="contaSaldoInicial" step="0.01" placeholder="Saldo inicial R$">
-        <input type="date" id="contaVencimento" placeholder="Data de vencimento (para cartão)">
-        <input type="number" id="contaLimite" step="0.01" placeholder="Limite (opcional)">
+        <input type="date" id="contaVencimento" placeholder="Vencimento do cartão (Opcional)">
         <button class="btn primary" id="btnSalvarConta">Salvar conta</button>
         <button class="btn secondary" onclick="fecharModal('modalConta')">Cancelar</button>
     </div>
@@ -207,10 +197,10 @@
     <div class="modal" id="modalExportar">
         <h4>Exportar Relatório</h4>
         <div class="flex-row">
-            <div style="flex:1"><label>Data Inicial:</label><input type="date" id="exportDataIni"></div>
-            <div style="flex:1"><label>Data Final:</label><input type="date" id="exportDataFim"></div>
+            <div style="flex:1"><label>Início:</label><input type="date" id="exportDataIni"></div>
+            <div style="flex:1"><label>Fim:</label><input type="date" id="exportDataFim"></div>
         </div>
-        <button class="btn primary" id="btnConfirmarExportar">Baixar CSV</button>
+        <button class="btn primary" id="btnConfirmarExportar">Baixar Planilha</button>
         <button class="btn secondary" onclick="fecharModal('modalExportar')">Cancelar</button>
     </div>
 
