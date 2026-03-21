@@ -6,6 +6,7 @@
     <title>Finanças Familiar</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830283.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -79,7 +80,7 @@
             <p>Digite sua senha mestra</p>
             <input type="password" id="inputSenha" placeholder="Senha">
             <p id="loginErro" style="color: var(--d); font-size: 14px; display: none;"></p>
-            <button class="btn primary" id="btnLogin" onclick="fazerLogin()">Entrar</button>
+            <button class="btn primary" id="btnLogin">Entrar</button>
         </div>
     </div>
 
@@ -145,6 +146,8 @@
         </nav>
     </div>
 
+    <div class="overlay" id="overlay" onclick="fecharTodasModals()"></div>
+
     <div class="modal" id="modalTransacao">
         <h4 id="modalTransacaoTitle">Nova transação</h4>
         <select id="transacaoTipo">
@@ -208,6 +211,6 @@
         <img id="zoomedImg" src="">
     </div>
 
-    <script src="app.js"></script>
+    <script src="./app.js"></script>
 </body>
 </html>
