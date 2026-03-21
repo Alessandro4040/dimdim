@@ -46,11 +46,17 @@ request.onupgradeneeded = (e) => {
 request.onsuccess = (e) => {
     db = e.target.result;
     document.getElementById('filtroMes').value = mesAtual;
-    if (localStorage.getItem('logado') === 'true') entrarNoApp();
-    else document.getElementById('loginScreen').style.display = 'flex';
+    if (localStorage.getItem('logado') === 'true') {
+        entrarNoApp();
+    } else {
+        document.getElementById('loginScreen').style.display = 'flex';
+    }
 };
 
-request.onerror = (e) => console.error('Erro IndexedDB', e);
+request.onerror = (e) => {
+    console.error('Erro IndexedDB', e);
+    alert('Erro ao abrir banco de dados local. Recarregue a página.');
+};
 
 // ============================================
 // Funções auxiliares
@@ -92,7 +98,7 @@ function deletarItem(storeName, id, onComplete) {
 }
 
 // ============================================
-// Sincronização com Google Sheets (CORS corrigido)
+// Sincronização com Google Sheets
 // ============================================
 async function sincronizar() {
     if (!navigator.onLine) {
@@ -128,7 +134,6 @@ async function sincronizar() {
             });
             const result = await response.json();
             if (!result.error) {
-                // Marcar como sincronizado
                 const tx = db.transaction([STORE_TRANSACOES, STORE_CONTAS, STORE_METAS], 'readwrite');
                 pendentesTrans.forEach(t => { t.sinc = 1; tx.objectStore(STORE_TRANSACOES).put(t); });
                 pendentesContas.forEach(c => { c.sinc = 1; tx.objectStore(STORE_CONTAS).put(c); });
@@ -160,14 +165,22 @@ async function sincronizar() {
 }
 
 // ============================================
-// Login
+// Login (com logs para depuração)
 // ============================================
 async function fazerLogin() {
     const senha = document.getElementById('inputSenha').value;
-    if (!senha) return;
+    if (!senha) {
+        alert('Digite a senha mestra.');
+        return;
+    }
     try {
-        const resp = await fetch(`${API_URL}?action=login&token=${encodeURIComponent(senha)}`);
+        console.log('Tentando login com senha:', senha);
+        const url = `${API_URL}?action=login&token=${encodeURIComponent(senha)}`;
+        console.log('URL:', url);
+        const resp = await fetch(url);
+        console.log('Resposta recebida, status:', resp.status);
         const data = await resp.json();
+        console.log('Dados da resposta:', data);
         if (data.error) {
             document.getElementById('loginErro').style.display = 'block';
             document.getElementById('loginErro').innerText = data.error;
@@ -177,7 +190,8 @@ async function fazerLogin() {
             entrarNoApp();
         }
     } catch (e) {
-        alert('Erro de conexão. Verifique sua internet.');
+        console.error('Erro no fetch do login:', e);
+        alert('Erro de conexão. Verifique sua internet e se a URL do Apps Script está correta.\n' + e.message);
     }
 }
 
@@ -389,7 +403,7 @@ function abrirModalTransacao(transacaoId = null) {
                 document.getElementById('fotoPreview').src = fotoBase64;
                 document.getElementById('fotoPreview').style.display = 'block';
             }
-            atualizarSelects(); // para carregar categorias corretas
+            atualizarSelects();
             document.getElementById('transacaoCategoria').value = t.categoria_id;
         }
     } else {
