@@ -1,7 +1,7 @@
 // ============================================
 // Configurações
 // ============================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbx6jEMNDD4MJmHW1jr2RKKNYOKgs-RW4ENjcFo2EyvCeccgiR_Q1xaiNivviO4a_cgP/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxUnI9VDXrfgMLH2aRjiVMH618jpsX3FYVBhMcieCVMGKC6H_cr8Av1I9-UFUCqkxhd/exec';
 const DB_NAME = 'financas_familiar_v3';
 const STORE_TRANSACOES = 'transacoes';
 const STORE_CONTAS = 'contas';
