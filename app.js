@@ -339,9 +339,12 @@ function atualizarDashboard() {
             }
         });
         if (c.tipo === 'corrente') saldoGeral += saldoConta;
-        htmlContas += `<div class="card" style="margin-bottom:10px; text-align:left;">
-            <strong>${c.nome}</strong> (${c.tipo})<br>
-            ${c.tipo === 'cartao' ? 'Limite Disp.' : 'Saldo'}: R$ ${saldoConta.toFixed(2)}
+        htmlContas += `<div class="card" style="margin-bottom:10px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <strong>${c.nome}</strong> (${c.tipo})<br>
+                ${c.tipo === 'cartao' ? 'Limite Disp.' : 'Saldo'}: R$ ${saldoConta.toFixed(2)}
+            </div>
+            <button onclick="editarConta('${c.id}')" style="width:auto; padding:5px; margin:0; background:none; border:none; font-size:18px; cursor:pointer;">✏️</button>
         </div>`;
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
@@ -368,8 +371,11 @@ function atualizarDashboard() {
                 <small>${t.data} - ${categoriaNome} - ${t.pago ? '✅' : '⏳'}</small>
                 ${t.foto ? `<br><a href="#" onclick="abrirZoom('${t.foto}')" style="color:var(--p);font-size:12px;">Ver Comprovante</a>` : ''}
             </div>
-            <div style="color: ${t.tipo === 'receita' ? 'var(--s)' : 'var(--d)'};">
-                R$ ${t.valor.toFixed(2)}
+            <div style="text-align:right;">
+                <div style="color: ${t.tipo === 'receita' ? 'var(--s)' : 'var(--d)'}; margin-bottom: 5px;">
+                    R$ ${t.valor.toFixed(2)}
+                </div>
+                <button onclick="editarTransacao('${t.id}')" style="width:auto; padding:2px 5px; margin:0; background:none; border:none; font-size:16px; cursor:pointer;">✏️</button>
             </div>
         </div>`;
     });
@@ -379,13 +385,16 @@ function atualizarDashboard() {
     document.getElementById('totalDes').innerText = `R$ ${desMes.toFixed(2)}`;
     document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div>Nenhuma transação neste mês.</div>';
 
-    // Metas
+   // Metas
     let htmlMetas = '';
     metas.forEach(m => {
         let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
-        htmlMetas += `<div class="card" style="margin-bottom:10px; text-align:left;">
-            <strong>${m.nome}</strong> - ${pct}% concluído<br>
-            <progress value="${m.valor_atual}" max="${m.valor_objetivo}" style="width:100%;"></progress>
+        htmlMetas += `<div class="card" style="margin-bottom:10px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
+            <div style="width: 85%;">
+                <strong>${m.nome}</strong> - ${pct}% concluído<br>
+                <progress value="${m.valor_atual}" max="${m.valor_objetivo}" style="width:100%;"></progress>
+            </div>
+            <button onclick="editarMeta('${m.id}')" style="width:auto; padding:5px; margin:0; background:none; border:none; font-size:18px; cursor:pointer;">✏️</button>
         </div>`;
     });
     document.getElementById('listaMetas').innerHTML = htmlMetas;
@@ -422,9 +431,10 @@ function renderizarGrafico(dados) {
 }
 
 async function salvarTransacao() {
+    const idEdit = document.getElementById('tId') ? document.getElementById('tId').value : '';
     const descricao = document.getElementById('tDescricao').value;
     const valorTotal = parseFloat(document.getElementById('tValor').value);
-    const dataInicial = new Date(document.getElementById('tData').value);
+    const dataInput = document.getElementById('tData').value;
     const parcelas = parseInt(document.getElementById('tParcelas').value) || 1;
     const tipo = document.getElementById('tTipo').value;
     const contaId = document.getElementById('tConta').value;
@@ -435,68 +445,196 @@ async function salvarTransacao() {
     let fotoBase64 = null;
     if (fotoFile) {
         fotoBase64 = await resizeImage(fotoFile);
+    } else if (idEdit) {
+        const txExistente = transacoes.find(t => t.id === idEdit);
+        if (txExistente) fotoBase64 = txExistente.foto;
     }
 
-    const idOriginal = uuidv4();
-    const valorParcela = valorTotal / parcelas;
+    if (idEdit) {
+        const transacaoExistente = transacoes.find(t => t.id === idEdit);
+        if (transacaoExistente) {
+            transacaoExistente.descricao = descricao;
+            transacaoExistente.valor = valorTotal;
+            transacaoExistente.data = dataInput;
+            transacaoExistente.tipo = tipo;
+            transacaoExistente.conta_id = contaId;
+            transacaoExistente.categoria_id = categoriaId;
+            transacaoExistente.pago = pago;
+            transacaoExistente.foto = fotoBase64;
+            transacaoExistente.sinc = false;
+            transacaoExistente.updated_at = new Date().toISOString();
+            salvarItemDB('transacoes', transacaoExistente);
+        }
+    } else {
+        const dataInicial = new Date(dataInput);
+        dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
+        const idOriginal = uuidv4();
+        const valorParcela = valorTotal / parcelas;
 
-    for (let i = 0; i < parcelas; i++) {
-        let dataParcela = new Date(dataInicial);
-        dataParcela.setMonth(dataParcela.getMonth() + i);
-        const transacao = {
-            id: uuidv4(),
-            id_original: idOriginal,
-            tipo: tipo,
-            descricao: parcelas > 1 ? `${descricao} (${i+1}/${parcelas})` : descricao,
-            valor: valorParcela,
-            data: dataParcela.toISOString().split('T')[0],
-            conta_id: contaId,
-            categoria_id: categoriaId,
-            pago: pago,
-            parcela_num: i + 1,
-            parcela_total: parcelas,
-            foto: fotoBase64,
-            sinc: false,
-            updated_at: new Date().toISOString()
-        };
-        salvarItemDB('transacoes', transacao);
+        for (let i = 0; i < parcelas; i++) {
+            let dataParcela = new Date(dataInicial);
+            dataParcela.setMonth(dataParcela.getMonth() + i);
+            const transacao = {
+                id: uuidv4(),
+                id_original: idOriginal,
+                tipo: tipo,
+                descricao: parcelas > 1 ? `${descricao} (${i+1}/${parcelas})` : descricao,
+                valor: valorParcela,
+                data: dataParcela.toISOString().split('T')[0],
+                conta_id: contaId,
+                categoria_id: categoriaId,
+                pago: pago,
+                parcela_num: i + 1,
+                parcela_total: parcelas,
+                foto: fotoBase64,
+                sinc: false,
+                updated_at: new Date().toISOString()
+            };
+            salvarItemDB('transacoes', transacao);
+        }
     }
     fecharModais();
 }
 
 function salvarConta() {
-    const novaConta = {
-        id: uuidv4(),
-        nome: document.getElementById('cNome').value,
-        tipo: document.getElementById('cTipo').value,
-        saldo_inicial: parseFloat(document.getElementById('cSaldoLimite').value) || 0,
-        limite: parseFloat(document.getElementById('cSaldoLimite').value) || 0,
-        vencimento: document.getElementById('cVencimento').value || null,
-        sinc: false,
-        updated_at: new Date().toISOString()
-    };
-    salvarItemDB('contas', novaConta);
+    const idEdit = document.getElementById('cId') ? document.getElementById('cId').value : '';
+    const nome = document.getElementById('cNome').value;
+    const tipo = document.getElementById('cTipo').value;
+    const saldoLimite = parseFloat(document.getElementById('cSaldoLimite').value) || 0;
+    const vencimento = document.getElementById('cVencimento').value || null;
+
+    if (idEdit) {
+        const contaExistente = contas.find(c => c.id === idEdit);
+        if (contaExistente) {
+            contaExistente.nome = nome;
+            contaExistente.tipo = tipo;
+            contaExistente.saldo_inicial = saldoLimite;
+            contaExistente.limite = saldoLimite;
+            contaExistente.vencimento = vencimento;
+            contaExistente.sinc = false;
+            contaExistente.updated_at = new Date().toISOString();
+            salvarItemDB('contas', contaExistente);
+        }
+    } else {
+        const novaConta = {
+            id: uuidv4(),
+            nome: nome,
+            tipo: tipo,
+            saldo_inicial: saldoLimite,
+            limite: saldoLimite,
+            vencimento: vencimento,
+            sinc: false,
+            updated_at: new Date().toISOString()
+        };
+        salvarItemDB('contas', novaConta);
+    }
     fecharModais();
 }
 
 function salvarMeta() {
-    const novaMeta = {
-        id: uuidv4(),
-        nome: document.getElementById('mNome').value,
-        valor_objetivo: parseFloat(document.getElementById('mObjetivo').value),
-        valor_atual: parseFloat(document.getElementById('mAtual').value) || 0,
-        data_limite: document.getElementById('mData').value,
-        conta_id: document.getElementById('mConta').value,
-        sinc: false,
-        updated_at: new Date().toISOString()
-    };
-    salvarItemDB('metas', novaMeta);
+    const idEdit = document.getElementById('mId') ? document.getElementById('mId').value : '';
+    const nome = document.getElementById('mNome').value;
+    const objetivo = parseFloat(document.getElementById('mObjetivo').value);
+    const atual = parseFloat(document.getElementById('mAtual').value) || 0;
+    const dataLimite = document.getElementById('mData').value;
+    const contaId = document.getElementById('mConta').value;
+
+    if (idEdit) {
+        const metaExistente = metas.find(m => m.id === idEdit);
+        if (metaExistente) {
+            metaExistente.nome = nome;
+            metaExistente.valor_objetivo = objetivo;
+            metaExistente.valor_atual = atual;
+            metaExistente.data_limite = dataLimite;
+            metaExistente.conta_id = contaId;
+            metaExistente.sinc = false;
+            metaExistente.updated_at = new Date().toISOString();
+            salvarItemDB('metas', metaExistente);
+        }
+    } else {
+        const novaMeta = {
+            id: uuidv4(),
+            nome: nome,
+            valor_objetivo: objetivo,
+            valor_atual: atual,
+            data_limite: dataLimite,
+            conta_id: contaId,
+            sinc: false,
+            updated_at: new Date().toISOString()
+        };
+        salvarItemDB('metas', novaMeta);
+    }
     fecharModais();
+}
+
+function editarTransacao(id) {
+    const t = transacoes.find(x => x.id === id);
+    if (!t) return;
+    document.getElementById('tId').value = t.id;
+    document.getElementById('tTipo').value = t.tipo;
+    document.getElementById('tDescricao').value = t.descricao;
+    document.getElementById('tValor').value = t.valor;
+    document.getElementById('tData').value = t.data;
+    document.getElementById('tConta').value = t.conta_id;
+    document.getElementById('tCategoria').value = t.categoria_id;
+    document.getElementById('tStatus').value = t.pago.toString();
+    document.getElementById('tParcelas').value = 1;
+    document.getElementById('tParcelas').disabled = true;
+    document.getElementById('tTituloModal').innerText = 'Editar Transação';
+    abrirModal('modalTransacao');
+}
+
+function editarConta(id) {
+    const c = contas.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('cId').value = c.id;
+    document.getElementById('cNome').value = c.nome;
+    document.getElementById('cTipo').value = c.tipo;
+    document.getElementById('cSaldoLimite').value = c.tipo === 'cartao' ? c.limite : c.saldo_inicial;
+    document.getElementById('cVencimento').value = c.vencimento || '';
+    document.getElementById('cTituloModal').innerText = 'Editar Conta / Cartão';
+    abrirModal('modalConta');
+}
+
+function editarMeta(id) {
+    const m = metas.find(x => x.id === id);
+    if (!m) return;
+    document.getElementById('mId').value = m.id;
+    document.getElementById('mNome').value = m.nome;
+    document.getElementById('mObjetivo').value = m.valor_objetivo;
+    document.getElementById('mAtual').value = m.valor_atual;
+    document.getElementById('mData').value = m.data_limite || '';
+    document.getElementById('mConta').value = m.conta_id || '';
+    document.getElementById('mTituloModal').innerText = 'Editar Cofrinho';
+    abrirModal('modalMeta');
 }
 
 // Utilitários de UI
 function abrirModal(id) { document.getElementById(id).classList.add('active'); document.getElementById('overlay').classList.add('active'); }
-function fecharModais() { document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); document.getElementById('overlay').classList.remove('active'); }
+function fecharModais() { 
+    document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
+    document.getElementById('overlay').classList.remove('active'); 
+    
+    // Limpar configurações para a próxima vez que abrir um modal vazio
+    if (document.getElementById('tId')) {
+        document.getElementById('tId').value = '';
+        document.getElementById('cId').value = '';
+        document.getElementById('mId').value = '';
+        document.getElementById('tTituloModal').innerText = 'Nova Transação';
+        document.getElementById('cTituloModal').innerText = 'Nova Conta / Cartão';
+        document.getElementById('mTituloModal').innerText = 'Novo Cofrinho';
+        document.getElementById('tParcelas').disabled = false;
+        
+        // Limpar dados de input para não ficar o lixo da edição anterior
+        document.getElementById('tDescricao').value = '';
+        document.getElementById('tValor').value = '';
+        document.getElementById('cNome').value = '';
+        document.getElementById('cSaldoLimite').value = '';
+        document.getElementById('mNome').value = '';
+        document.getElementById('mObjetivo').value = '';
+        document.getElementById('mAtual').value = '';
+    }
+}
 
 function abrirZoom(base64) {
     document.getElementById('zoomImg').src = base64;
