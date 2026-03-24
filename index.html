@@ -9,7 +9,10 @@
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./money-icon.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
+        /* same as before, plus password screen styles */
         :root {
             --bg: #f8fafc; --card: #ffffff; --txt: #0f172a;
             --p: #2563eb; --s: #16a34a; --d: #dc2626; --w: #f59e0b;
@@ -21,19 +24,53 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, system-ui, Roboto, sans-serif; }
         body { background-color: var(--bg); color: var(--txt); transition: 0.3s; padding-bottom: 80px; }
-        
-        /* Ecrã de Bloqueio */
-        #lockScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        #lockScreen.hidden { display: none; }
-        .btn-bio { padding: 15px 30px; font-size: 18px; background: var(--p); color: white; border: none; border-radius: 8px; cursor: pointer; }
-
-        /* Layout Principal */
-        header { display: flex; justify-content: space-between; padding: 20px; background: var(--card); box-shadow: var(--shadow); }
+        .fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+        .fullscreen.hidden { display: none; }
+        .btn-bio, .btn-password {
+            padding: 15px 30px;
+            font-size: 18px;
+            background: var(--p);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .password-input {
+            width: 80%;
+            max-width: 300px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--txt);
+            font-size: 16px;
+            text-align: center;
+        }
+        .error-msg {
+            color: var(--d);
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        /* rest of the styles unchanged */
+        header { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: var(--card); box-shadow: var(--shadow); flex-wrap: wrap; gap: 10px; }
+        .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .filters input, .filters select, .filters button { width: auto; margin: 0; }
         .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; padding: 20px; }
         .card { background: var(--card); padding: 15px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; }
         .graficos { padding: 20px; max-width: 600px; margin: 0 auto; }
-        
-        /* Botões e Modais */
         .fab { position: fixed; bottom: 20px; right: 20px; background: var(--p); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: var(--shadow); border: none; z-index: 100; cursor: pointer; }
         .btn-menu { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--txt); }
         .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); padding: 20px; border-radius: 12px; z-index: 1000; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
@@ -42,27 +79,43 @@
         .overlay.active { display: block; }
         input, select, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--txt); }
         .btn-primary { background: var(--p); color: white; border: none; font-weight: bold; }
-        
-        /* Zoom da Imagem */
         #imageViewer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; }
         #imageViewer img { max-width: 95%; max-height: 95%; transition: transform 0.25s ease; cursor: zoom-in; }
         .fechar-zoom { position: absolute; top: 20px; right: 20px; color: white; font-size: 30px; cursor: pointer; }
+        .sync-status { font-size: 12px; padding: 5px; background: var(--card); border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
+        .status-pending { color: var(--w); }
+        .status-synced { color: var(--s); }
     </style>
 </head>
 <body>
+    <!-- Password Screen -->
+    <div id="passwordScreen" class="fullscreen">
+        <h2>Digite a senha</h2>
+        <input type="password" id="passwordInput" class="password-input" placeholder="Senha mestra">
+        <button class="btn-password" onclick="submitPassword()">Entrar</button>
+        <div id="passwordError" class="error-msg"></div>
+    </div>
 
-    <div id="lockScreen">
-        <h2 style="margin-bottom: 20px;">Finanças Familiar</h2>
+    <!-- Lock Screen (Biometria) -->
+    <div id="lockScreen" class="fullscreen hidden">
+        <h2>Finanças Familiar</h2>
         <button class="btn-bio" onclick="autenticarBiometria()">Desbloquear (Face ID / Touch)</button>
     </div>
 
     <div id="appContent" style="display: none;">
         <header>
-            <h2>Resumo</h2>
-            <div>
+            <div class="filters">
+                <input type="month" id="monthPicker" value="">
+                <input type="text" id="globalSearch" placeholder="Buscar...">
+                <select id="categoryFilter">
+                    <option value="">Todas categorias</option>
+                </select>
+                <button class="btn-menu" onclick="syncWithServer()">🔄</button>
                 <button class="btn-menu" onclick="alternarTema()">🌓</button>
                 <button class="btn-menu" onclick="abrirModal('modalExportar')">📊</button>
+                <button class="btn-menu" onclick="logout()">🚪</button>
             </div>
+            <div id="syncStatus" class="sync-status">🔄 Sincronizando...</div>
         </header>
 
         <div id="alertasPendentes" style="padding: 10px 20px; color: var(--w); font-weight: bold; text-align: center;"></div>
@@ -93,6 +146,7 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
+    <!-- modais unchanged -->
     <div class="modal" id="modalTransacao">
         <h3>Nova Transação</h3>
         <select id="tTipo"><option value="despesa">Despesa</option><option value="receita">Receita</option></select>
@@ -100,12 +154,7 @@
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
         <input type="date" id="tData">
         <select id="tConta"><option value="">Selecione a Conta/Cartão</option></select>
-        <select id="tCategoria">
-            <option value="1">Alimentação (Fixa)</option>
-            <option value="2">Transporte (Fixa)</option>
-            <option value="3">Lazer</option>
-            <option value="4">Salário</option>
-        </select>
+        <select id="tCategoria"></select>
         <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº de Parcelas (1 = à vista)">
         <select id="tStatus"><option value="true">Pago/Recebido</option><option value="false">Pendente</option></select>
         <input type="file" id="tFoto" accept="image/*">
@@ -127,6 +176,7 @@
         <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
         <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado R$">
         <input type="date" id="mData">
+        <select id="mConta"><option value="">Conta associada</option></select>
         <button class="btn-primary" onclick="salvarMeta()">Guardar</button>
     </div>
 
@@ -134,7 +184,8 @@
         <h3>Exportar Relatório</h3>
         <input type="date" id="eDataIni">
         <input type="date" id="eDataFim">
-        <button class="btn-primary" onclick="baixarRelatorio()">Descarregar CSV</button>
+        <button class="btn-primary" onclick="baixarRelatorio()">CSV</button>
+        <button class="btn-primary" onclick="baixarPDF()">PDF</button>
     </div>
 
     <div id="imageViewer">
