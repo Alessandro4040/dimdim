@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
@@ -7,208 +7,139 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2830/2830283.png">
+    <link rel="apple-touch-icon" href="./money-icon.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, system-ui, 'Segoe UI', Roboto, sans-serif; }
         :root {
             --bg: #f8fafc; --card: #ffffff; --txt: #0f172a;
-            --p: #2563eb; --s: #16a34a; --d: #dc2626;
-            --border: #e2e8f0; --placeholder: #94a3b8;
-            --shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+            --p: #2563eb; --s: #16a34a; --d: #dc2626; --w: #f59e0b;
+            --border: #e2e8f0; --shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
         }
-        [data-theme="dark"] {
-            --bg: #0f172a; --card: #1e293b; --txt: #f1f5f9;
-            --border: #334155; --placeholder: #64748b;
-            --shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+        [data-theme='escuro'] {
+            --bg: #0f172a; --card: #1e293b; --txt: #f8fafc;
+            --border: #334155; --shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
         }
-        body { background: var(--bg); color: var(--txt); padding: 16px 16px 90px; transition: background 0.3s, color 0.3s; }
-        .container { max-width: 500px; margin: 0 auto; }
-        #loginScreen { position: fixed; inset: 0; background: var(--bg); display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
-        .login-box { background: var(--card); padding: 32px; border-radius: 32px; width: 100%; max-width: 360px; box-shadow: var(--shadow); }
-        .login-box img { width: 80px; display: block; margin: 0 auto 20px; }
-        .login-box h3 { text-align: center; margin-bottom: 8px; }
-        .login-box p { text-align: center; color: var(--placeholder); margin-bottom: 24px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
-        .periodo { display: flex; gap: 8px; align-items: center; background: var(--card); padding: 6px 12px; border-radius: 40px; border: 1px solid var(--border); }
-        .periodo input[type="month"] { border: none; background: transparent; color: var(--txt); }
-        .status { font-size: 12px; padding: 6px 12px; border-radius: 40px; background: var(--card); border: 1px solid var(--border); }
-        .online { color: var(--s); } .offline { color: var(--d); }
-        .saldo-geral { background: linear-gradient(145deg, var(--p), #1d4ed8); color: white; padding: 24px; border-radius: 32px; margin-bottom: 20px; box-shadow: 0 10px 20px -5px rgba(37,99,235,0.3); }
-        .saldo-geral small { opacity: 0.9; font-size: 14px; }
-        .saldo-geral h1 { font-size: 2.5rem; margin: 8px 0 16px; }
-        .resumo-rapido { display: flex; justify-content: space-between; }
-        .badge { background: rgba(255,255,255,0.2); padding: 8px 12px; border-radius: 40px; }
-        .contas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px; }
-        .conta-card { background: var(--card); border-radius: 20px; padding: 16px; border: 1px solid var(--border); box-shadow: var(--shadow); }
-        .conta-card .tipo { font-size: 12px; color: var(--placeholder); text-transform: capitalize; }
-        .conta-card .saldo { font-size: 1.4rem; font-weight: bold; margin: 8px 0; }
-        .conta-card .vencimento { font-size: 11px; color: var(--d); }
-        .busca-filtros { display: flex; gap: 8px; margin-bottom: 20px; }
-        .busca-filtros input { flex: 1; padding: 14px; border-radius: 40px; border: 1px solid var(--border); background: var(--card); color: var(--txt); }
-        .busca-filtros select { padding: 0 16px; border-radius: 40px; border: 1px solid var(--border); background: var(--card); color: var(--txt); }
-        .transacao-item { background: var(--card); border-radius: 20px; padding: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--border); }
-        .mini-foto { width: 50px; height: 50px; border-radius: 16px; object-fit: cover; background: var(--border); cursor: pointer; }
-        .info { flex: 1; }
-        .info .desc { font-weight: 600; margin-bottom: 4px; }
-        .info .categoria { font-size: 12px; color: var(--placeholder); }
-        .valor { font-weight: 700; font-size: 1.2rem; }
-        .valor.receita { color: var(--s); } .valor.despesa { color: var(--d); }
-        .fab { position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px; border-radius: 30px; background: var(--p); color: white; display: flex; align-items: center; justify-content: center; font-size: 28px; box-shadow: 0 10px 20px rgba(37,99,235,0.4); border: none; cursor: pointer; z-index: 100; }
-        .nav-bottom { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 12px 0; backdrop-filter: blur(10px); }
-        .nav-item { background: none; border: none; color: var(--placeholder); font-size: 12px; text-align: center; transition: 0.2s; cursor: pointer; }
-        .nav-item.active { color: var(--p); font-weight: 600; }
-        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 420px; max-height: 85vh; overflow-y: auto; background: var(--card); border-radius: 32px; padding: 24px; z-index: 1001; display: none; box-shadow: var(--shadow); }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, system-ui, Roboto, sans-serif; }
+        body { background-color: var(--bg); color: var(--txt); transition: 0.3s; padding-bottom: 80px; }
+        
+        /* Ecrã de Bloqueio */
+        #lockScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #lockScreen.hidden { display: none; }
+        .btn-bio { padding: 15px 30px; font-size: 18px; background: var(--p); color: white; border: none; border-radius: 8px; cursor: pointer; }
+
+        /* Layout Principal */
+        header { display: flex; justify-content: space-between; padding: 20px; background: var(--card); box-shadow: var(--shadow); }
+        .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; padding: 20px; }
+        .card { background: var(--card); padding: 15px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; }
+        .graficos { padding: 20px; max-width: 600px; margin: 0 auto; }
+        
+        /* Botões e Modais */
+        .fab { position: fixed; bottom: 20px; right: 20px; background: var(--p); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: var(--shadow); border: none; z-index: 100; cursor: pointer; }
+        .btn-menu { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--txt); }
+        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); padding: 20px; border-radius: 12px; z-index: 1000; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
         .modal.active { display: block; }
-        .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; backdrop-filter: blur(4px); }
-        .overlay.active { display: flex; align-items: center; justify-content: center; }
-        input, select, textarea { width: 100%; padding: 16px; margin: 8px 0; border-radius: 24px; border: 1px solid var(--border); background: var(--card); color: var(--txt); font-size: 16px; }
-        .btn { width: 100%; padding: 16px; border: none; border-radius: 40px; font-weight: 600; font-size: 16px; margin-top: 12px; cursor: pointer; }
-        .btn.primary { background: var(--p); color: white; }
-        .btn.secondary { background: transparent; border: 1px solid var(--border); color: var(--txt); }
-        #graficoContainer { background: var(--card); border-radius: 32px; padding: 20px; margin: 20px 0; border: 1px solid var(--border); }
-        #zoomOverlay img { max-width: 95%; max-height: 90%; border-radius: 24px; }
-        .theme-toggle { background: var(--card); border: 1px solid var(--border); border-radius: 40px; padding: 8px 16px; cursor: pointer; }
-        .flex-row { display: flex; gap: 8px; align-items: center; }
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
+        .overlay.active { display: block; }
+        input, select, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--txt); }
+        .btn-primary { background: var(--p); color: white; border: none; font-weight: bold; }
+        
+        /* Zoom da Imagem */
+        #imageViewer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; }
+        #imageViewer img { max-width: 95%; max-height: 95%; transition: transform 0.25s ease; cursor: zoom-in; }
+        .fechar-zoom { position: absolute; top: 20px; right: 20px; color: white; font-size: 30px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div id="loginScreen">
-        <div class="login-box">
-            <img src="https://cdn-icons-png.flaticon.com/512/2830/2830283.png" alt="Logo">
-            <h3>Bem‑vindo de volta</h3>
-            <p>Digite sua senha mestra</p>
-            <input type="password" id="inputSenha" placeholder="Senha">
-            <p id="loginErro" style="color: var(--d); font-size: 14px; display: none;"></p>
-            <button class="btn primary" id="btnLogin">Entrar</button>
-        </div>
+
+    <div id="lockScreen">
+        <h2 style="margin-bottom: 20px;">Finanças Familiar</h2>
+        <button class="btn-bio" onclick="autenticarBiometria()">Desbloquear (Face ID / Touch)</button>
     </div>
 
-    <div id="appMain" style="display: none;">
-        <div class="container">
-            <div class="header">
-                <div class="periodo">
-                    <input type="month" id="filtroMes" value="">
-                </div>
-                <div class="status online" id="statusLabel">🌐 Online</div>
-                <div class="theme-toggle" onclick="alternarTema()">🌓</div>
+    <div id="appContent" style="display: none;">
+        <header>
+            <h2>Resumo</h2>
+            <div>
+                <button class="btn-menu" onclick="alternarTema()">🌓</button>
+                <button class="btn-menu" onclick="abrirModal('modalExportar')">📊</button>
             </div>
+        </header>
 
-            <div id="viewResumo">
-                <div class="saldo-geral">
-                    <small>Saldo Total das Contas</small>
-                    <h1 id="saldoTotal">R$ 0,00</h1>
-                    <div class="resumo-rapido">
-                        <span class="badge">📈 Mês: R$ <span id="totalRec">0,00</span></span>
-                        <span class="badge">📉 Mês: R$ <span id="totalDes">0,00</span></span>
-                    </div>
-                </div>
+        <div id="alertasPendentes" style="padding: 10px 20px; color: var(--w); font-weight: bold; text-align: center;"></div>
 
-                <div class="contas-grid" id="contasGrid"></div>
-                <button class="btn secondary" onclick="abrirModal('modalConta')" style="margin-bottom: 20px; padding: 12px; font-size: 14px;">+ Nova Conta</button>
-
-                <div class="busca-filtros">
-                    <input type="search" id="busca" placeholder="🔍 Buscar transação...">
-                    <select id="filtroConta">
-                        <option value="">Todas contas</option>
-                    </select>
-                </div>
-
-                <div id="listaTransacoes"></div>
-                
-                <button class="btn secondary" onclick="abrirModal('modalExportar')" style="margin-top: 10px;">📥 Exportar CSV</button>
-            </div>
-
-            <div id="viewGrafico" style="display: none;">
-                <div id="graficoContainer">
-                    <canvas id="meuGrafico"></canvas>
-                </div>
-                <div style="margin: 20px 0;">
-                    <select id="filtroGraficoConta">
-                        <option value="">Todas as contas</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="viewMetas" style="display: none;">
-                <h3 style="margin-bottom: 16px;">🎯 Minhas metas</h3>
-                <div id="metasLista"></div>
-                <button class="btn primary" onclick="abrirModalMeta()">+ Nova meta</button>
-            </div>
+        <div class="dashboard-cards">
+            <div class="card"><h3>Saldo Total</h3><p id="saldoTotal">R$ 0,00</p></div>
+            <div class="card"><h3>Receitas (Mês)</h3><p id="totalRec" style="color: var(--s);">R$ 0,00</p></div>
+            <div class="card"><h3>Despesas (Mês)</h3><p id="totalDes" style="color: var(--d);">R$ 0,00</p></div>
         </div>
 
-        <button class="fab" id="fabAdd">+</button>
+        <div class="graficos">
+            <canvas id="graficoDespesas"></canvas>
+        </div>
 
-        <nav class="nav-bottom">
-            <button class="nav-item active" data-view="resumo">🏠<br>Início</button>
-            <button class="nav-item" data-view="grafico">📊<br>Gráfico</button>
-            <button class="nav-item" data-view="metas">🐷<br>Metas</button>
-        </nav>
+        <div style="padding: 20px;">
+            <h3>Contas e Cartões <button onclick="abrirModal('modalConta')" style="width:auto; padding:5px 10px; float:right;">+</button></h3>
+            <div id="listaContas"></div>
+            
+            <h3 style="margin-top: 20px;">Cofrinhos / Metas <button onclick="abrirModal('modalMeta')" style="width:auto; padding:5px 10px; float:right;">+</button></h3>
+            <div id="listaMetas"></div>
+
+            <h3 style="margin-top: 20px;">Transações Recentes</h3>
+            <div id="listaTransacoes"></div>
+        </div>
+
+        <button class="fab" onclick="abrirModal('modalTransacao')">+</button>
     </div>
 
-    <div class="overlay" id="overlay" onclick="fecharTodasModals()"></div>
+    <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
     <div class="modal" id="modalTransacao">
-        <h4 id="modalTransacaoTitle">Nova transação</h4>
-        <select id="transacaoTipo">
-            <option value="receita">Receita</option>
-            <option value="despesa">Despesa</option>
+        <h3>Nova Transação</h3>
+        <select id="tTipo"><option value="despesa">Despesa</option><option value="receita">Receita</option></select>
+        <input type="text" id="tDescricao" placeholder="Descrição">
+        <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
+        <input type="date" id="tData">
+        <select id="tConta"><option value="">Selecione a Conta/Cartão</option></select>
+        <select id="tCategoria">
+            <option value="1">Alimentação (Fixa)</option>
+            <option value="2">Transporte (Fixa)</option>
+            <option value="3">Lazer</option>
+            <option value="4">Salário</option>
         </select>
-        <select id="transacaoConta"></select>
-        <select id="transacaoCategoria"></select>
-        <input type="date" id="transacaoData">
-        <input type="text" id="transacaoDescricao" placeholder="Descrição">
-        <input type="number" id="transacaoValor" step="0.01" placeholder="Valor R$">
-        <label style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
-            <input type="checkbox" id="transacaoPago"> <span>Já pago / recebido?</span>
-        </label>
-        <div id="parcelasContainer" style="display: none;">
-            <input type="number" id="parcelasNum" placeholder="Nº de parcelas" min="1" value="1">
-        </div>
-        <button class="btn secondary" onclick="document.getElementById('fotoInput').click()">📸 Adicionar foto</button>
-        <input type="file" id="fotoInput" accept="image/*" style="display: none;">
-        <img id="fotoPreview" style="width: 100%; max-height: 120px; object-fit: cover; border-radius: 16px; margin: 8px 0; display: none;">
-        <button class="btn primary" id="btnSalvarTransacao">Salvar Transação</button>
-        <button class="btn secondary" onclick="fecharModal('modalTransacao')">Cancelar</button>
+        <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº de Parcelas (1 = à vista)">
+        <select id="tStatus"><option value="true">Pago/Recebido</option><option value="false">Pendente</option></select>
+        <input type="file" id="tFoto" accept="image/*">
+        <button class="btn-primary" onclick="salvarTransacao()">Guardar</button>
     </div>
 
     <div class="modal" id="modalConta">
-        <h4>Nova conta / cartão</h4>
-        <input type="text" id="contaNome" placeholder="Nome (ex: Nubank, Carteira)">
-        <select id="contaTipo">
-            <option value="banco">Banco</option>
-            <option value="cartao">Cartão de crédito</option>
-            <option value="dinheiro">Dinheiro físico</option>
-            <option value="poupanca">Cofrinho / Poupança</option>
-        </select>
-        <input type="number" id="contaSaldoInicial" step="0.01" placeholder="Saldo inicial R$">
-        <input type="date" id="contaVencimento" placeholder="Vencimento do cartão (Opcional)">
-        <button class="btn primary" id="btnSalvarConta">Salvar conta</button>
-        <button class="btn secondary" onclick="fecharModal('modalConta')">Cancelar</button>
+        <h3>Nova Conta / Cartão</h3>
+        <input type="text" id="cNome" placeholder="Nome (ex: Nubank)">
+        <select id="cTipo"><option value="corrente">Conta Corrente</option><option value="cartao">Cartão de Crédito</option></select>
+        <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial / Limite do Cartão">
+        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (apenas cartão)" min="1" max="31">
+        <button class="btn-primary" onclick="salvarConta()">Guardar</button>
     </div>
 
     <div class="modal" id="modalMeta">
-        <h4>Nova meta</h4>
-        <input type="text" id="metaNome" placeholder="Nome da meta">
-        <input type="number" id="metaValorObjetivo" step="0.01" placeholder="Valor objetivo R$">
-        <input type="date" id="metaDataLimite">
-        <select id="metaConta"></select>
-        <button class="btn primary" id="btnSalvarMeta">Salvar meta</button>
-        <button class="btn secondary" onclick="fecharModal('modalMeta')">Cancelar</button>
+        <h3>Novo Cofrinho</h3>
+        <input type="text" id="mNome" placeholder="Objetivo (ex: Viagem)">
+        <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
+        <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado R$">
+        <input type="date" id="mData">
+        <button class="btn-primary" onclick="salvarMeta()">Guardar</button>
     </div>
 
     <div class="modal" id="modalExportar">
-        <h4>Exportar Relatório</h4>
-        <div class="flex-row">
-            <div style="flex:1"><label>Início:</label><input type="date" id="exportDataIni"></div>
-            <div style="flex:1"><label>Fim:</label><input type="date" id="exportDataFim"></div>
-        </div>
-        <button class="btn primary" id="btnConfirmarExportar">Baixar Planilha</button>
-        <button class="btn secondary" onclick="fecharModal('modalExportar')">Cancelar</button>
+        <h3>Exportar Relatório</h3>
+        <input type="date" id="eDataIni">
+        <input type="date" id="eDataFim">
+        <button class="btn-primary" onclick="baixarRelatorio()">Descarregar CSV</button>
     </div>
 
-    <div class="overlay" id="zoomOverlay" onclick="fecharZoom()">
-        <img id="zoomedImg" src="">
+    <div id="imageViewer">
+        <span class="fechar-zoom" onclick="fecharZoom()">×</span>
+        <img id="zoomImg" src="" onclick="aplicarZoom(this)">
     </div>
 
     <script src="./app.js"></script>
