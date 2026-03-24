@@ -3,7 +3,8 @@ const assets = [
   './',
   './index.html',
   './app.js',
-  './manifest.json'
+  './manifest.json',
+  './money-icon.png'
 ];
 
 self.addEventListener('install', e => {
@@ -22,10 +23,22 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Ignora chamadas de API ou requisições que não sejam GET
   if (e.request.method !== 'GET' || e.request.url.includes('script.google.com')) return;
+  
   e.respondWith(
-    fetch(e.request)
-      .then(res => caches.open(CACHE_NAME).then(cache => { cache.put(e.request, res.clone()); return res; }))
-      .catch(() => caches.match(e.request))
+    caches.match(e.request).then(cachedResponse => {
+      if (cachedResponse) return cachedResponse;
+      
+      return fetch(e.request).then(res => {
+        return caches.open(CACHE_NAME).then(cache => {
+          cache.put(e.request, res.clone());
+          return res;
+        });
+      });
+    }).catch(() => {
+      // Fallback básico
+      return new Response('Offline de forma inesperada.');
+    })
   );
 });
