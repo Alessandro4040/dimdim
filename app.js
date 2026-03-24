@@ -1,5 +1,5 @@
 // Configurações
-const API_URL = 'https://script.google.com/macros/s/AKfycbytKn8WB5K74pfgxK-XI6JWnQf-t-foFxUWEcMnIpCWFJxsKV9TVjZmE05RDePkBelu/exec'; // substitua
+const API_URL = 'https://script.google.com/macros/s/AKfycbwGk0XAFHppkf9iZ59O7y47QjNzo5z6Xqd5GUKOMpGTNVYxbJwUN8tpNKILNSe4pjp1/exec'; // substitua
 const DB_NAME = 'financas_v5';
 let db, chartInstance;
 let transacoes = [], contas = [], metas = [], categorias = [];
