@@ -112,6 +112,7 @@
                 </select>
                 <button class="btn-menu" onclick="syncWithServer()">🔄</button>
                 <button class="btn-menu" onclick="alternarTema()">🌓</button>
+                <button class="btn-menu" onclick="abrirModal('modalGrafico')">📈</button>
                 <button class="btn-menu" onclick="abrirModal('modalExportar')">📊</button>
                 <button class="btn-menu" onclick="logout()">🚪</button>
             </div>
@@ -124,10 +125,6 @@
             <div class="card"><h3>Saldo Total</h3><p id="saldoTotal">R$ 0,00</p></div>
             <div class="card"><h3>Receitas (Mês)</h3><p id="totalRec" style="color: var(--s);">R$ 0,00</p></div>
             <div class="card"><h3>Despesas (Mês)</h3><p id="totalDes" style="color: var(--d);">R$ 0,00</p></div>
-        </div>
-
-        <div class="graficos">
-            <canvas id="graficoDespesas"></canvas>
         </div>
 
         <div style="padding: 20px;">
@@ -146,9 +143,17 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
-    <!-- modais unchanged -->
+    <div class="modal" id="modalGrafico">
+        <h3>Gráfico de Despesas</h3>
+        <div class="graficos">
+            <canvas id="graficoDespesas"></canvas>
+        </div>
+        <button class="btn-primary" onclick="fecharModais()" style="margin-top: 15px;">Fechar</button>
+    </div>
+
     <div class="modal" id="modalTransacao">
-        <h3>Nova Transação</h3>
+        <h3 id="tTituloModal">Nova Transação</h3>
+        <input type="hidden" id="tId">
         <select id="tTipo"><option value="despesa">Despesa</option><option value="receita">Receita</option></select>
         <input type="text" id="tDescricao" placeholder="Descrição">
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
@@ -162,7 +167,8 @@
     </div>
 
     <div class="modal" id="modalConta">
-        <h3>Nova Conta / Cartão</h3>
+        <h3 id="cTituloModal">Nova Conta / Cartão</h3>
+        <input type="hidden" id="cId">
         <input type="text" id="cNome" placeholder="Nome (ex: Nubank)">
         <select id="cTipo"><option value="corrente">Conta Corrente</option><option value="cartao">Cartão de Crédito</option></select>
         <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial / Limite do Cartão">
@@ -171,7 +177,8 @@
     </div>
 
     <div class="modal" id="modalMeta">
-        <h3>Novo Cofrinho</h3>
+        <h3 id="mTituloModal">Novo Cofrinho</h3>
+        <input type="hidden" id="mId">
         <input type="text" id="mNome" placeholder="Objetivo (ex: Viagem)">
         <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
         <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado R$">
