@@ -1,12 +1,12 @@
 {
   "name": "Finanças Familiar",
   "short_name": "Finanças",
-  "description": "Controle financeiro completo com gestão de cartões e metas.",
+  "description": "Controle financeiro completo offline-first com sincronização.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#ffffff",
+  "background_color": "#f8fafc",
   "theme_color": "#2563eb",
   "icons": [
     {
