@@ -1,7 +1,7 @@
 {
   "name": "Finanças Familiar",
   "short_name": "Finanças",
-  "description": "Controle financeiro completo para famílias",
+  "description": "Controle financeiro completo com gestão de cartões e metas.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -10,7 +10,7 @@
   "theme_color": "#2563eb",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2830/2830283.png",
+      "src": "./money-icon.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
