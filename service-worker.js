@@ -1,5 +1,5 @@
-const CACHE_NAME = 'financas-v26';
-const assets = [
+const CACHE_NAME = 'financas-v30';
+const ASSETS = [
   './',
   './index.html',
   './app.js',
@@ -7,38 +7,34 @@ const assets = [
   './money-icon.png'
 ];
 
-self.addEventListener('install', e => {
+self.addEventListener('install', event => {
   self.skipWaiting();
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(c => c.addAll(assets))
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
+self.addEventListener('activate', event => {
+  event.waitUntil(
     caches.keys().then(keys => 
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))
     )
   );
 });
 
-self.addEventListener('fetch', e => {
-  // Ignora chamadas de API ou requisições que não sejam GET
-  if (e.request.method !== 'GET' || e.request.url.includes('script.google.com')) return;
-  
-  e.respondWith(
-    caches.match(e.request).then(cachedResponse => {
-      if (cachedResponse) return cachedResponse;
-      
-      return fetch(e.request).then(res => {
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('script.google.com')) return;
+  event.respondWith(
+    caches.match(event.request).then(response => {
+      return response || fetch(event.request).then(fetchResponse => {
         return caches.open(CACHE_NAME).then(cache => {
-          cache.put(e.request, res.clone());
-          return res;
+          cache.put(event.request, fetchResponse.clone());
+          return fetchResponse;
         });
       });
     }).catch(() => {
-      // Fallback básico
-      return new Response('Offline de forma inesperada.');
+      return new Response('Você está offline. Acesse novamente quando a conexão retornar.', { status: 503 });
     })
   );
 });
