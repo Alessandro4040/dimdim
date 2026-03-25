@@ -8,7 +8,6 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./money-icon.png">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
@@ -68,9 +67,11 @@
         header { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: var(--card); box-shadow: var(--shadow); flex-wrap: wrap; gap: 10px; }
         .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
         .filters input, .filters select, .filters button { width: auto; margin: 0; }
-        .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; padding: 20px; }
+        .dashboard-pyramid { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 20px; }
+        .card-top { width: 100%; max-width: 400px; text-align: center; }
+        .card-bottom-row { display: flex; justify-content: space-between; width: 100%; max-width: 400px; gap: 15px; }
+        .card-bottom-row .card { flex: 1; text-align: center; }
         .card { background: var(--card); padding: 15px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; }
-        .graficos { padding: 20px; max-width: 600px; margin: 0 auto; }
         .fab { position: fixed; bottom: 20px; right: 20px; background: var(--p); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: var(--shadow); border: none; z-index: 100; cursor: pointer; }
         .btn-menu { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--txt); }
         .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); padding: 20px; border-radius: 12px; z-index: 1000; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
@@ -112,7 +113,6 @@
                 </select>
                 <button class="btn-menu" onclick="syncWithServer()">🔄</button>
                 <button class="btn-menu" onclick="alternarTema()">🌓</button>
-                <button class="btn-menu" onclick="abrirModal('modalGrafico')">📈</button>
                 <button class="btn-menu" onclick="abrirModal('modalExportar')">📊</button>
                 <button class="btn-menu" onclick="logout()">🚪</button>
             </div>
@@ -121,10 +121,21 @@
 
         <div id="alertasPendentes" style="padding: 10px 20px; color: var(--w); font-weight: bold; text-align: center;"></div>
 
-        <div class="dashboard-cards">
-            <div class="card"><h3>Saldo Total</h3><p id="saldoTotal">R$ 0,00</p></div>
-            <div class="card"><h3>Receitas (Mês)</h3><p id="totalRec" style="color: var(--s);">R$ 0,00</p></div>
-            <div class="card"><h3>Despesas (Mês)</h3><p id="totalDes" style="color: var(--d);">R$ 0,00</p></div>
+        <div class="dashboard-pyramid">
+            <div class="card card-top">
+                <h3>Saldo Total</h3>
+                <p id="saldoTotal" style="font-size: 1.5em; font-weight: bold;">R$ 0,00</p>
+            </div>
+            <div class="card-bottom-row">
+                <div class="card">
+                    <h3>Despesas (Mês)</h3>
+                    <p id="totalDes" style="color: var(--d); font-size: 1.2em; font-weight: bold;">R$ 0,00</p>
+                </div>
+                <div class="card">
+                    <h3>Receitas (Mês)</h3>
+                    <p id="totalRec" style="color: var(--s); font-size: 1.2em; font-weight: bold;">R$ 0,00</p>
+                </div>
+            </div>
         </div>
 
         <div style="padding: 20px;">
@@ -143,19 +154,11 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
-    <div class="modal" id="modalGrafico">
-        <h3>Gráfico de Despesas</h3>
-        <div class="graficos">
-            <canvas id="graficoDespesas"></canvas>
-        </div>
-        <button class="btn-primary" onclick="fecharModais()" style="margin-top: 15px;">Fechar</button>
-    </div>
-
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal">Nova Transação</h3>
         <input type="hidden" id="tId">
         <select id="tTipo"><option value="despesa">Despesa</option><option value="receita">Receita</option></select>
-        <input type="text" id="tDescricao" placeholder="Descrição">
+        <input type="text" id="tDescricao" placeholder="Descrição (Opcional)">
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
         <input type="date" id="tData">
         <select id="tConta"><option value="">Selecione a Conta/Cartão</option></select>
@@ -163,7 +166,10 @@
         <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº de Parcelas (1 = à vista)">
         <select id="tStatus"><option value="true">Pago/Recebido</option><option value="false">Pendente</option></select>
         <input type="file" id="tFoto" accept="image/*">
-        <button class="btn-primary" onclick="salvarTransacao()">Guardar</button>
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 15px;">
+            <button class="btn-primary" id="btnExcluirTransacao" style="background: var(--d); display: none;" onclick="excluirItem('transacoes', 'tId')">Excluir</button>
+            <button class="btn-primary" style="flex: 1;" onclick="salvarTransacao()">Guardar</button>
+        </div>
     </div>
 
     <div class="modal" id="modalConta">
@@ -172,8 +178,11 @@
         <input type="text" id="cNome" placeholder="Nome (ex: Nubank)">
         <select id="cTipo"><option value="corrente">Conta Corrente</option><option value="cartao">Cartão de Crédito</option></select>
         <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial / Limite do Cartão">
-        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (apenas cartão)" min="1" max="31">
-        <button class="btn-primary" onclick="salvarConta()">Guardar</button>
+        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (Opcional)" min="1" max="31">
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 15px;">
+            <button class="btn-primary" id="btnExcluirConta" style="background: var(--d); display: none;" onclick="excluirItem('contas', 'cId')">Excluir</button>
+            <button class="btn-primary" style="flex: 1;" onclick="salvarConta()">Guardar</button>
+        </div>
     </div>
 
     <div class="modal" id="modalMeta">
@@ -181,10 +190,13 @@
         <input type="hidden" id="mId">
         <input type="text" id="mNome" placeholder="Objetivo (ex: Viagem)">
         <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
-        <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado R$">
+        <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado R$ (Opcional)">
         <input type="date" id="mData">
-        <select id="mConta"><option value="">Conta associada</option></select>
-        <button class="btn-primary" onclick="salvarMeta()">Guardar</button>
+        <select id="mConta"><option value="">Conta associada (Opcional)</option></select>
+        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 15px;">
+            <button class="btn-primary" id="btnExcluirMeta" style="background: var(--d); display: none;" onclick="excluirItem('metas', 'mId')">Excluir</button>
+            <button class="btn-primary" style="flex: 1;" onclick="salvarMeta()">Guardar</button>
+        </div>
     </div>
 
     <div class="modal" id="modalExportar">
