@@ -1,7 +1,7 @@
 // Configurações
-const API_URL = 'https://script.google.com/macros/s/AKfycbwGk0XAFHppkf9iZ59O7y47QjNzo5z6Xqd5GUKOMpGTNVYxbJwUN8tpNKILNSe4pjp1/exec'; // substitua
+const API_URL = 'https://script.google.com/macros/s/AKfycbwxA5JvOFf3HhUFXIPRqnqOFtBU7aKEOrsykmOxR5cy-NjjEOlLH2EVpVwsnEVlME96/exec'; // substitua
 const DB_NAME = 'financas_v5';
-let db, chartInstance;
+let db;
 let transacoes = [], contas = [], metas = [], categorias = [];
 let mesAtual = new Date().toISOString().slice(0, 7);
 let temaAtual = localStorage.getItem('tema') || 'claro';
@@ -185,22 +185,42 @@ function salvarItemDB(store, item) {
     tx.oncomplete = () => carregarDadosLocais();
 }
 
-// Sincronização com servidor (incluindo token)
+async function excluirItem(store, inputId) {
+    const id = document.getElementById(inputId).value;
+    if (!id || !confirm('Tem certeza que deseja excluir este item?')) return;
+    
+    const tx = db.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(id);
+    tx.oncomplete = () => {
+        let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+        deletados[store].push(id);
+        localStorage.setItem('deletados', JSON.stringify(deletados));
+        
+        fecharModais();
+        carregarDadosLocais();
+        syncWithServer();
+    };
+}
+
+// Sincronização com servidor (incluindo token e conversão de dados)
 async function syncWithServer() {
     if (syncInProgress) return;
-    if (!authToken) return; // sem token, não sincroniza
+    if (!authToken) return; 
     syncInProgress = true;
     atualizarSyncStatus('sincronizando');
     try {
-        // Obter todos os registros não sincronizados
+        let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
         const unsynced = { transacoes: [], contas: [], metas: [], categorias: [] };
+        let temDadosParaEnviar = false;
+
         for (const store of ['transacoes', 'contas', 'metas', 'categorias']) {
             const items = await getAllFromStore(store);
             unsynced[store] = items.filter(i => !i.sinc);
+            if (unsynced[store].length > 0 || deletados[store].length > 0) temDadosParaEnviar = true;
         }
-        // Enviar ao servidor
-        if (Object.values(unsynced).some(arr => arr.length)) {
-            const payload = { ...unsynced, token: authToken };
+
+        if (temDadosParaEnviar) {
+            const payload = { ...unsynced, deletados, token: authToken };
             const response = await fetch(API_URL, {
                 method: 'POST',
                 body: JSON.stringify(payload)
@@ -208,7 +228,9 @@ async function syncWithServer() {
             if (response.ok) {
                 const result = await response.json();
                 if (result.error) throw new Error(result.error);
-                // Marcar como sincronizados localmente
+                
+                localStorage.setItem('deletados', '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+                
                 for (const store of ['transacoes', 'contas', 'metas', 'categorias']) {
                     for (const item of unsynced[store]) {
                         item.sinc = true;
@@ -219,26 +241,36 @@ async function syncWithServer() {
                 throw new Error('Sync failed');
             }
         }
-        // Obter dados mais recentes do servidor (pull)
+
         const pullResponse = await fetch(`${API_URL}?action=getAll&token=${encodeURIComponent(authToken)}`);
         const remoteData = await pullResponse.json();
+        
         if (remoteData && !remoteData.error) {
-            // Substituir dados locais pelos remotos (merge)
             for (const store of ['transacoes', 'contas', 'metas', 'categorias']) {
                 const remoteItems = remoteData[store] || [];
+                let deletadosAtuais = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+                
                 for (const item of remoteItems) {
+                    if (deletadosAtuais[store].includes(item.id)) continue; 
+
+                    // Conversão crítica! Se abrir em um novo navegador, a planilha entrega texto em vez de números/booleanos
+                    if (item.valor !== undefined) item.valor = parseFloat(item.valor) || 0;
+                    if (item.pago !== undefined) item.pago = (item.pago === true || item.pago === 'true' || item.pago === 'VERDADEIRO');
+                    if (item.saldo_inicial !== undefined) item.saldo_inicial = parseFloat(item.saldo_inicial) || 0;
+                    if (item.limite !== undefined) item.limite = parseFloat(item.limite) || 0;
+                    if (item.valor_objetivo !== undefined) item.valor_objetivo = parseFloat(item.valor_objetivo) || 0;
+                    if (item.valor_atual !== undefined) item.valor_atual = parseFloat(item.valor_atual) || 0;
+                    
+                    item.sinc = true;
                     await putToStore(store, item);
                 }
-                // Opcional: remover itens locais que não estão no remoto (exclusão)
-                // Aqui optamos por não excluir, apenas adicionar/atualizar
             }
         } else if (remoteData.error === "Acesso negado.") {
-            // Token inválido, forçar logout
             logout();
             return;
         }
         atualizarSyncStatus('sincronizado');
-        carregarDadosLocais(); // recarregar UI
+        carregarDadosLocais(); 
     } catch (error) {
         console.error('Sync error', error);
         atualizarSyncStatus('erro');
@@ -246,7 +278,6 @@ async function syncWithServer() {
         syncInProgress = false;
     }
 }
-
 function getAllFromStore(store) {
     return new Promise((resolve) => {
         const tx = db.transaction(store, 'readonly');
@@ -332,6 +363,12 @@ function atualizarDashboard() {
     let htmlContas = '';
     contas.forEach(c => {
         let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
+        
+        // Adicionando o valor do saldo inicial em dinheiro ou carro à Receita Total do mês
+        if (c.saldo_inicial > 0) {
+            recMes += c.saldo_inicial;
+        }
+
         transacoes.forEach(t => {
             if (t.conta_id === c.id && t.pago) {
                 if (t.tipo === 'receita') saldoConta += t.valor;
@@ -350,7 +387,6 @@ function atualizarDashboard() {
     document.getElementById('listaContas').innerHTML = htmlContas;
 
     // Transações filtradas
-    let categoriasTotais = {};
     let htmlTransacoes = '';
     let transacoesFiltradas = transacoes.filter(t => {
         if (t.data.startsWith(mes) === false) return false;
@@ -360,10 +396,8 @@ function atualizarDashboard() {
     });
     transacoesFiltradas.forEach(t => {
         if (t.tipo === 'receita') recMes += t.valor;
-        if (t.tipo === 'despesa') {
-            desMes += t.valor;
-            categoriasTotais[t.categoria_id] = (categoriasTotais[t.categoria_id] || 0) + t.valor;
-        }
+        if (t.tipo === 'despesa') desMes += t.valor;
+        
         const categoriaNome = categorias.find(c => c.id === t.categoria_id)?.nome || 'Sem categoria';
         htmlTransacoes += `<div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
             <div>
@@ -385,7 +419,7 @@ function atualizarDashboard() {
     document.getElementById('totalDes').innerText = `R$ ${desMes.toFixed(2)}`;
     document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div>Nenhuma transação neste mês.</div>';
 
-   // Metas
+    // Metas
     let htmlMetas = '';
     metas.forEach(m => {
         let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
@@ -398,10 +432,7 @@ function atualizarDashboard() {
         </div>`;
     });
     document.getElementById('listaMetas').innerHTML = htmlMetas;
-
-    renderizarGrafico(categoriasTotais);
 }
-
 function verificarPendencias() {
     const hoje = new Date().toISOString().slice(0, 10);
     const pendentes = transacoes.filter(t => !t.pago && t.data <= hoje);
@@ -412,23 +443,6 @@ function verificarPendencias() {
     }
 }
 
-function renderizarGrafico(dados) {
-    const ctx = document.getElementById('graficoDespesas').getContext('2d');
-    if (chartInstance) chartInstance.destroy();
-    const labels = Object.keys(dados).map(id => categorias.find(c => c.id === id)?.nome || id);
-    chartInstance = new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: Object.values(dados),
-                backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6'],
-                borderWidth: 0
-            }]
-        },
-        options: { responsive: true, plugins: { legend: { position: 'bottom', labels:{color: 'var(--txt)'} } } }
-    });
-}
 
 async function salvarTransacao() {
     const idEdit = document.getElementById('tId') ? document.getElementById('tId').value : '';
@@ -581,6 +595,7 @@ function editarTransacao(id) {
     document.getElementById('tParcelas').value = 1;
     document.getElementById('tParcelas').disabled = true;
     document.getElementById('tTituloModal').innerText = 'Editar Transação';
+    document.getElementById('btnExcluirTransacao').style.display = 'block';
     abrirModal('modalTransacao');
 }
 
@@ -593,6 +608,7 @@ function editarConta(id) {
     document.getElementById('cSaldoLimite').value = c.tipo === 'cartao' ? c.limite : c.saldo_inicial;
     document.getElementById('cVencimento').value = c.vencimento || '';
     document.getElementById('cTituloModal').innerText = 'Editar Conta / Cartão';
+    document.getElementById('btnExcluirConta').style.display = 'block';
     abrirModal('modalConta');
 }
 
@@ -606,6 +622,7 @@ function editarMeta(id) {
     document.getElementById('mData').value = m.data_limite || '';
     document.getElementById('mConta').value = m.conta_id || '';
     document.getElementById('mTituloModal').innerText = 'Editar Cofrinho';
+    document.getElementById('btnExcluirMeta').style.display = 'block';
     abrirModal('modalMeta');
 }
 
@@ -615,7 +632,6 @@ function fecharModais() {
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active')); 
     document.getElementById('overlay').classList.remove('active'); 
     
-    // Limpar configurações para a próxima vez que abrir um modal vazio
     if (document.getElementById('tId')) {
         document.getElementById('tId').value = '';
         document.getElementById('cId').value = '';
@@ -625,7 +641,12 @@ function fecharModais() {
         document.getElementById('mTituloModal').innerText = 'Novo Cofrinho';
         document.getElementById('tParcelas').disabled = false;
         
-        // Limpar dados de input para não ficar o lixo da edição anterior
+        // Esconder botões de exclusão
+        document.getElementById('btnExcluirTransacao').style.display = 'none';
+        document.getElementById('btnExcluirConta').style.display = 'none';
+        document.getElementById('btnExcluirMeta').style.display = 'none';
+
+        // Limpar dados
         document.getElementById('tDescricao').value = '';
         document.getElementById('tValor').value = '';
         document.getElementById('cNome').value = '';
@@ -695,6 +716,11 @@ document.getElementById('categoryFilter').addEventListener('change', () => atual
 
 // Inicialização
 document.getElementById('monthPicker').value = mesAtual;
+
+// Auto-sync ao voltar a conexão
+window.addEventListener('online', () => {
+    if (authToken) syncWithServer();
+});
 
 // Ao carregar a página, verificar se já há token salvo
 window.addEventListener('load', () => {
