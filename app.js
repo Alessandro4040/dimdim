@@ -283,7 +283,10 @@ async function syncWithServer() {
                     if (item.valor_objetivo !== undefined) item.valor_objetivo = parseMoedaBR(item.valor_objetivo);
                     if (item.valor_atual !== undefined) item.valor_atual = parseMoedaBR(item.valor_atual);
                     
-                    if (item.pago !== undefined) item.pago = (item.pago === true || item.pago === 'true' || String(item.pago).toUpperCase() === 'VERDADEIRO');
+                    if (item.pago !== undefined) {
+    const pStr = String(item.pago).toUpperCase().trim();
+    item.pago = (item.pago === true || pStr === 'TRUE' || pStr === 'VERDADEIRO' || pStr === 'SIM' || pStr === '1');
+}
                     
                     if (item.data !== undefined) item.data = parseDataBR(item.data);
                     if (item.vencimento !== undefined) item.vencimento = parseDataBR(item.vencimento);
@@ -387,23 +390,24 @@ function atualizarDashboard() {
 
     let recMes = 0, desMes = 0, saldoGeral = 0;
 
-    // Contas
+    // 1. Contas e Saldo Geral
     let htmlContas = '';
     contas.forEach(c => {
         let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
         
-        // Adicionando o valor do saldo inicial em dinheiro ou carro à Receita Total do mês
-        if (c.saldo_inicial > 0) {
-            recMes += c.saldo_inicial;
+        // Soma o saldo inicial ao Saldo Geral APENAS para contas correntes
+        if (c.tipo === 'corrente') {
+            saldoGeral += c.saldo_inicial || 0;
         }
 
+        // Calcula o saldo individual de cada conta
         transacoes.forEach(t => {
             if (t.conta_id === c.id && t.pago) {
                 if (t.tipo === 'receita') saldoConta += t.valor;
                 if (t.tipo === 'despesa') saldoConta -= t.valor;
             }
         });
-        if (c.tipo === 'corrente') saldoGeral += saldoConta;
+
         htmlContas += `<div class="card" style="margin-bottom:10px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
             <div>
                 <strong>${c.nome}</strong> (${c.tipo})<br>
@@ -414,7 +418,19 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
-    // Transações filtradas
+    // 2. Calcula Receitas e Despesas Globais para o Saldo (só as pagas)
+    transacoes.forEach(t => {
+        if (t.pago) {
+            const conta = contas.find(c => c.id === t.conta_id);
+            // Impacta o saldo se for conta corrente OU se a transação estiver sem conta vinculada
+            if (!conta || conta.tipo === 'corrente') {
+                if (t.tipo === 'receita') saldoGeral += t.valor;
+                if (t.tipo === 'despesa') saldoGeral -= t.valor;
+            }
+        }
+    });
+
+    // 3. Transações filtradas para listar na tela e calcular totais DO MÊS
     let htmlTransacoes = '';
     let transacoesFiltradas = transacoes.filter(t => {
         if (t.data.startsWith(mes) === false) return false;
@@ -422,7 +438,9 @@ function atualizarDashboard() {
         if (catFilter && t.categoria_id !== catFilter) return false;
         return true;
     });
+
     transacoesFiltradas.forEach(t => {
+        // TOTAIS DO MÊS - Sem interferência de saldo inicial
         if (t.tipo === 'receita') recMes += t.valor;
         if (t.tipo === 'despesa') desMes += t.valor;
         
@@ -430,7 +448,7 @@ function atualizarDashboard() {
         htmlTransacoes += `<div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
             <div>
                 <strong>${t.descricao}</strong><br>
-                <small>${t.data} - ${categoriaNome} - ${t.pago ? '✅' : '⏳'}</small>
+                <small>${t.data} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
                 ${t.foto ? `<br><a href="#" onclick="abrirZoom('${t.foto}')" style="color:var(--p);font-size:12px;">Ver Comprovante</a>` : ''}
             </div>
             <div style="text-align:right;">
@@ -462,12 +480,18 @@ function atualizarDashboard() {
     document.getElementById('listaMetas').innerHTML = htmlMetas;
 }
 function verificarPendencias() {
-    const hoje = new Date().toISOString().slice(0, 10);
+    // Corrige o fuso horário para bater exatamente com a data do seu celular/PC
+    const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+    const hoje = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+    
     const pendentes = transacoes.filter(t => !t.pago && t.data <= hoje);
+    const alertasDiv = document.getElementById('alertasPendentes');
     if (pendentes.length > 0) {
-        document.getElementById('alertasPendentes').innerText = `Aviso: ${pendentes.length} transação(ões) pendente(s) ou vencida(s)!`;
+        alertasDiv.innerText = `⚠️ Aviso: ${pendentes.length} transação(ões) pendente(s) ou vencida(s)!`;
+        alertasDiv.style.display = 'block';
     } else {
-        document.getElementById('alertasPendentes').innerText = '';
+        alertasDiv.innerText = '';
+        alertasDiv.style.display = 'none';
     }
 }
 
@@ -757,17 +781,14 @@ window.addEventListener('load', () => {
 
 // Função visual para forçar a sincronização e dar feedback
 async function forcarSincronizacao() {
-    const btn = document.getElementById('btnNuvem');
-    if(btn) {
-        btn.innerText = '⏳';
-        btn.disabled = true;
+    const el = document.getElementById('syncStatus');
+    if (el) {
+        el.style.pointerEvents = 'none'; // Evita a pessoa clicar várias vezes seguidas
+        atualizarSyncStatus('sincronizando');
     }
     
     await syncWithServer(); 
     
-    if(btn) {
-        btn.innerText = '🔄';
-        btn.disabled = false;
-    }
-    alert("Dados sincronizados com a planilha!");
+    if (el) el.style.pointerEvents = 'auto'; // Libera o clique novamente
+    // Não precisa de alert() aqui porque o atualizarSyncStatus já mostrará "✅ Sincronizado" na tela
 }
