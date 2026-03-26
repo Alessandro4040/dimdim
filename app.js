@@ -418,19 +418,33 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
-    // 2. Calcula Receitas e Despesas Globais para o Saldo (só as pagas)
+   // 2. Calcula Receitas e Despesas Globais para o Saldo Total (só as pagas)
     transacoes.forEach(t => {
         if (t.pago) {
             const conta = contas.find(c => c.id === t.conta_id);
-            // Impacta o saldo se for conta corrente OU se a transação estiver sem conta vinculada
-            if (!conta || conta.tipo === 'corrente') {
-                if (t.tipo === 'receita') saldoGeral += t.valor;
-                if (t.tipo === 'despesa') saldoGeral -= t.valor;
+            
+            // Receitas SEMPRE somam ao Saldo Geral, independente de ser cartão, banco ou sem conta
+            if (t.tipo === 'receita') {
+                saldoGeral += t.valor;
+            } 
+            // Despesas só abatem do Saldo Geral se forem de conta corrente ou sem conta
+            else if (t.tipo === 'despesa') {
+                if (!conta || conta.tipo === 'corrente') {
+                    saldoGeral -= t.valor;
+                }
             }
         }
     });
 
-    // 3. Transações filtradas para listar na tela e calcular totais DO MÊS
+    // 3. Calcula totais DO MÊS (Calculado antes dos filtros para o valor nunca sumir do topo)
+    transacoes.forEach(t => {
+        if (t.data.startsWith(mes)) {
+            if (t.tipo === 'receita') recMes += t.valor;
+            if (t.tipo === 'despesa') desMes += t.valor;
+        }
+    });
+
+    // 4. Transações filtradas apenas para montar a lista na tela
     let htmlTransacoes = '';
     let transacoesFiltradas = transacoes.filter(t => {
         if (t.data.startsWith(mes) === false) return false;
@@ -440,10 +454,6 @@ function atualizarDashboard() {
     });
 
     transacoesFiltradas.forEach(t => {
-        // TOTAIS DO MÊS - Sem interferência de saldo inicial
-        if (t.tipo === 'receita') recMes += t.valor;
-        if (t.tipo === 'despesa') desMes += t.valor;
-        
         const categoriaNome = categorias.find(c => c.id === t.categoria_id)?.nome || 'Sem categoria';
         htmlTransacoes += `<div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
             <div>
