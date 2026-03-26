@@ -1,5 +1,5 @@
 // Configurações
-const API_URL = 'https://script.google.com/macros/s/AKfycbwxA5JvOFf3HhUFXIPRqnqOFtBU7aKEOrsykmOxR5cy-NjjEOlLH2EVpVwsnEVlME96/exec'; // substitua
+const API_URL = 'https://script.google.com/macros/s/AKfycbznPvhHLdMUEfl2Vbb3BPDqwKmlQaQZxHISujSjeLgPzbwLPSkLqIlnayyvZh-M_p1e/exec'; // substitua
 const DB_NAME = 'financas_v5';
 let db;
 let transacoes = [], contas = [], metas = [], categorias = [];
@@ -202,10 +202,33 @@ async function excluirItem(store, inputId) {
     };
 }
 
+// ==========================================
+// FUNÇÕES DE LIMPEZA DE DADOS DA PLANILHA
+// ==========================================
+function parseMoedaBR(valor) {
+    if (typeof valor === 'number') return valor;
+    if (!valor) return 0;
+    let str = String(valor).replace(/[^0-9,\-]/g, '');
+    str = str.replace(',', '.');
+    return parseFloat(str) || 0;
+}
+
+function parseDataBR(dataStr) {
+    if (!dataStr) return '';
+    if (String(dataStr).includes('-') && String(dataStr).length === 10) return dataStr;
+    if (String(dataStr).includes('/')) {
+        const partes = String(dataStr).split(' ')[0].split('/');
+        if (partes.length === 3) {
+            return `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
+        }
+    }
+    return dataStr;
+}
+
 // Sincronização com servidor (incluindo token e conversão de dados)
 async function syncWithServer() {
     if (syncInProgress) return;
-    if (!authToken) return; 
+    if (!authToken) return;
     syncInProgress = true;
     atualizarSyncStatus('sincronizando');
     try {
@@ -253,13 +276,18 @@ async function syncWithServer() {
                 for (const item of remoteItems) {
                     if (deletadosAtuais[store].includes(item.id)) continue; 
 
-                    // Conversão crítica! Se abrir em um novo navegador, a planilha entrega texto em vez de números/booleanos
-                    if (item.valor !== undefined) item.valor = parseFloat(item.valor) || 0;
-                    if (item.pago !== undefined) item.pago = (item.pago === true || item.pago === 'true' || item.pago === 'VERDADEIRO');
-                    if (item.saldo_inicial !== undefined) item.saldo_inicial = parseFloat(item.saldo_inicial) || 0;
-                    if (item.limite !== undefined) item.limite = parseFloat(item.limite) || 0;
-                    if (item.valor_objetivo !== undefined) item.valor_objetivo = parseFloat(item.valor_objetivo) || 0;
-                    if (item.valor_atual !== undefined) item.valor_atual = parseFloat(item.valor_atual) || 0;
+                    // Conversão crítica BLINDADA! Garante que o frontend entenda números e datas da planilha
+                    if (item.valor !== undefined) item.valor = parseMoedaBR(item.valor);
+                    if (item.saldo_inicial !== undefined) item.saldo_inicial = parseMoedaBR(item.saldo_inicial);
+                    if (item.limite !== undefined) item.limite = parseMoedaBR(item.limite);
+                    if (item.valor_objetivo !== undefined) item.valor_objetivo = parseMoedaBR(item.valor_objetivo);
+                    if (item.valor_atual !== undefined) item.valor_atual = parseMoedaBR(item.valor_atual);
+                    
+                    if (item.pago !== undefined) item.pago = (item.pago === true || item.pago === 'true' || String(item.pago).toUpperCase() === 'VERDADEIRO');
+                    
+                    if (item.data !== undefined) item.data = parseDataBR(item.data);
+                    if (item.vencimento !== undefined) item.vencimento = parseDataBR(item.vencimento);
+                    if (item.data_limite !== undefined) item.data_limite = parseDataBR(item.data_limite);
                     
                     item.sinc = true;
                     await putToStore(store, item);
@@ -726,3 +754,20 @@ window.addEventListener('online', () => {
 window.addEventListener('load', () => {
     checkStoredToken();
 });
+
+// Função visual para forçar a sincronização e dar feedback
+async function forcarSincronizacao() {
+    const btn = document.getElementById('btnNuvem');
+    if(btn) {
+        btn.innerText = '⏳';
+        btn.disabled = true;
+    }
+    
+    await syncWithServer(); 
+    
+    if(btn) {
+        btn.innerText = '☁️🔄';
+        btn.disabled = false;
+    }
+    alert("Dados sincronizados com a planilha!");
+}
