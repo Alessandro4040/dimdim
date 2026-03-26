@@ -766,7 +766,7 @@ async function forcarSincronizacao() {
     await syncWithServer(); 
     
     if(btn) {
-        btn.innerText = '☁️🔄';
+        btn.innerText = '🔄';
         btn.disabled = false;
     }
     alert("Dados sincronizados com a planilha!");
