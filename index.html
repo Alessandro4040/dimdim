@@ -111,12 +111,12 @@
                 <select id="categoryFilter">
                     <option value="">Todas categorias</option>
                 </select>
-                <button class="btn-menu" id="btnNuvem" onclick="forcarSincronizacao()" title="Sincronizar com a Nuvem">🔄</button>
+                
                 <button class="btn-menu" onclick="alternarTema()">🌓</button>
                 <button class="btn-menu" onclick="abrirModal('modalExportar')">📊</button>
                 <button class="btn-menu" onclick="logout()">🚪</button>
             </div>
-            <div id="syncStatus" class="sync-status">🔄 Sincronizando...</div>
+            <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()" style="cursor: pointer; padding: 8px 12px;" title="Clique para sincronizar">🔄 Sincronizando...</div>
         </header>
 
         <div id="alertasPendentes" style="padding: 10px 20px; color: var(--w); font-weight: bold; text-align: center;"></div>
