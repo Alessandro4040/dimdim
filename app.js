@@ -390,14 +390,18 @@ function atualizarDashboard() {
 
     let recMes = 0, desMes = 0, saldoGeral = 0;
 
-    // 1. Contas e Saldo Geral
+    // 1. Contas, Saldo Geral e Receitas (Mês)
     let htmlContas = '';
     contas.forEach(c => {
-        let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
+        let saldoConta = c.tipo === 'corrente' ? (c.saldo_inicial || 0) : (c.limite || 0);
         
-        // Soma o saldo inicial ao Saldo Geral APENAS para contas correntes
-        if (c.tipo === 'corrente') {
-            saldoGeral += c.saldo_inicial || 0;
+        // 1. Soma TODOS os saldos e limites ao Saldo Total
+        saldoGeral += saldoConta;
+
+        // 2. Adiciona esses valores de conta e cartão ao campo "Receitas (Mês)"
+        // (Ele usa a data de criação/atualização da conta para saber se pertence ao mês que você está visualizando)
+        if (c.updated_at && c.updated_at.startsWith(mes)) {
+            recMes += saldoConta;
         }
 
         // Calcula o saldo individual de cada conta
