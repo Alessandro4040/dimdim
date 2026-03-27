@@ -418,20 +418,26 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
-   // 2. Calcula Receitas e Despesas Globais para o Saldo Total (só as pagas)
+   // 2 e 3. Calcula Receitas e Despesas (Globais e do Mês)
     transacoes.forEach(t => {
+        
+        // --- CÁLCULO DO SALDO TOTAL GERAL ---
+        // Pega TODAS as receitas pagas e diminui TODAS as despesas pagas (incluindo cartão)
         if (t.pago) {
-            const conta = contas.find(c => c.id === t.conta_id);
-            
-            // Receitas SEMPRE somam ao Saldo Geral, independente de ser cartão, banco ou sem conta
             if (t.tipo === 'receita') {
                 saldoGeral += t.valor;
-            } 
-            // Despesas só abatem do Saldo Geral se forem de conta corrente ou sem conta
-            else if (t.tipo === 'despesa') {
-                if (!conta || conta.tipo === 'corrente') {
-                    saldoGeral -= t.valor;
-                }
+            } else if (t.tipo === 'despesa') {
+                saldoGeral -= t.valor;
+            }
+        }
+
+        // --- CÁLCULO DOS CARDS DO MÊS (Visão Mensal) ---
+        // Soma todas as despesas e receitas do mês selecionado, independente da conta
+        if (t.data.startsWith(mes)) {
+            if (t.tipo === 'receita') {
+                recMes += t.valor;
+            } else if (t.tipo === 'despesa') {
+                desMes += t.valor;
             }
         }
     });
