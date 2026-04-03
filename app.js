@@ -247,7 +247,7 @@ async function syncWithServer() {
                     if (item.data_limite !== undefined) item.data_limite = parseDataBR(item.data_limite);
                     item.sinc = true;
                     if (!idsLocais.has(item.id)) await putToStore(store, item);
-                    else await putToStore(store, item); // atualiza existente
+                    else await putToStore(store, item);
                 }
             }
         } else if (remoteData.error === "Acesso negado.") {
@@ -326,42 +326,35 @@ function atualizarFiltroCategorias() {
     categorias.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`; });
 }
 
-// 🔧 DASHBOARD CORRIGIDO (Receitas do Mês, Despesas do Mês e Saldo Total)
+// DASHBOARD CORRIGIDO
 function atualizarDashboard() {
-    const mes = mesAtual; // formato "YYYY-MM"
+    const mes = mesAtual;
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
 
-    // Cálculo de Receitas e Despesas do Mês (apenas transações pagas? Sim, para refletir o realizado)
     let receitasMes = 0, despesasMes = 0;
-    // Saldo Total: começa com saldo inicial das contas correntes
     let saldoTotal = 0;
     contas.forEach(c => {
         if (c.tipo === 'corrente') saldoTotal += (c.saldo_inicial || 0);
     });
-    // Agora percorre todas as transações pagas
     transacoes.forEach(t => {
         if (!t.pago) return;
         const conta = contas.find(c => c.id === t.conta_id);
-        // Atualiza saldo total: receitas sempre somam; despesas só se conta corrente ou sem conta
         if (t.tipo === 'receita') {
             saldoTotal += t.valor;
         } else if (t.tipo === 'despesa') {
             if (!conta || conta.tipo === 'corrente') saldoTotal -= t.valor;
         }
-        // Acumula receitas/despesas do mês (considera apenas transações do mês atual)
         if (t.data && t.data.startsWith(mes)) {
             if (t.tipo === 'receita') receitasMes += t.valor;
             else if (t.tipo === 'despesa') despesasMes += t.valor;
         }
     });
 
-    // Atualiza os cards superiores
     document.getElementById('saldoTotal').innerText = `R$ ${saldoTotal.toFixed(2)}`;
     document.getElementById('totalRec').innerText = `R$ ${receitasMes.toFixed(2)}`;
     document.getElementById('totalDes').innerText = `R$ ${despesasMes.toFixed(2)}`;
 
-    // Lista de contas com saldo atualizado
     let htmlContas = '';
     contas.forEach(c => {
         let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
@@ -379,7 +372,6 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
-    // Lista de transações do mês (com filtros de busca e categoria)
     let htmlTransacoes = '';
     let transacoesFiltradas = transacoes.filter(t => {
         if (!t.data.startsWith(mes)) return false;
@@ -387,7 +379,7 @@ function atualizarDashboard() {
         if (catFilter && t.categoria_id !== catFilter) return false;
         return true;
     });
-    transacoesFiltradas.sort((a,b) => (a.data < b.data ? 1 : -1)); // mais recentes primeiro
+    transacoesFiltradas.sort((a,b) => (a.data < b.data ? 1 : -1));
     transacoesFiltradas.forEach(t => {
         const categoriaNome = categorias.find(c => c.id === t.categoria_id)?.nome || 'Sem categoria';
         htmlTransacoes += `<div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
@@ -406,7 +398,6 @@ function atualizarDashboard() {
     });
     document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div>Nenhuma transação neste mês.</div>';
 
-    // Metas
     let htmlMetas = '';
     metas.forEach(m => {
         let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
@@ -435,7 +426,7 @@ function verificarPendencias() {
     }
 }
 
-// ========== SALVAR TRANSAÇÃO (SEM DUPLICAÇÃO) ==========
+// ========== SALVAR TRANSAÇÃO (SEM DUPLICAÇÃO E COM RESET DA FOTO) ==========
 let salvando = false;
 async function salvarTransacao() {
     if (salvando) return;
@@ -462,7 +453,6 @@ async function salvarTransacao() {
         }
 
         if (idEdit) {
-            // Edição
             const index = transacoes.findIndex(t => t.id === idEdit);
             if (index !== -1) {
                 const t = transacoes[index];
@@ -479,7 +469,6 @@ async function salvarTransacao() {
                 await salvarItemDB('transacoes', t);
             }
         } else {
-            // Nova transação (com suporte a parcelas)
             const dataInicial = new Date(dataInput);
             dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
             const idOriginal = uuidv4();
@@ -619,7 +608,15 @@ function editarMeta(id) {
 }
 
 // ========== UTILITÁRIOS ==========
-function abrirModal(id) { document.getElementById(id).classList.add('active'); document.getElementById('overlay').classList.add('active'); }
+function abrirModal(id) {
+    document.getElementById(id).classList.add('active');
+    document.getElementById('overlay').classList.add('active');
+    // Se for o modal de transação e NÃO for edição, limpar o campo de foto
+    if (id === 'modalTransacao' && !document.getElementById('tId').value) {
+        document.getElementById('tFoto').value = '';
+    }
+}
+
 function fecharModais() {
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('overlay').classList.remove('active');
@@ -641,16 +638,37 @@ function fecharModais() {
         document.getElementById('mNome').value = '';
         document.getElementById('mObjetivo').value = '';
         document.getElementById('mAtual').value = '';
+        // 🔧 Limpa o campo de foto e o arquivo selecionado
+        document.getElementById('tFoto').value = '';
     }
 }
 
+// 🔧 VISUALIZADOR DE IMAGEM MELHORADO PARA IPHONE
 function abrirZoom(base64) {
-    document.getElementById('zoomImg').src = base64;
-    document.getElementById('zoomImg').style.transform = 'scale(1)';
-    document.getElementById('imageViewer').style.display = 'flex';
+    const viewer = document.getElementById('imageViewer');
+    const img = document.getElementById('zoomImg');
+    img.src = base64;
+    img.style.transform = 'scale(1)';
+    viewer.style.display = 'flex';
+    // Garante que o clique na imagem também feche (além do X e do overlay)
+    img.onclick = () => fecharZoom();
+    // O overlay (fundo escuro) também fecha ao clicar
+    viewer.onclick = (e) => {
+        if (e.target === viewer) fecharZoom();
+    };
 }
-function fecharZoom() { document.getElementById('imageViewer').style.display = 'none'; }
-function aplicarZoom(img) { img.style.transform = img.style.transform === 'scale(2)' ? 'scale(1)' : 'scale(2)'; }
+
+function fecharZoom() {
+    document.getElementById('imageViewer').style.display = 'none';
+    const img = document.getElementById('zoomImg');
+    img.onclick = null;
+    document.getElementById('imageViewer').onclick = null;
+}
+
+function aplicarZoom(img) {
+    // Mantém o zoom duplo-toque, mas sem atrapalhar o fechamento
+    img.style.transform = img.style.transform === 'scale(2)' ? 'scale(1)' : 'scale(2)';
+}
 
 function baixarRelatorio() {
     const ini = document.getElementById('eDataIni').value;
