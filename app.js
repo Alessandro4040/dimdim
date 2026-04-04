@@ -334,16 +334,15 @@ function atualizarSelectCategorias() {
 
 function atualizarFiltroCategorias() {
     const sel = document.getElementById('categoryFilter');
-    sel.innerHTML = '<option value="">Todas categorias</option>';
+    sel.innerHTML = '<option value="">📂 Todas categorias</option>';
     categorias.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`; });
 }
 
-// Função que retorna as transações filtradas por período (mês ou intervalo)
-function getTransacoesFiltradasPeriodo() {
+// Retorna as transações do período (pagas) sem aplicar filtros de busca/categoria
+function getTransacoesPeriodoBase() {
     let dataInicio = filtroDataInicio;
     let dataFim = filtroDataFim;
 
-    // Se os campos de data personalizados estiverem vazios, usa o mês atual
     if (!dataInicio || !dataFim) {
         if (!mesAtual) return [];
         const [ano, mes] = mesAtual.split('-');
@@ -351,33 +350,32 @@ function getTransacoesFiltradasPeriodo() {
         const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
         dataFim = `${ano}-${mes}-${ultimoDia}`;
     }
-
     return transacoes.filter(t => t.pago && t.data >= dataInicio && t.data <= dataFim);
 }
 
-// DASHBOARD ATUALIZADO COM SUPORTE A PERÍODO PERSONALIZADO
+// DASHBOARD ATUALIZADO: totais de receitas/despesas baseados nas transações visíveis (filtro de busca e categoria)
 function atualizarDashboard() {
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
 
-    // Obter transações do período (pagas)
-    let transacoesPeriodo = getTransacoesFiltradasPeriodo();
-    
-    // Aplicar filtros de texto e categoria
+    // Transações do período (pagas)
+    let transacoesPeriodo = getTransacoesPeriodoBase();
+
+    // Aplicar filtros de texto e categoria para os TOTAIS e para a lista
     let transacoesFiltradas = transacoesPeriodo.filter(t => {
         if (searchTerm && !t.descricao.toLowerCase().includes(searchTerm)) return false;
         if (catFilter && t.categoria_id !== catFilter) return false;
         return true;
     });
 
-    // Totais do período (usando transacoesPeriodo, sem os filtros de texto/categoria)
-    let receitasPeriodo = 0, despesasPeriodo = 0;
-    transacoesPeriodo.forEach(t => {
-        if (t.tipo === 'receita') receitasPeriodo += t.valor;
-        else if (t.tipo === 'despesa') despesasPeriodo += t.valor;
+    // Totais das transações filtradas (visíveis)
+    let receitasFiltradas = 0, despesasFiltradas = 0;
+    transacoesFiltradas.forEach(t => {
+        if (t.tipo === 'receita') receitasFiltradas += t.valor;
+        else if (t.tipo === 'despesa') despesasFiltradas += t.valor;
     });
 
-    // Saldo Total (considera todas as transações pagas, sem filtro de período)
+    // Saldo Total (geral, sem filtro de período)
     let saldoTotal = 0;
     contas.forEach(c => {
         if (c.tipo === 'corrente') saldoTotal += (c.saldo_inicial || 0);
@@ -393,8 +391,8 @@ function atualizarDashboard() {
     });
 
     document.getElementById('saldoTotal').innerText = `R$ ${saldoTotal.toFixed(2)}`;
-    document.getElementById('totalRec').innerText = `R$ ${receitasPeriodo.toFixed(2)}`;
-    document.getElementById('totalDes').innerText = `R$ ${despesasPeriodo.toFixed(2)}`;
+    document.getElementById('totalRec').innerText = `R$ ${receitasFiltradas.toFixed(2)}`;
+    document.getElementById('totalDes').innerText = `R$ ${despesasFiltradas.toFixed(2)}`;
 
     // Lista de contas
     let htmlContas = '';
@@ -414,36 +412,37 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
-    // Lista de transações (com formatação de data DD/MM/AAAA)
+    // Lista de transações (com data formatada)
     let htmlTransacoes = '';
     transacoesFiltradas.sort((a,b) => (a.data < b.data ? 1 : -1));
     transacoesFiltradas.forEach(t => {
         const categoriaNome = categorias.find(c => c.id === t.categoria_id)?.nome || 'Sem categoria';
         const dataFormatada = formatarDataBR(t.data);
-        htmlTransacoes += `<div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
-            <div>
+        htmlTransacoes += `<div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <div style="flex:1;">
                 <strong>${t.descricao}</strong><br>
-                <small>${dataFormatada} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
-                ${t.foto ? `<br><a href="#" onclick="abrirZoom('${t.foto}')" style="color:var(--p);font-size:12px;">Ver Comprovante</a>` : ''}
+                <small style="opacity:0.7;">${dataFormatada} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
+                ${t.foto ? `<br><a href="#" onclick="abrirZoom('${t.foto}')" style="color:var(--p);font-size:12px;">📎 Ver comprovante</a>` : ''}
             </div>
-            <div style="text-align:right;">
-                <div style="color: ${t.tipo === 'receita' ? 'var(--s)' : 'var(--d)'}; margin-bottom:5px;">
+            <div style="text-align:right; min-width: 90px;">
+                <div style="color: ${t.tipo === 'receita' ? 'var(--s)' : 'var(--d)'}; font-weight:bold;">
                     R$ ${t.valor.toFixed(2)}
                 </div>
-                <button onclick="editarTransacao('${t.id}')" style="width:auto; padding:2px 5px; margin:0; background:none; border:none; font-size:16px; cursor:pointer;">✏️</button>
+                <button onclick="editarTransacao('${t.id}')" style="width:auto; padding:4px 8px; margin:4px 0 0; background:var(--p); font-size:12px;">✏️ Editar</button>
             </div>
         </div>`;
     });
-    document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div>Nenhuma transação no período.</div>';
+    document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div class="card">Nenhuma transação no período com os filtros aplicados.</div>';
 
     // Metas
     let htmlMetas = '';
     metas.forEach(m => {
         let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
         htmlMetas += `<div class="card" style="margin-bottom:10px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
-            <div style="width:85%;">
-                <strong>${m.nome}</strong> - ${pct}% concluído<br>
-                <progress value="${m.valor_atual}" max="${m.valor_objetivo}" style="width:100%;"></progress>
+            <div style="width:80%;">
+                <strong>${m.nome}</strong> - ${pct}%<br>
+                <progress value="${m.valor_atual}" max="${m.valor_objetivo}" style="width:100%; height:8px; border-radius:10px;"></progress>
+                <small>R$ ${m.valor_atual.toFixed(2)} / R$ ${m.valor_objetivo.toFixed(2)}</small>
             </div>
             <button onclick="editarMeta('${m.id}')" style="width:auto; padding:5px; margin:0; background:none; border:none; font-size:18px; cursor:pointer;">✏️</button>
         </div>`;
@@ -680,7 +679,7 @@ function fecharModais() {
     }
 }
 
-// Filtros de data personalizados
+// Filtros de data
 function aplicarFiltroData() {
     const inicio = document.getElementById('dataInicioFiltro').value;
     const fim = document.getElementById('dataFimFiltro').value;
@@ -697,7 +696,7 @@ function limparFiltroData() {
     atualizarDashboard();
 }
 
-// Visualizador de imagem melhorado
+// Visualizador de imagem
 function abrirZoom(base64) {
     const viewer = document.getElementById('imageViewer');
     const img = document.getElementById('zoomImg');
@@ -758,7 +757,6 @@ function baixarPDF() {
 // ========== EVENTOS E INICIALIZAÇÃO ==========
 document.getElementById('monthPicker').addEventListener('change', (e) => {
     mesAtual = e.target.value;
-    // Limpa os filtros de data personalizados quando muda o mês
     document.getElementById('dataInicioFiltro').value = '';
     document.getElementById('dataFimFiltro').value = '';
     filtroDataInicio = '';
