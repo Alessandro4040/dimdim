@@ -42,7 +42,6 @@
             padding-bottom: 90px;
             padding-top: env(safe-area-inset-top, 20px);
         }
-        /* Telas de autenticação */
         .fullscreen {
             position: fixed;
             top: 0;
@@ -311,6 +310,13 @@
             border-radius: 30px;
             font-size: 14px;
         }
+        .label-small {
+            font-size: 13px;
+            margin-bottom: 4px;
+            display: block;
+            color: var(--txt);
+            opacity: 0.7;
+        }
         @media (max-width: 480px) {
             .filter-row { flex-wrap: wrap; }
             .filter-row input, .filter-row select { min-width: 110px; }
@@ -411,7 +417,8 @@
         </select>
         <input type="text" id="tDescricao" placeholder="Descrição (opcional)">
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
-        <input type="date" id="tData">
+        <label class="label-small">📅 Data da transação:</label>
+        <input type="date" id="tData" placeholder="AAAA-MM-DD">
         <select id="tConta"><option value="">Selecione a Conta/Cartão</option></select>
         <select id="tCategoria"></select>
         <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº Parcelas (1 = à vista)">
@@ -448,7 +455,8 @@
         <input type="text" id="mNome" placeholder="Objetivo (ex: Viagem)">
         <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
         <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado (opcional)">
-        <input type="date" id="mData">
+        <label class="label-small">📅 Data limite:</label>
+        <input type="date" id="mData" placeholder="AAAA-MM-DD">
         <select id="mConta"><option value="">Conta associada (opcional)</option></select>
         <div class="modal-actions">
             <button id="btnExcluirMeta" class="danger" style="display: none;" onclick="excluirItem('metas', 'mId')">🗑 Excluir</button>
@@ -458,8 +466,10 @@
 
     <div class="modal" id="modalExportar">
         <h3>📎 Exportar Relatório</h3>
-        <input type="date" id="eDataIni" placeholder="Data inicial">
-        <input type="date" id="eDataFim" placeholder="Data final">
+        <label class="label-small">Data inicial:</label>
+        <input type="date" id="eDataIni">
+        <label class="label-small">Data final:</label>
+        <input type="date" id="eDataFim">
         <div class="modal-actions">
             <button class="btn-primary" onclick="baixarRelatorio()">📄 CSV</button>
             <button class="btn-primary" onclick="baixarPDF()">📑 PDF</button>
