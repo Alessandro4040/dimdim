@@ -317,7 +317,14 @@
             color: var(--txt);
             opacity: 0.7;
         }
-        /* Estilo para os campos de data com label acima */
+        /* Campos de data lado a lado */
+        .date-range {
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+            flex: 2;
+            align-items: flex-end;
+        }
         .date-field {
             flex: 1;
             min-width: 0;
@@ -332,16 +339,21 @@
             margin-top: 0;
             width: 100%;
         }
-        .date-range {
-            display: flex;
-            gap: 8px;
-            flex: 2;
-        }
         @media (max-width: 480px) {
-            .filter-row { flex-wrap: wrap; }
-            .date-range { width: 100%; flex-direction: column; gap: 12px; }
-            .date-field { width: 100%; }
-            .card p { font-size: 1.2rem; }
+            .filter-row {
+                flex-wrap: wrap;
+            }
+            .date-range {
+                width: 100%;
+                flex-direction: row !important;
+                flex-wrap: nowrap;
+            }
+            .date-field {
+                flex: 1;
+            }
+            .card p {
+                font-size: 1.2rem;
+            }
         }
     </style>
 </head>
@@ -455,7 +467,8 @@
             <option value="true">✅ Pago / Recebido</option>
             <option value="false">⏳ Pendente</option>
         </select>
-        <input type="file" id="tFoto" accept="image/*" capture="environment">
+        <!-- Removido capture="environment" para permitir galeria e arquivos -->
+        <input type="file" id="tFoto" accept="image/*">
         <div class="modal-actions">
             <button id="btnExcluirTransacao" class="danger" style="display: none;" onclick="excluirItem('transacoes', 'tId')">🗑 Excluir</button>
             <button class="btn-primary" onclick="salvarTransacao()">💾 Guardar</button>
