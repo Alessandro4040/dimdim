@@ -8,11 +8,23 @@ let temaAtual = localStorage.getItem('tema') || 'claro';
 let syncInProgress = false;
 let authToken = localStorage.getItem('authToken');
 
+// Filtros de data personalizados
+let filtroDataInicio = '';
+let filtroDataFim = '';
+
 // UUID v4
 function uuidv4() {
     return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
         (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
     );
+}
+
+// Formatar data ISO (YYYY-MM-DD) para DD/MM/YYYY
+function formatarDataBR(dataISO) {
+    if (!dataISO) return '';
+    const partes = dataISO.split('-');
+    if (partes.length !== 3) return dataISO;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
 // Redimensionar imagem
@@ -326,13 +338,46 @@ function atualizarFiltroCategorias() {
     categorias.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`; });
 }
 
-// DASHBOARD CORRIGIDO
+// Função que retorna as transações filtradas por período (mês ou intervalo)
+function getTransacoesFiltradasPeriodo() {
+    let dataInicio = filtroDataInicio;
+    let dataFim = filtroDataFim;
+
+    // Se os campos de data personalizados estiverem vazios, usa o mês atual
+    if (!dataInicio || !dataFim) {
+        if (!mesAtual) return [];
+        const [ano, mes] = mesAtual.split('-');
+        dataInicio = `${ano}-${mes}-01`;
+        const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
+        dataFim = `${ano}-${mes}-${ultimoDia}`;
+    }
+
+    return transacoes.filter(t => t.pago && t.data >= dataInicio && t.data <= dataFim);
+}
+
+// DASHBOARD ATUALIZADO COM SUPORTE A PERÍODO PERSONALIZADO
 function atualizarDashboard() {
-    const mes = mesAtual;
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
 
-    let receitasMes = 0, despesasMes = 0;
+    // Obter transações do período (pagas)
+    let transacoesPeriodo = getTransacoesFiltradasPeriodo();
+    
+    // Aplicar filtros de texto e categoria
+    let transacoesFiltradas = transacoesPeriodo.filter(t => {
+        if (searchTerm && !t.descricao.toLowerCase().includes(searchTerm)) return false;
+        if (catFilter && t.categoria_id !== catFilter) return false;
+        return true;
+    });
+
+    // Totais do período (usando transacoesPeriodo, sem os filtros de texto/categoria)
+    let receitasPeriodo = 0, despesasPeriodo = 0;
+    transacoesPeriodo.forEach(t => {
+        if (t.tipo === 'receita') receitasPeriodo += t.valor;
+        else if (t.tipo === 'despesa') despesasPeriodo += t.valor;
+    });
+
+    // Saldo Total (considera todas as transações pagas, sem filtro de período)
     let saldoTotal = 0;
     contas.forEach(c => {
         if (c.tipo === 'corrente') saldoTotal += (c.saldo_inicial || 0);
@@ -345,16 +390,13 @@ function atualizarDashboard() {
         } else if (t.tipo === 'despesa') {
             if (!conta || conta.tipo === 'corrente') saldoTotal -= t.valor;
         }
-        if (t.data && t.data.startsWith(mes)) {
-            if (t.tipo === 'receita') receitasMes += t.valor;
-            else if (t.tipo === 'despesa') despesasMes += t.valor;
-        }
     });
 
     document.getElementById('saldoTotal').innerText = `R$ ${saldoTotal.toFixed(2)}`;
-    document.getElementById('totalRec').innerText = `R$ ${receitasMes.toFixed(2)}`;
-    document.getElementById('totalDes').innerText = `R$ ${despesasMes.toFixed(2)}`;
+    document.getElementById('totalRec').innerText = `R$ ${receitasPeriodo.toFixed(2)}`;
+    document.getElementById('totalDes').innerText = `R$ ${despesasPeriodo.toFixed(2)}`;
 
+    // Lista de contas
     let htmlContas = '';
     contas.forEach(c => {
         let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
@@ -372,20 +414,16 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
+    // Lista de transações (com formatação de data DD/MM/AAAA)
     let htmlTransacoes = '';
-    let transacoesFiltradas = transacoes.filter(t => {
-        if (!t.data.startsWith(mes)) return false;
-        if (searchTerm && !t.descricao.toLowerCase().includes(searchTerm)) return false;
-        if (catFilter && t.categoria_id !== catFilter) return false;
-        return true;
-    });
     transacoesFiltradas.sort((a,b) => (a.data < b.data ? 1 : -1));
     transacoesFiltradas.forEach(t => {
         const categoriaNome = categorias.find(c => c.id === t.categoria_id)?.nome || 'Sem categoria';
+        const dataFormatada = formatarDataBR(t.data);
         htmlTransacoes += `<div style="padding:10px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
             <div>
                 <strong>${t.descricao}</strong><br>
-                <small>${t.data} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
+                <small>${dataFormatada} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
                 ${t.foto ? `<br><a href="#" onclick="abrirZoom('${t.foto}')" style="color:var(--p);font-size:12px;">Ver Comprovante</a>` : ''}
             </div>
             <div style="text-align:right;">
@@ -396,8 +434,9 @@ function atualizarDashboard() {
             </div>
         </div>`;
     });
-    document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div>Nenhuma transação neste mês.</div>';
+    document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div>Nenhuma transação no período.</div>';
 
+    // Metas
     let htmlMetas = '';
     metas.forEach(m => {
         let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
@@ -426,7 +465,7 @@ function verificarPendencias() {
     }
 }
 
-// ========== SALVAR TRANSAÇÃO (SEM DUPLICAÇÃO E COM RESET DA FOTO) ==========
+// ========== SALVAR TRANSAÇÃO ==========
 let salvando = false;
 async function salvarTransacao() {
     if (salvando) return;
@@ -611,7 +650,6 @@ function editarMeta(id) {
 function abrirModal(id) {
     document.getElementById(id).classList.add('active');
     document.getElementById('overlay').classList.add('active');
-    // Se for o modal de transação e NÃO for edição, limpar o campo de foto
     if (id === 'modalTransacao' && !document.getElementById('tId').value) {
         document.getElementById('tFoto').value = '';
     }
@@ -638,21 +676,35 @@ function fecharModais() {
         document.getElementById('mNome').value = '';
         document.getElementById('mObjetivo').value = '';
         document.getElementById('mAtual').value = '';
-        // 🔧 Limpa o campo de foto e o arquivo selecionado
         document.getElementById('tFoto').value = '';
     }
 }
 
-// 🔧 VISUALIZADOR DE IMAGEM MELHORADO PARA IPHONE
+// Filtros de data personalizados
+function aplicarFiltroData() {
+    const inicio = document.getElementById('dataInicioFiltro').value;
+    const fim = document.getElementById('dataFimFiltro').value;
+    filtroDataInicio = inicio;
+    filtroDataFim = fim;
+    atualizarDashboard();
+}
+
+function limparFiltroData() {
+    document.getElementById('dataInicioFiltro').value = '';
+    document.getElementById('dataFimFiltro').value = '';
+    filtroDataInicio = '';
+    filtroDataFim = '';
+    atualizarDashboard();
+}
+
+// Visualizador de imagem melhorado
 function abrirZoom(base64) {
     const viewer = document.getElementById('imageViewer');
     const img = document.getElementById('zoomImg');
     img.src = base64;
     img.style.transform = 'scale(1)';
     viewer.style.display = 'flex';
-    // Garante que o clique na imagem também feche (além do X e do overlay)
     img.onclick = () => fecharZoom();
-    // O overlay (fundo escuro) também fecha ao clicar
     viewer.onclick = (e) => {
         if (e.target === viewer) fecharZoom();
     };
@@ -666,7 +718,6 @@ function fecharZoom() {
 }
 
 function aplicarZoom(img) {
-    // Mantém o zoom duplo-toque, mas sem atrapalhar o fechamento
     img.style.transform = img.style.transform === 'scale(2)' ? 'scale(1)' : 'scale(2)';
 }
 
@@ -707,10 +758,17 @@ function baixarPDF() {
 // ========== EVENTOS E INICIALIZAÇÃO ==========
 document.getElementById('monthPicker').addEventListener('change', (e) => {
     mesAtual = e.target.value;
+    // Limpa os filtros de data personalizados quando muda o mês
+    document.getElementById('dataInicioFiltro').value = '';
+    document.getElementById('dataFimFiltro').value = '';
+    filtroDataInicio = '';
+    filtroDataFim = '';
     atualizarDashboard();
 });
 document.getElementById('globalSearch').addEventListener('input', () => atualizarDashboard());
 document.getElementById('categoryFilter').addEventListener('change', () => atualizarDashboard());
+document.getElementById('dataInicioFiltro').addEventListener('change', aplicarFiltroData);
+document.getElementById('dataFimFiltro').addEventListener('change', aplicarFiltroData);
 document.getElementById('monthPicker').value = mesAtual;
 
 window.addEventListener('online', () => { if (authToken && !syncInProgress) syncWithServer(); });
