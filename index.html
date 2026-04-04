@@ -11,18 +11,39 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
-        /* same as before, plus password screen styles */
+        /* Variáveis e reset */
         :root {
-            --bg: #f8fafc; --card: #ffffff; --txt: #0f172a;
-            --p: #2563eb; --s: #16a34a; --d: #dc2626; --w: #f59e0b;
-            --border: #e2e8f0; --shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --txt: #0f172a;
+            --p: #2563eb;
+            --s: #16a34a;
+            --d: #dc2626;
+            --w: #f59e0b;
+            --border: #e2e8f0;
+            --shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
         }
         [data-theme='escuro'] {
-            --bg: #0f172a; --card: #1e293b; --txt: #f8fafc;
-            --border: #334155; --shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+            --bg: #0f172a;
+            --card: #1e293b;
+            --txt: #f8fafc;
+            --border: #334155;
+            --shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, system-ui, Roboto, sans-serif; }
-        body { background-color: var(--bg); color: var(--txt); transition: 0.3s; padding-bottom: 80px; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, system-ui, Roboto, sans-serif;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--txt);
+            transition: 0.3s;
+            padding-bottom: 90px;
+            padding-top: env(safe-area-inset-top, 20px);
+        }
+        /* Telas de autenticação */
         .fullscreen {
             position: fixed;
             top: 0;
@@ -36,6 +57,7 @@
             align-items: center;
             justify-content: center;
             gap: 20px;
+            padding: 20px;
         }
         .fullscreen.hidden { display: none; }
         .btn-bio, .btn-password {
@@ -44,14 +66,15 @@
             background: var(--p);
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
+            min-width: 200px;
         }
         .password-input {
             width: 80%;
             max-width: 300px;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 14px;
+            border-radius: 12px;
             border: 1px solid var(--border);
             background: var(--bg);
             color: var(--txt);
@@ -63,89 +86,316 @@
             font-size: 14px;
             margin-top: 10px;
         }
-        /* rest of the styles unchanged */
-        header { display: flex; justify-content: space-between; align-items: center; padding: 20px; background: var(--card); box-shadow: var(--shadow); flex-wrap: wrap; gap: 10px; }
-        .filters { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .filters input, .filters select, .filters button { width: auto; margin: 0; }
-        .dashboard-pyramid { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 20px; }
-        .card-top { width: 100%; max-width: 400px; text-align: center; }
-        .card-bottom-row { display: flex; justify-content: space-between; width: 100%; max-width: 400px; gap: 15px; }
-        .card-bottom-row .card { flex: 1; text-align: center; }
-        .card { background: var(--card); padding: 15px; border-radius: 12px; box-shadow: var(--shadow); text-align: center; }
-        .fab { position: fixed; bottom: 20px; right: 20px; background: var(--p); color: white; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 30px; box-shadow: var(--shadow); border: none; z-index: 100; cursor: pointer; }
-        .btn-menu { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--txt); }
-        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--card); padding: 20px; border-radius: 12px; z-index: 1000; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow); }
-        .modal.active { display: block; }
-        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
-        .overlay.active { display: block; }
-        input, select, button { width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--txt); }
-        .btn-primary { background: var(--p); color: white; border: none; font-weight: bold; }
-        #imageViewer { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; align-items: center; justify-content: center; }
-        #imageViewer img { max-width: 95%; max-height: 95%; transition: transform 0.25s ease; cursor: zoom-in; }
-        .fechar-zoom { position: absolute; top: 20px; right: 20px; color: white; font-size: 30px; cursor: pointer; }
-        .sync-status { font-size: 12px; padding: 5px; background: var(--card); border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; }
+
+        /* Cabeçalho e filtros */
+        header {
+            padding: 12px 16px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 99;
+        }
+        .filters {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .filter-row input, .filter-row select, .filter-row button {
+            flex: 1;
+            min-width: 100px;
+            padding: 12px 10px;
+            font-size: 16px;
+        }
+        .btn-menu {
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            cursor: pointer;
+            color: var(--txt);
+            font-size: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 48px;
+            min-height: 48px;
+        }
+        .sync-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 14px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            white-space: nowrap;
+        }
         .status-pending { color: var(--w); }
         .status-synced { color: var(--s); }
+
+        /* Dashboard */
+        .dashboard-pyramid {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
+        }
+        .card-top { width: 100%; max-width: 400px; text-align: center; }
+        .card-bottom-row {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            gap: 15px;
+        }
+        .card-bottom-row .card { flex: 1; text-align: center; }
+        .card {
+            background: var(--card);
+            padding: 18px 12px;
+            border-radius: 20px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+
+        /* Listas */
+        #listaContas, #listaMetas, #listaTransacoes {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        /* Botão flutuante */
+        .fab {
+            position: fixed;
+            bottom: max(20px, env(safe-area-inset-bottom));
+            right: 20px;
+            background: var(--p);
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: var(--shadow);
+            border: none;
+            z-index: 100;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+        }
+        .fab:active { transform: scale(0.96); }
+
+        /* Modais */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: var(--card);
+            padding: 24px 20px;
+            border-radius: 28px;
+            z-index: 1000;
+            width: 90%;
+            max-width: 450px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+        }
+        .modal.active { display: block; }
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
+        }
+        .overlay.active { display: block; }
+
+        /* Formulários */
+        input, select, button {
+            width: 100%;
+            padding: 14px 12px;
+            margin-top: 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--txt);
+            font-size: 16px;
+        }
+        button {
+            cursor: pointer;
+            background: var(--p);
+            color: white;
+            font-weight: 600;
+            border: none;
+        }
+        button.btn-primary {
+            background: var(--p);
+        }
+        button.danger {
+            background: var(--d);
+        }
+        .modal-actions {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .modal-actions button {
+            flex: 1;
+            margin-top: 0;
+        }
+
+        /* Visualizador de imagem */
+        #imageViewer {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.92);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+        #imageViewer img {
+            max-width: 90%;
+            max-height: 85%;
+            transition: transform 0.2s ease;
+            cursor: zoom-in;
+            border-radius: 16px;
+        }
+        .fechar-zoom {
+            position: absolute;
+            top: max(20px, env(safe-area-inset-top));
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10001;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Alertas */
+        #alertasPendentes {
+            padding: 10px 20px;
+            margin: 8px 16px;
+            background: rgba(245,158,11,0.15);
+            border-radius: 40px;
+            color: var(--w);
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* Ajustes responsivos */
+        @media (max-width: 480px) {
+            .filter-row {
+                flex-wrap: wrap;
+            }
+            .filter-row input, .filter-row select {
+                min-width: 120px;
+            }
+            .card h3 {
+                font-size: 0.95rem;
+            }
+        }
     </style>
 </head>
 <body>
     <!-- Password Screen -->
     <div id="passwordScreen" class="fullscreen">
-        <h2>Digite a senha</h2>
-        <input type="password" id="passwordInput" class="password-input" placeholder="Senha mestra">
+        <h2>🔐 Acesso Restrito</h2>
+        <input type="password" id="passwordInput" class="password-input" placeholder="Senha mestra" autocomplete="off">
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
         <div id="passwordError" class="error-msg"></div>
     </div>
 
     <!-- Lock Screen (Biometria) -->
     <div id="lockScreen" class="fullscreen hidden">
-        <h2>Finanças Familiar</h2>
-        <button class="btn-bio" onclick="autenticarBiometria()">Desbloquear (Face ID / Touch)</button>
+        <h2>💰 Finanças Familiar</h2>
+        <button class="btn-bio" onclick="autenticarBiometria()">🔓 Desbloquear (Face ID / Touch)</button>
     </div>
 
     <div id="appContent" style="display: none;">
         <header>
             <div class="filters">
-                <input type="month" id="monthPicker" value="">
-                <input type="text" id="globalSearch" placeholder="Buscar...">
-                <select id="categoryFilter">
-                    <option value="">Todas categorias</option>
-                </select>
-                
-                <button class="btn-menu" onclick="alternarTema()">🌓</button>
-                <button class="btn-menu" onclick="abrirModal('modalExportar')">📊</button>
-                <button class="btn-menu" onclick="logout()">🚪</button>
+                <div class="filter-row">
+                    <input type="month" id="monthPicker" value="">
+                    <input type="text" id="globalSearch" placeholder="🔍 Buscar...">
+                    <button class="btn-menu" onclick="alternarTema()" title="Tema claro/escuro">🌓</button>
+                    <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()" title="Clique para sincronizar">🔄 Sincronizando...</div>
+                </div>
+                <div class="filter-row">
+                    <select id="categoryFilter">
+                        <option value="">📂 Todas categorias</option>
+                    </select>
+                    <button class="btn-menu" onclick="abrirModal('modalExportar')" title="Exportar relatório">📊</button>
+                    <button class="btn-menu" onclick="logout()" title="Sair">🚪</button>
+                </div>
             </div>
-            <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()" style="cursor: pointer; padding: 8px 12px;" title="Clique para sincronizar">🔄 Sincronizando...</div>
         </header>
 
-        <div id="alertasPendentes" style="padding: 10px 20px; color: var(--w); font-weight: bold; text-align: center;"></div>
+        <div id="alertasPendentes"></div>
 
         <div class="dashboard-pyramid">
             <div class="card card-top">
-                <h3>Saldo Total</h3>
-                <p id="saldoTotal" style="font-size: 1.5em; font-weight: bold;">R$ 0,00</p>
+                <h3>💰 Saldo Total</h3>
+                <p id="saldoTotal" style="font-size: 2rem; font-weight: bold;">R$ 0,00</p>
             </div>
             <div class="card-bottom-row">
                 <div class="card">
-                    <h3>Despesas (Mês)</h3>
-                    <p id="totalDes" style="color: var(--d); font-size: 1.2em; font-weight: bold;">R$ 0,00</p>
+                    <h3>📉 Despesas (Mês)</h3>
+                    <p id="totalDes" style="color: var(--d); font-size: 1.4rem; font-weight: bold;">R$ 0,00</p>
                 </div>
                 <div class="card">
-                    <h3>Receitas (Mês)</h3>
-                    <p id="totalRec" style="color: var(--s); font-size: 1.2em; font-weight: bold;">R$ 0,00</p>
+                    <h3>📈 Receitas (Mês)</h3>
+                    <p id="totalRec" style="color: var(--s); font-size: 1.4rem; font-weight: bold;">R$ 0,00</p>
                 </div>
             </div>
         </div>
 
-        <div style="padding: 20px;">
-            <h3>Contas e Cartões <button onclick="abrirModal('modalConta')" style="width:auto; padding:5px 10px; float:right;">+</button></h3>
+        <div style="padding: 0 20px 20px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h3>💳 Contas e Cartões</h3>
+                <button onclick="abrirModal('modalConta')" style="width: auto; padding: 8px 16px; margin:0;">+ Adicionar</button>
+            </div>
             <div id="listaContas"></div>
             
-            <h3 style="margin-top: 20px;">Cofrinhos / Metas <button onclick="abrirModal('modalMeta')" style="width:auto; padding:5px 10px; float:right;">+</button></h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 8px;">
+                <h3>🎯 Cofrinhos / Metas</h3>
+                <button onclick="abrirModal('modalMeta')" style="width: auto; padding: 8px 16px; margin:0;">+ Novo</button>
+            </div>
             <div id="listaMetas"></div>
 
-            <h3 style="margin-top: 20px;">Transações Recentes</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 8px;">
+                <h3>📋 Transações Recentes</h3>
+            </div>
             <div id="listaTransacoes"></div>
         </div>
 
@@ -154,61 +404,77 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
+    <!-- Modal Transação -->
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal">Nova Transação</h3>
         <input type="hidden" id="tId">
-        <select id="tTipo"><option value="despesa">Despesa</option><option value="receita">Receita</option></select>
-        <input type="text" id="tDescricao" placeholder="Descrição (Opcional)">
+        <select id="tTipo">
+            <option value="despesa">💸 Despesa</option>
+            <option value="receita">💰 Receita</option>
+        </select>
+        <input type="text" id="tDescricao" placeholder="Descrição (opcional)">
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
         <input type="date" id="tData">
         <select id="tConta"><option value="">Selecione a Conta/Cartão</option></select>
         <select id="tCategoria"></select>
-        <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº de Parcelas (1 = à vista)">
-        <select id="tStatus"><option value="true">Pago/Recebido</option><option value="false">Pendente</option></select>
-        <input type="file" id="tFoto" accept="image/*">
-        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 15px;">
-            <button class="btn-primary" id="btnExcluirTransacao" style="background: var(--d); display: none;" onclick="excluirItem('transacoes', 'tId')">Excluir</button>
-            <button class="btn-primary" style="flex: 1;" onclick="salvarTransacao()">Guardar</button>
+        <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº Parcelas (1 = à vista)">
+        <select id="tStatus">
+            <option value="true">✅ Pago / Recebido</option>
+            <option value="false">⏳ Pendente</option>
+        </select>
+        <input type="file" id="tFoto" accept="image/*" capture="environment">
+        <div class="modal-actions">
+            <button id="btnExcluirTransacao" class="danger" style="display: none;" onclick="excluirItem('transacoes', 'tId')">🗑 Excluir</button>
+            <button class="btn-primary" onclick="salvarTransacao()">💾 Guardar</button>
         </div>
     </div>
 
+    <!-- Modal Conta -->
     <div class="modal" id="modalConta">
         <h3 id="cTituloModal">Nova Conta / Cartão</h3>
         <input type="hidden" id="cId">
         <input type="text" id="cNome" placeholder="Nome (ex: Nubank)">
-        <select id="cTipo"><option value="corrente">Conta Corrente</option><option value="cartao">Cartão de Crédito</option></select>
+        <select id="cTipo">
+            <option value="corrente">🏦 Conta Corrente</option>
+            <option value="cartao">💳 Cartão de Crédito</option>
+        </select>
         <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial / Limite do Cartão">
-        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (Opcional)" min="1" max="31">
-        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 15px;">
-            <button class="btn-primary" id="btnExcluirConta" style="background: var(--d); display: none;" onclick="excluirItem('contas', 'cId')">Excluir</button>
-            <button class="btn-primary" style="flex: 1;" onclick="salvarConta()">Guardar</button>
+        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (1-31) - Opcional" min="1" max="31">
+        <div class="modal-actions">
+            <button id="btnExcluirConta" class="danger" style="display: none;" onclick="excluirItem('contas', 'cId')">🗑 Excluir</button>
+            <button class="btn-primary" onclick="salvarConta()">💾 Guardar</button>
         </div>
     </div>
 
+    <!-- Modal Meta -->
     <div class="modal" id="modalMeta">
         <h3 id="mTituloModal">Novo Cofrinho</h3>
         <input type="hidden" id="mId">
         <input type="text" id="mNome" placeholder="Objetivo (ex: Viagem)">
         <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
-        <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado R$ (Opcional)">
+        <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado (opcional)">
         <input type="date" id="mData">
-        <select id="mConta"><option value="">Conta associada (Opcional)</option></select>
-        <div style="display: flex; justify-content: space-between; gap: 10px; margin-top: 15px;">
-            <button class="btn-primary" id="btnExcluirMeta" style="background: var(--d); display: none;" onclick="excluirItem('metas', 'mId')">Excluir</button>
-            <button class="btn-primary" style="flex: 1;" onclick="salvarMeta()">Guardar</button>
+        <select id="mConta"><option value="">Conta associada (opcional)</option></select>
+        <div class="modal-actions">
+            <button id="btnExcluirMeta" class="danger" style="display: none;" onclick="excluirItem('metas', 'mId')">🗑 Excluir</button>
+            <button class="btn-primary" onclick="salvarMeta()">💾 Guardar</button>
         </div>
     </div>
 
+    <!-- Modal Exportar -->
     <div class="modal" id="modalExportar">
-        <h3>Exportar Relatório</h3>
-        <input type="date" id="eDataIni">
-        <input type="date" id="eDataFim">
-        <button class="btn-primary" onclick="baixarRelatorio()">CSV</button>
-        <button class="btn-primary" onclick="baixarPDF()">PDF</button>
+        <h3>📎 Exportar Relatório</h3>
+        <input type="date" id="eDataIni" placeholder="Data inicial">
+        <input type="date" id="eDataFim" placeholder="Data final">
+        <div class="modal-actions">
+            <button class="btn-primary" onclick="baixarRelatorio()">📄 CSV</button>
+            <button class="btn-primary" onclick="baixarPDF()">📑 PDF</button>
+        </div>
     </div>
 
+    <!-- Visualizador de imagem -->
     <div id="imageViewer">
-        <span class="fechar-zoom" onclick="fecharZoom()">×</span>
+        <span class="fechar-zoom" onclick="fecharZoom()">✕</span>
         <img id="zoomImg" src="" onclick="aplicarZoom(this)">
     </div>
 
