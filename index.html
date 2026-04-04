@@ -20,14 +20,14 @@
             --d: #dc2626;
             --w: #f59e0b;
             --border: #e2e8f0;
-            --shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+            --shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
         [data-theme='escuro'] {
             --bg: #0f172a;
             --card: #1e293b;
             --txt: #f8fafc;
             --border: #334155;
-            --shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+            --shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
         * {
             box-sizing: border-box;
@@ -42,6 +42,7 @@
             padding-bottom: 90px;
             padding-top: env(safe-area-inset-top, 20px);
         }
+        /* Telas de autenticação */
         .fullscreen {
             position: fixed;
             top: 0;
@@ -64,7 +65,7 @@
             background: var(--p);
             color: white;
             border: none;
-            border-radius: 12px;
+            border-radius: 14px;
             cursor: pointer;
             min-width: 200px;
         }
@@ -72,7 +73,7 @@
             width: 80%;
             max-width: 300px;
             padding: 14px;
-            border-radius: 12px;
+            border-radius: 14px;
             border: 1px solid var(--border);
             background: var(--bg);
             color: var(--txt);
@@ -91,6 +92,7 @@
             position: sticky;
             top: 0;
             z-index: 99;
+            border-bottom: 1px solid var(--border);
         }
         .filters {
             display: flex;
@@ -100,22 +102,25 @@
         .filter-row {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
         }
         .filter-row input, .filter-row select, .filter-row button {
             flex: 1;
             min-width: 100px;
-            padding: 12px 10px;
-            font-size: 16px;
+            padding: 10px 12px;
+            font-size: 15px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--txt);
         }
         .btn-menu {
-            background: none;
+            background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 14px;
             padding: 10px;
             cursor: pointer;
-            color: var(--txt);
             font-size: 20px;
             display: inline-flex;
             align-items: center;
@@ -156,11 +161,13 @@
         .card {
             background: var(--card);
             padding: 18px 12px;
-            border-radius: 20px;
+            border-radius: 24px;
             box-shadow: var(--shadow);
             text-align: center;
+            border: 1px solid var(--border);
         }
-        .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .card h3 { font-size: 1rem; margin-bottom: 8px; opacity: 0.8; }
+        .card p { font-weight: bold; font-size: 1.4rem; }
         #listaContas, #listaMetas, #listaTransacoes {
             display: flex;
             flex-direction: column;
@@ -202,6 +209,7 @@
             max-height: 85vh;
             overflow-y: auto;
             box-shadow: var(--shadow);
+            border: 1px solid var(--border);
         }
         .modal.active { display: block; }
         .overlay {
@@ -217,7 +225,7 @@
         .overlay.active { display: block; }
         input, select, button {
             width: 100%;
-            padding: 14px 12px;
+            padding: 12px;
             margin-top: 12px;
             border-radius: 14px;
             border: 1px solid var(--border);
@@ -288,10 +296,25 @@
             font-weight: bold;
             text-align: center;
         }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin: 20px 0 8px;
+        }
+        .section-header h3 { font-size: 1.2rem; }
+        .section-header button {
+            width: auto;
+            padding: 6px 14px;
+            margin: 0;
+            background: var(--p);
+            border-radius: 30px;
+            font-size: 14px;
+        }
         @media (max-width: 480px) {
             .filter-row { flex-wrap: wrap; }
-            .filter-row input, .filter-row select { min-width: 120px; }
-            .card h3 { font-size: 0.95rem; }
+            .filter-row input, .filter-row select { min-width: 110px; }
+            .card p { font-size: 1.2rem; }
         }
     </style>
 </head>
@@ -318,7 +341,7 @@
                     <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
                 </div>
                 <div class="filter-row">
-                    <input type="text" id="globalSearch" placeholder="🔍 Buscar...">
+                    <input type="text" id="globalSearch" placeholder="🔍 Buscar por descrição...">
                     <select id="categoryFilter">
                         <option value="">📂 Todas categorias</option>
                     </select>
@@ -336,35 +359,38 @@
 
         <div class="dashboard-pyramid">
             <div class="card card-top">
-                <h3>💰 Saldo Total</h3>
-                <p id="saldoTotal" style="font-size: 2rem; font-weight: bold;">R$ 0,00</p>
+                <h3>💰 Saldo Total (geral)</h3>
+                <p id="saldoTotal">R$ 0,00</p>
             </div>
             <div class="card-bottom-row">
                 <div class="card">
-                    <h3>📉 Despesas (período)</h3>
-                    <p id="totalDes" style="color: var(--d); font-size: 1.4rem; font-weight: bold;">R$ 0,00</p>
+                    <h3>📉 Despesas (filtro)</h3>
+                    <p id="totalDes" style="color: var(--d);">R$ 0,00</p>
                 </div>
                 <div class="card">
-                    <h3>📈 Receitas (período)</h3>
-                    <p id="totalRec" style="color: var(--s); font-size: 1.4rem; font-weight: bold;">R$ 0,00</p>
+                    <h3>📈 Receitas (filtro)</h3>
+                    <p id="totalRec" style="color: var(--s);">R$ 0,00</p>
                 </div>
+            </div>
+            <div class="card" style="width:100%; max-width:400px; padding:10px; background: var(--card);">
+                <p style="font-size:12px; opacity:0.7;">⬆️ Os valores acima são das transações <strong>pagas</strong> no período e que correspondem à busca e categoria selecionadas.</p>
             </div>
         </div>
 
         <div style="padding: 0 20px 20px 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div class="section-header">
                 <h3>💳 Contas e Cartões</h3>
-                <button onclick="abrirModal('modalConta')" style="width: auto; padding: 8px 16px; margin:0;">+ Adicionar</button>
+                <button onclick="abrirModal('modalConta')">+ Adicionar</button>
             </div>
             <div id="listaContas"></div>
             
-            <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 8px;">
+            <div class="section-header">
                 <h3>🎯 Cofrinhos / Metas</h3>
-                <button onclick="abrirModal('modalMeta')" style="width: auto; padding: 8px 16px; margin:0;">+ Novo</button>
+                <button onclick="abrirModal('modalMeta')">+ Novo</button>
             </div>
             <div id="listaMetas"></div>
 
-            <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 8px;">
+            <div class="section-header">
                 <h3>📋 Transações</h3>
             </div>
             <div id="listaTransacoes"></div>
