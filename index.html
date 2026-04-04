@@ -317,19 +317,30 @@
             color: var(--txt);
             opacity: 0.7;
         }
-        /* Campos de data lado a lado */
+        /* Estilo para os campos de data com label acima */
+        .date-field {
+            flex: 1;
+            min-width: 0;
+        }
+        .date-field label {
+            font-size: 12px;
+            display: block;
+            margin-bottom: 4px;
+            opacity: 0.7;
+        }
+        .date-field input {
+            margin-top: 0;
+            width: 100%;
+        }
         .date-range {
             display: flex;
             gap: 8px;
             flex: 2;
         }
-        .date-range input {
-            flex: 1;
-            min-width: 0;
-        }
         @media (max-width: 480px) {
             .filter-row { flex-wrap: wrap; }
-            .date-range { width: 100%; }
+            .date-range { width: 100%; flex-direction: column; gap: 12px; }
+            .date-field { width: 100%; }
             .card p { font-size: 1.2rem; }
         }
     </style>
@@ -353,8 +364,14 @@
                 <div class="filter-row">
                     <input type="month" id="monthPicker" value="">
                     <div class="date-range">
-                        <input type="date" id="dataInicioFiltro" placeholder="📅 Início">
-                        <input type="date" id="dataFimFiltro" placeholder="📅 Fim">
+                        <div class="date-field">
+                            <label>📅 Início</label>
+                            <input type="date" id="dataInicioFiltro">
+                        </div>
+                        <div class="date-field">
+                            <label>📅 Fim</label>
+                            <input type="date" id="dataFimFiltro">
+                        </div>
                     </div>
                     <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
                 </div>
@@ -430,7 +447,7 @@
         <input type="text" id="tDescricao" placeholder="Descrição (opcional)">
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
         <label class="label-small">📅 Data da transação:</label>
-        <input type="date" id="tData" placeholder="AAAA-MM-DD">
+        <input type="date" id="tData">
         <select id="tConta"><option value="">Selecione a Conta/Cartão</option></select>
         <select id="tCategoria"></select>
         <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº Parcelas (1 = à vista)">
@@ -468,7 +485,7 @@
         <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
         <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado (opcional)">
         <label class="label-small">📅 Data limite:</label>
-        <input type="date" id="mData" placeholder="AAAA-MM-DD">
+        <input type="date" id="mData">
         <select id="mConta"><option value="">Conta associada (opcional)</option></select>
         <div class="modal-actions">
             <button id="btnExcluirMeta" class="danger" style="display: none;" onclick="excluirItem('metas', 'mId')">🗑 Excluir</button>
