@@ -317,9 +317,19 @@
             color: var(--txt);
             opacity: 0.7;
         }
+        /* Campos de data lado a lado */
+        .date-range {
+            display: flex;
+            gap: 8px;
+            flex: 2;
+        }
+        .date-range input {
+            flex: 1;
+            min-width: 0;
+        }
         @media (max-width: 480px) {
             .filter-row { flex-wrap: wrap; }
-            .filter-row input, .filter-row select { min-width: 110px; }
+            .date-range { width: 100%; }
             .card p { font-size: 1.2rem; }
         }
     </style>
@@ -342,8 +352,10 @@
             <div class="filters">
                 <div class="filter-row">
                     <input type="month" id="monthPicker" value="">
-                    <input type="date" id="dataInicioFiltro" placeholder="Data início">
-                    <input type="date" id="dataFimFiltro" placeholder="Data fim">
+                    <div class="date-range">
+                        <input type="date" id="dataInicioFiltro" placeholder="📅 Início">
+                        <input type="date" id="dataFimFiltro" placeholder="📅 Fim">
+                    </div>
                     <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
                 </div>
                 <div class="filter-row">
