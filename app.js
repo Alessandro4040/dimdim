@@ -146,7 +146,8 @@ function carregarDadosLocais() {
                 { id: '2', nome: 'Transporte', tipo: 'despesa', icone: '🚗', fixa: true, sinc: true, updated_at: new Date().toISOString() },
                 { id: '3', nome: 'Lazer', tipo: 'despesa', icone: '🎮', fixa: true, sinc: true, updated_at: new Date().toISOString() },
                 { id: '4', nome: 'Salário', tipo: 'receita', icone: '💰', fixa: true, sinc: true, updated_at: new Date().toISOString() },
-                { id: '5', nome: 'Outros', tipo: 'outros', icone: '📦', fixa: true, sinc: true, updated_at: new Date().toISOString() }
+                { id: '5', nome: 'Outros', tipo: 'outros', icone: '📦', fixa: true, sinc: true, updated_at: new Date().toISOString() },
+                { id: 'cat_transferencia', nome: '🔄 Transf. / Fatura', tipo: 'outros', icone: '🔄', fixa: true, sinc: true, updated_at: new Date().toISOString() }
             ];
             padrao.forEach(c => salvarItemDB('categorias', c));
             categorias = padrao;
@@ -167,19 +168,63 @@ function salvarItemDB(store, item) {
     tx.oncomplete = () => carregarDadosLocais();
 }
 
+// Deleção em cascata para transferências
 async function excluirItem(store, inputId) {
     const id = document.getElementById(inputId).value;
     if (!id || !confirm('Tem certeza que deseja excluir este item?')) return;
-    const tx = db.transaction(store, 'readwrite');
-    tx.objectStore(store).delete(id);
-    tx.oncomplete = () => {
+    
+    // Se for transação, verificar se é parte de uma transferência (tem id_original)
+    if (store === 'transacoes') {
+        const transacao = transacoes.find(t => t.id === id);
+        if (transacao && transacao.id_original) {
+            // Buscar todas as transações com o mesmo id_original
+            const related = transacoes.filter(t => t.id_original === transacao.id_original);
+            if (related.length > 1) {
+                if (confirm('Esta é uma transferência. Deseja excluir ambas as movimentações (saída e entrada)?')) {
+                    for (const t of related) {
+                        const tx = db.transaction('transacoes', 'readwrite');
+                        tx.objectStore('transacoes').delete(t.id);
+                        // Registrar exclusão para sincronização
+                        let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+                        deletados['transacoes'].push(t.id);
+                        localStorage.setItem('deletados', JSON.stringify(deletados));
+                    }
+                } else {
+                    // Excluir apenas esta perna
+                    const tx = db.transaction('transacoes', 'readwrite');
+                    tx.objectStore('transacoes').delete(id);
+                    let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+                    deletados['transacoes'].push(id);
+                    localStorage.setItem('deletados', JSON.stringify(deletados));
+                }
+            } else {
+                // Transação normal
+                const tx = db.transaction('transacoes', 'readwrite');
+                tx.objectStore('transacoes').delete(id);
+                let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+                deletados['transacoes'].push(id);
+                localStorage.setItem('deletados', JSON.stringify(deletados));
+            }
+        } else {
+            // Transação normal sem id_original
+            const tx = db.transaction('transacoes', 'readwrite');
+            tx.objectStore('transacoes').delete(id);
+            let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+            deletados['transacoes'].push(id);
+            localStorage.setItem('deletados', JSON.stringify(deletados));
+        }
+    } else {
+        // Contas, metas, categorias
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).delete(id);
         let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
         deletados[store].push(id);
         localStorage.setItem('deletados', JSON.stringify(deletados));
-        fecharModais();
-        carregarDadosLocais();
-        syncWithServer();
-    };
+    }
+    
+    fecharModais();
+    carregarDadosLocais();
+    syncWithServer();
 }
 
 // ========== FUNÇÕES DE CONVERSÃO ==========
@@ -317,8 +362,13 @@ function atualizarSyncStatus(status) {
 // ========== FUNÇÕES DE UI ==========
 function atualizarSelectContas() {
     const sel = document.getElementById('tConta');
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    contas.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`; });
+    const selDestino = document.getElementById('tContaDestino');
+    sel.innerHTML = '<option value="">Selecione a Origem...</option>';
+    if (selDestino) selDestino.innerHTML = '<option value="">Selecione o Destino...</option>';
+    contas.forEach(c => {
+        sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+        if (selDestino) selDestino.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+    });
     const selMeta = document.getElementById('mConta');
     if (selMeta) {
         selMeta.innerHTML = '<option value="">Nenhuma</option>';
@@ -329,13 +379,40 @@ function atualizarSelectContas() {
 function atualizarSelectCategorias() {
     const sel = document.getElementById('tCategoria');
     sel.innerHTML = '';
-    categorias.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`; });
+    // Filtrar para não mostrar a categoria de transferência ao usuário comum
+    categorias.filter(c => c.id !== 'cat_transferencia').forEach(c => {
+        sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+    });
 }
 
 function atualizarFiltroCategorias() {
     const sel = document.getElementById('categoryFilter');
     sel.innerHTML = '<option value="">📂 Todas categorias</option>';
-    categorias.forEach(c => { sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`; });
+    categorias.filter(c => c.id !== 'cat_transferencia').forEach(c => {
+        sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+    });
+}
+
+// Função para mostrar/esconder campos de transferência
+function toggleTransferencia() {
+    const tipo = document.getElementById('tTipo').value;
+    const contaDestino = document.getElementById('tContaDestino');
+    const categoria = document.getElementById('tCategoria');
+    const parcelas = document.getElementById('tParcelas');
+    
+    if (tipo === 'transferencia') {
+        contaDestino.style.display = 'block';
+        categoria.disabled = true;
+        // Forçar a categoria de transferência (não visível no select)
+        // Como a categoria não está no select, vamos definir um campo hidden ou simplesmente ignorar
+        // A lógica de salvar vai usar 'cat_transferencia' diretamente
+        parcelas.disabled = true;
+        parcelas.value = '1';
+    } else {
+        contaDestino.style.display = 'none';
+        categoria.disabled = false;
+        parcelas.disabled = false;
+    }
 }
 
 // Retorna as transações do período (pagas) sem aplicar filtros de busca/categoria
@@ -354,6 +431,7 @@ function getTransacoesPeriodoBase() {
 }
 
 // DASHBOARD ATUALIZADO: totais de receitas/despesas baseados nas transações visíveis (filtro de busca e categoria)
+// E excluindo a categoria de transferência dos totais
 function atualizarDashboard() {
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
@@ -368,14 +446,15 @@ function atualizarDashboard() {
         return true;
     });
 
-    // Totais das transações filtradas (visíveis)
+    // Totais das transações filtradas (visíveis) EXCLUINDO categoria de transferência
     let receitasFiltradas = 0, despesasFiltradas = 0;
     transacoesFiltradas.forEach(t => {
+        if (t.categoria_id === 'cat_transferencia') return; // Ignorar transferências
         if (t.tipo === 'receita') receitasFiltradas += t.valor;
         else if (t.tipo === 'despesa') despesasFiltradas += t.valor;
     });
 
-    // Saldo Total (geral, sem filtro de período)
+    // Saldo Total (geral, sem filtro de período) - ajustado para não contar receitas em cartão de crédito
     let saldoTotal = 0;
     contas.forEach(c => {
         if (c.tipo === 'corrente') saldoTotal += (c.saldo_inicial || 0);
@@ -384,7 +463,9 @@ function atualizarDashboard() {
         if (!t.pago) return;
         const conta = contas.find(c => c.id === t.conta_id);
         if (t.tipo === 'receita') {
-            saldoTotal += t.valor;
+            // Só adiciona ao Saldo Geral se o dinheiro entrar numa Conta Corrente
+            // (Evita que fatura paga gere "falso dinheiro")
+            if (!conta || conta.tipo === 'corrente') saldoTotal += t.valor;
         } else if (t.tipo === 'despesa') {
             if (!conta || conta.tipo === 'corrente') saldoTotal -= t.valor;
         }
@@ -418,9 +499,12 @@ function atualizarDashboard() {
     transacoesFiltradas.forEach(t => {
         const categoriaNome = categorias.find(c => c.id === t.categoria_id)?.nome || 'Sem categoria';
         const dataFormatada = formatarDataBR(t.data);
+        // Se for transferência, mostrar ícone especial
+        const isTransfer = t.categoria_id === 'cat_transferencia';
+        const tipoIcon = isTransfer ? '🔄' : (t.tipo === 'receita' ? '💰' : '💸');
         htmlTransacoes += `<div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
             <div style="flex:1;">
-                <strong>${t.descricao}</strong><br>
+                <strong>${tipoIcon} ${t.descricao}</strong><br>
                 <small style="opacity:0.7;">${dataFormatada} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
                 ${t.foto ? `<br><a href="#" onclick="abrirZoom('${t.foto}')" style="color:var(--p);font-size:12px;">📎 Ver comprovante</a>` : ''}
             </div>
@@ -490,6 +574,51 @@ async function salvarTransacao() {
             if (existente) fotoBase64 = existente.foto;
         }
 
+        // === INTERCEPTAR TRANSFERÊNCIA ===
+        if (tipo === 'transferencia') {
+            const contaDestinoId = document.getElementById('tContaDestino').value;
+            if (!contaDestinoId || contaId === contaDestinoId) {
+                alert("Selecione uma conta de destino válida e diferente da origem.");
+                salvando = false;
+                if (btn) btn.disabled = false;
+                return;
+            }
+
+            const dataInicial = new Date(dataInput);
+            dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
+            const dataStr = dataInicial.toISOString().split('T')[0];
+            const idOriginal = uuidv4();
+
+            // 1. Saída (Conta Origem - normalmente corrente)
+            const saida = {
+                id: uuidv4(), id_original: idOriginal,
+                tipo: 'despesa', descricao: descricao || 'Pagamento Fatura / Transf.',
+                valor: valorTotal, data: dataStr,
+                conta_id: contaId, categoria_id: 'cat_transferencia',
+                pago: pago, parcela_num: 1, parcela_total: 1,
+                foto: fotoBase64, sinc: false, updated_at: new Date().toISOString()
+            };
+
+            // 2. Entrada (Restaurar Limite do Cartão Destino)
+            const entrada = {
+                id: uuidv4(), id_original: idOriginal,
+                tipo: 'receita', descricao: descricao || 'Fatura Recebida',
+                valor: valorTotal, data: dataStr,
+                conta_id: contaDestinoId, categoria_id: 'cat_transferencia',
+                pago: pago, parcela_num: 1, parcela_total: 1,
+                foto: fotoBase64, sinc: false, updated_at: new Date().toISOString()
+            };
+
+            await salvarItemDB('transacoes', saida);
+            await salvarItemDB('transacoes', entrada);
+
+            fecharModais();
+            salvando = false;
+            if (btn) btn.disabled = false;
+            return;
+        }
+
+        // === TRANSAÇÃO NORMAL (DESPESA/RECEITA) ===
         if (idEdit) {
             const index = transacoes.findIndex(t => t.id === idEdit);
             if (index !== -1) {
@@ -603,17 +732,52 @@ function salvarMeta() {
 function editarTransacao(id) {
     const t = transacoes.find(x => x.id === id);
     if (!t) return;
+    
+    // Verificar se é parte de uma transferência
+    const isTransfer = t.categoria_id === 'cat_transferencia';
+    let related = [];
+    if (isTransfer && t.id_original) {
+        related = transacoes.filter(x => x.id_original === t.id_original);
+    }
+    
     document.getElementById('tId').value = t.id;
-    document.getElementById('tTipo').value = t.tipo;
-    document.getElementById('tDescricao').value = t.descricao;
-    document.getElementById('tValor').value = t.valor;
-    document.getElementById('tData').value = t.data;
-    document.getElementById('tConta').value = t.conta_id;
-    document.getElementById('tCategoria').value = t.categoria_id;
-    document.getElementById('tStatus').value = t.pago.toString();
-    document.getElementById('tParcelas').value = 1;
-    document.getElementById('tParcelas').disabled = true;
-    document.getElementById('tTituloModal').innerText = 'Editar Transação';
+    
+    if (isTransfer && related.length === 2) {
+        // É uma transferência - mostrar no modo transferência
+        document.getElementById('tTipo').value = 'transferencia';
+        toggleTransferencia();
+        // Encontrar a outra perna para saber destino/origem
+        const outra = related.find(x => x.id !== t.id);
+        if (t.tipo === 'despesa') {
+            // Esta é a saída, origem é t.conta_id, destino é outra.conta_id
+            document.getElementById('tConta').value = t.conta_id;
+            document.getElementById('tContaDestino').value = outra.conta_id;
+        } else {
+            // Esta é a entrada, origem é outra.conta_id, destino é t.conta_id
+            document.getElementById('tConta').value = outra.conta_id;
+            document.getElementById('tContaDestino').value = t.conta_id;
+        }
+        document.getElementById('tDescricao').value = t.descricao.replace(' (Fatura Recebida)', '').replace(' (Pagamento Fatura / Transf.)', '');
+        document.getElementById('tValor').value = t.valor;
+        document.getElementById('tData').value = t.data;
+        document.getElementById('tStatus').value = t.pago.toString();
+        document.getElementById('tParcelas').value = 1;
+        document.getElementById('tParcelas').disabled = true;
+    } else {
+        // Transação normal
+        document.getElementById('tTipo').value = t.tipo;
+        toggleTransferencia();
+        document.getElementById('tDescricao').value = t.descricao;
+        document.getElementById('tValor').value = t.valor;
+        document.getElementById('tData').value = t.data;
+        document.getElementById('tConta').value = t.conta_id;
+        document.getElementById('tCategoria').value = t.categoria_id;
+        document.getElementById('tStatus').value = t.pago.toString();
+        document.getElementById('tParcelas').value = t.parcela_total || 1;
+        document.getElementById('tParcelas').disabled = false;
+    }
+    
+    document.getElementById('tTituloModal').innerText = isTransfer ? 'Editar Transferência' : 'Editar Transação';
     document.getElementById('btnExcluirTransacao').style.display = 'block';
     abrirModal('modalTransacao');
 }
@@ -651,6 +815,9 @@ function abrirModal(id) {
     document.getElementById('overlay').classList.add('active');
     if (id === 'modalTransacao' && !document.getElementById('tId').value) {
         document.getElementById('tFoto').value = '';
+        // Resetar campos de transferência
+        document.getElementById('tTipo').value = 'despesa';
+        toggleTransferencia();
     }
 }
 
@@ -676,6 +843,10 @@ function fecharModais() {
         document.getElementById('mObjetivo').value = '';
         document.getElementById('mAtual').value = '';
         document.getElementById('tFoto').value = '';
+        // Reset transferência
+        document.getElementById('tTipo').value = 'despesa';
+        toggleTransferencia();
+        document.getElementById('tContaDestino').value = '';
     }
 }
 
