@@ -317,7 +317,6 @@
             color: var(--txt);
             opacity: 0.7;
         }
-        /* Campos de data lado a lado */
         .date-range {
             display: flex;
             flex-direction: row;
@@ -420,7 +419,7 @@
                 </div>
             </div>
             <div class="card" style="width:100%; max-width:400px; padding:10px; background: var(--card);">
-                <p style="font-size:12px; opacity:0.7;">⬆️ Os valores acima são das transações <strong>pagas</strong> no período e que correspondem à busca e categoria selecionadas.</p>
+                <p style="font-size:12px; opacity:0.7;">⬆️ Os valores acima são das transações <strong>pagas</strong> no período e que correspondem à busca e categoria selecionadas.<br>🔄 Transferências não entram nos totais.</p>
             </div>
         </div>
 
@@ -452,22 +451,23 @@
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal">Nova Transação</h3>
         <input type="hidden" id="tId">
-        <select id="tTipo">
+        <select id="tTipo" onchange="toggleTransferencia()">
             <option value="despesa">💸 Despesa</option>
             <option value="receita">💰 Receita</option>
+            <option value="transferencia">🔄 Pagar Fatura / Transf.</option>
         </select>
         <input type="text" id="tDescricao" placeholder="Descrição (opcional)">
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
         <label class="label-small">📅 Data da transação:</label>
         <input type="date" id="tData">
-        <select id="tConta"><option value="">Selecione a Conta/Cartão</option></select>
+        <select id="tConta"><option value="">Selecione a Conta/Cartão (Origem)</option></select>
+        <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão (Destino)</option></select>
         <select id="tCategoria"></select>
         <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº Parcelas (1 = à vista)">
         <select id="tStatus">
             <option value="true">✅ Pago / Recebido</option>
             <option value="false">⏳ Pendente</option>
         </select>
-        <!-- Removido capture="environment" para permitir galeria e arquivos -->
         <input type="file" id="tFoto" accept="image/*">
         <div class="modal-actions">
             <button id="btnExcluirTransacao" class="danger" style="display: none;" onclick="excluirItem('transacoes', 'tId')">🗑 Excluir</button>
