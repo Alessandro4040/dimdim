@@ -173,24 +173,20 @@ async function excluirItem(store, inputId) {
     const id = document.getElementById(inputId).value;
     if (!id || !confirm('Tem certeza que deseja excluir este item?')) return;
     
-    // Se for transação, verificar se é parte de uma transferência (tem id_original)
     if (store === 'transacoes') {
         const transacao = transacoes.find(t => t.id === id);
         if (transacao && transacao.id_original) {
-            // Buscar todas as transações com o mesmo id_original
             const related = transacoes.filter(t => t.id_original === transacao.id_original);
             if (related.length > 1) {
                 if (confirm('Esta é uma transferência. Deseja excluir ambas as movimentações (saída e entrada)?')) {
                     for (const t of related) {
                         const tx = db.transaction('transacoes', 'readwrite');
                         tx.objectStore('transacoes').delete(t.id);
-                        // Registrar exclusão para sincronização
                         let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
                         deletados['transacoes'].push(t.id);
                         localStorage.setItem('deletados', JSON.stringify(deletados));
                     }
                 } else {
-                    // Excluir apenas esta perna
                     const tx = db.transaction('transacoes', 'readwrite');
                     tx.objectStore('transacoes').delete(id);
                     let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
@@ -198,7 +194,6 @@ async function excluirItem(store, inputId) {
                     localStorage.setItem('deletados', JSON.stringify(deletados));
                 }
             } else {
-                // Transação normal
                 const tx = db.transaction('transacoes', 'readwrite');
                 tx.objectStore('transacoes').delete(id);
                 let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
@@ -206,7 +201,6 @@ async function excluirItem(store, inputId) {
                 localStorage.setItem('deletados', JSON.stringify(deletados));
             }
         } else {
-            // Transação normal sem id_original
             const tx = db.transaction('transacoes', 'readwrite');
             tx.objectStore('transacoes').delete(id);
             let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
@@ -214,7 +208,6 @@ async function excluirItem(store, inputId) {
             localStorage.setItem('deletados', JSON.stringify(deletados));
         }
     } else {
-        // Contas, metas, categorias
         const tx = db.transaction(store, 'readwrite');
         tx.objectStore(store).delete(id);
         let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
@@ -379,7 +372,6 @@ function atualizarSelectContas() {
 function atualizarSelectCategorias() {
     const sel = document.getElementById('tCategoria');
     sel.innerHTML = '';
-    // Filtrar para não mostrar a categoria de transferência ao usuário comum
     categorias.filter(c => c.id !== 'cat_transferencia').forEach(c => {
         sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
     });
@@ -393,7 +385,6 @@ function atualizarFiltroCategorias() {
     });
 }
 
-// Função para mostrar/esconder campos de transferência
 function toggleTransferencia() {
     const tipo = document.getElementById('tTipo').value;
     const contaDestino = document.getElementById('tContaDestino');
@@ -403,9 +394,6 @@ function toggleTransferencia() {
     if (tipo === 'transferencia') {
         contaDestino.style.display = 'block';
         categoria.disabled = true;
-        // Forçar a categoria de transferência (não visível no select)
-        // Como a categoria não está no select, vamos definir um campo hidden ou simplesmente ignorar
-        // A lógica de salvar vai usar 'cat_transferencia' diretamente
         parcelas.disabled = true;
         parcelas.value = '1';
     } else {
@@ -430,8 +418,7 @@ function getTransacoesPeriodoBase() {
     return transacoes.filter(t => t.pago && t.data >= dataInicio && t.data <= dataFim);
 }
 
-// DASHBOARD ATUALIZADO: totais de receitas/despesas baseados nas transações visíveis (filtro de busca e categoria)
-// E excluindo a categoria de transferência dos totais
+// ========== FUNÇÃO PRINCIPAL: DASHBOARD COM MONTANTE TOTAL ==========
 function atualizarDashboard() {
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
@@ -449,33 +436,29 @@ function atualizarDashboard() {
     // Totais das transações filtradas (visíveis) EXCLUINDO categoria de transferência
     let receitasFiltradas = 0, despesasFiltradas = 0;
     transacoesFiltradas.forEach(t => {
-        if (t.categoria_id === 'cat_transferencia') return; // Ignorar transferências
+        if (t.categoria_id === 'cat_transferencia') return;
         if (t.tipo === 'receita') receitasFiltradas += t.valor;
         else if (t.tipo === 'despesa') despesasFiltradas += t.valor;
     });
 
-    // Saldo Total (geral, sem filtro de período) - ajustado para não contar receitas em cartão de crédito
-    let saldoTotal = 0;
-    contas.forEach(c => {
-        if (c.tipo === 'corrente') saldoTotal += (c.saldo_inicial || 0);
-    });
-    transacoes.forEach(t => {
-        if (!t.pago) return;
-        const conta = contas.find(c => c.id === t.conta_id);
-        if (t.tipo === 'receita') {
-            // Só adiciona ao Saldo Geral se o dinheiro entrar numa Conta Corrente
-            // (Evita que fatura paga gere "falso dinheiro")
-            if (!conta || conta.tipo === 'corrente') saldoTotal += t.valor;
-        } else if (t.tipo === 'despesa') {
-            if (!conta || conta.tipo === 'corrente') saldoTotal -= t.valor;
-        }
+    // MONTANTE TOTAL (soma do saldo atual de TODAS as contas)
+    let montanteTotal = 0;
+    contas.forEach(conta => {
+        let saldoConta = conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite;
+        transacoes.forEach(t => {
+            if (t.conta_id === conta.id && t.pago) {
+                if (t.tipo === 'receita') saldoConta += t.valor;
+                if (t.tipo === 'despesa') saldoConta -= t.valor;
+            }
+        });
+        montanteTotal += saldoConta;
     });
 
-    document.getElementById('saldoTotal').innerText = `R$ ${saldoTotal.toFixed(2)}`;
+    document.getElementById('saldoTotal').innerText = `R$ ${montanteTotal.toFixed(2)}`;
     document.getElementById('totalRec').innerText = `R$ ${receitasFiltradas.toFixed(2)}`;
     document.getElementById('totalDes').innerText = `R$ ${despesasFiltradas.toFixed(2)}`;
 
-    // Lista de contas
+    // Lista de contas (sem alteração)
     let htmlContas = '';
     contas.forEach(c => {
         let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
@@ -493,13 +476,12 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
-    // Lista de transações (com data formatada)
+    // Lista de transações
     let htmlTransacoes = '';
     transacoesFiltradas.sort((a,b) => (a.data < b.data ? 1 : -1));
     transacoesFiltradas.forEach(t => {
         const categoriaNome = categorias.find(c => c.id === t.categoria_id)?.nome || 'Sem categoria';
         const dataFormatada = formatarDataBR(t.data);
-        // Se for transferência, mostrar ícone especial
         const isTransfer = t.categoria_id === 'cat_transferencia';
         const tipoIcon = isTransfer ? '🔄' : (t.tipo === 'receita' ? '💰' : '💸');
         htmlTransacoes += `<div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
@@ -574,7 +556,7 @@ async function salvarTransacao() {
             if (existente) fotoBase64 = existente.foto;
         }
 
-        // === INTERCEPTAR TRANSFERÊNCIA ===
+        // === TRANSFERÊNCIA ===
         if (tipo === 'transferencia') {
             const contaDestinoId = document.getElementById('tContaDestino').value;
             if (!contaDestinoId || contaId === contaDestinoId) {
@@ -589,7 +571,6 @@ async function salvarTransacao() {
             const dataStr = dataInicial.toISOString().split('T')[0];
             const idOriginal = uuidv4();
 
-            // 1. Saída (Conta Origem - normalmente corrente)
             const saida = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'despesa', descricao: descricao || 'Pagamento Fatura / Transf.',
@@ -599,7 +580,6 @@ async function salvarTransacao() {
                 foto: fotoBase64, sinc: false, updated_at: new Date().toISOString()
             };
 
-            // 2. Entrada (Restaurar Limite do Cartão Destino)
             const entrada = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'receita', descricao: descricao || 'Fatura Recebida',
@@ -618,7 +598,7 @@ async function salvarTransacao() {
             return;
         }
 
-        // === TRANSAÇÃO NORMAL (DESPESA/RECEITA) ===
+        // === TRANSAÇÃO NORMAL ===
         if (idEdit) {
             const index = transacoes.findIndex(t => t.id === idEdit);
             if (index !== -1) {
@@ -733,7 +713,6 @@ function editarTransacao(id) {
     const t = transacoes.find(x => x.id === id);
     if (!t) return;
     
-    // Verificar se é parte de uma transferência
     const isTransfer = t.categoria_id === 'cat_transferencia';
     let related = [];
     if (isTransfer && t.id_original) {
@@ -743,17 +722,13 @@ function editarTransacao(id) {
     document.getElementById('tId').value = t.id;
     
     if (isTransfer && related.length === 2) {
-        // É uma transferência - mostrar no modo transferência
         document.getElementById('tTipo').value = 'transferencia';
         toggleTransferencia();
-        // Encontrar a outra perna para saber destino/origem
         const outra = related.find(x => x.id !== t.id);
         if (t.tipo === 'despesa') {
-            // Esta é a saída, origem é t.conta_id, destino é outra.conta_id
             document.getElementById('tConta').value = t.conta_id;
             document.getElementById('tContaDestino').value = outra.conta_id;
         } else {
-            // Esta é a entrada, origem é outra.conta_id, destino é t.conta_id
             document.getElementById('tConta').value = outra.conta_id;
             document.getElementById('tContaDestino').value = t.conta_id;
         }
@@ -764,7 +739,6 @@ function editarTransacao(id) {
         document.getElementById('tParcelas').value = 1;
         document.getElementById('tParcelas').disabled = true;
     } else {
-        // Transação normal
         document.getElementById('tTipo').value = t.tipo;
         toggleTransferencia();
         document.getElementById('tDescricao').value = t.descricao;
@@ -815,7 +789,6 @@ function abrirModal(id) {
     document.getElementById('overlay').classList.add('active');
     if (id === 'modalTransacao' && !document.getElementById('tId').value) {
         document.getElementById('tFoto').value = '';
-        // Resetar campos de transferência
         document.getElementById('tTipo').value = 'despesa';
         toggleTransferencia();
     }
@@ -843,14 +816,12 @@ function fecharModais() {
         document.getElementById('mObjetivo').value = '';
         document.getElementById('mAtual').value = '';
         document.getElementById('tFoto').value = '';
-        // Reset transferência
         document.getElementById('tTipo').value = 'despesa';
         toggleTransferencia();
         document.getElementById('tContaDestino').value = '';
     }
 }
 
-// Filtros de data
 function aplicarFiltroData() {
     const inicio = document.getElementById('dataInicioFiltro').value;
     const fim = document.getElementById('dataFimFiltro').value;
@@ -867,7 +838,6 @@ function limparFiltroData() {
     atualizarDashboard();
 }
 
-// Visualizador de imagem
 function abrirZoom(base64) {
     const viewer = document.getElementById('imageViewer');
     const img = document.getElementById('zoomImg');
