@@ -8,10 +8,12 @@ let temaAtual = localStorage.getItem('tema') || 'claro';
 let syncInProgress = false;
 let authToken = localStorage.getItem('authToken');
 
-// Controle de retry da sincronização
-let syncRetryCount = 0;
+// Controle de debounce e retry
+let syncDebounceTimer = null;
 let syncRetryTimer = null;
-const MAX_SYNC_RETRIES = 5;
+let syncRetryCount = 0;
+const MAX_SYNC_RETRIES = 3;
+const SYNC_DEBOUNCE_MS = 2000; // 2 segundos
 
 // Filtros de data personalizados
 let filtroDataInicio = '';
@@ -133,12 +135,16 @@ function iniciarApp() {
     req.onsuccess = (e) => {
         db = e.target.result;
         carregarDadosLocais();
-        // Primeira sincronização ao iniciar (se online)
+        // Agenda primeira sincronização se online
         if (navigator.onLine) {
-            syncWithServer();
+            scheduleSync(true);
         }
+        // Intervalo periódico (a cada 5 minutos) só se houver pendências
         setInterval(() => {
-            if (!syncInProgress && navigator.onLine) syncWithServer();
+            if (!syncInProgress && navigator.onLine) {
+                const temPendencias = transacoes.some(t => !t.sinc) || contas.some(c => !c.sinc) || metas.some(m => !m.sinc);
+                if (temPendencias) scheduleSync(true);
+            }
         }, 300000);
     };
 }
@@ -227,7 +233,7 @@ async function excluirItem(store, inputId) {
     
     fecharModais();
     carregarDadosLocais();
-    syncWithServer();
+    scheduleSync(); // Agenda sincronização após exclusão
 }
 
 // ========== FUNÇÕES DE CONVERSÃO ==========
@@ -251,8 +257,31 @@ function parseDataBR(dataStr) {
     return dataStr;
 }
 
-// ========== SINCRONIZAÇÃO (COM RETRY AUTOMÁTICO) ==========
-function clearSyncRetry() {
+// ========== AGENDAMENTO DE SINCRONIZAÇÃO ==========
+function scheduleSync(immediate = false) {
+    // Cancela timer de debounce existente
+    if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = null;
+    }
+    
+    if (immediate) {
+        // Executa imediatamente, mas só se não estiver em progresso
+        if (!syncInProgress && navigator.onLine && authToken) {
+            syncWithServer();
+        }
+    } else {
+        // Agenda para daqui a SYNC_DEBOUNCE_MS
+        syncDebounceTimer = setTimeout(() => {
+            if (!syncInProgress && navigator.onLine && authToken) {
+                syncWithServer();
+            }
+            syncDebounceTimer = null;
+        }, SYNC_DEBOUNCE_MS);
+    }
+}
+
+function clearRetry() {
     if (syncRetryTimer) {
         clearTimeout(syncRetryTimer);
         syncRetryTimer = null;
@@ -260,62 +289,102 @@ function clearSyncRetry() {
     syncRetryCount = 0;
 }
 
-function scheduleSyncRetry() {
-    if (syncRetryCount >= MAX_SYNC_RETRIES) {
-        console.warn('Número máximo de tentativas de sincronização atingido.');
-        atualizarSyncStatus('erro');
-        syncRetryCount = 0;
-        return;
-    }
-    // Backoff exponencial: 10s, 30s, 1min, 2min, 5min...
-    const baseDelay = 10000; // 10 segundos
-    const delay = baseDelay * Math.pow(2, syncRetryCount);
-    syncRetryTimer = setTimeout(() => {
-        if (navigator.onLine && authToken && !syncInProgress) {
-            syncWithServer();
-        } else {
-            // Se ainda offline, reagendar com mesmo contador
-            scheduleSyncRetry();
-        }
-    }, delay);
-    syncRetryCount++;
-}
-
+// ========== SINCRONIZAÇÃO (COM RETRY CONTROLADO) ==========
 async function syncWithServer() {
     if (syncInProgress || !authToken) return;
     if (!navigator.onLine) {
         atualizarSyncStatus('offline');
         return;
     }
+    
+    // Verifica se realmente há algo pendente para enviar ou se é apenas pull
+    const temPendencias = transacoes.some(t => !t.sinc) || contas.some(c => !c.sinc) || metas.some(m => !m.sinc);
+    const deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+    const temDeletados = Object.values(deletados).some(arr => arr.length > 0);
+    
+    if (!temPendencias && !temDeletados) {
+        // Nada para enviar, mas ainda podemos puxar dados novos (pull)
+        // Só faz pull se não estiver em retry (evita excesso)
+        if (syncRetryCount === 0) {
+            await pullFromServer();
+        }
+        atualizarSyncStatus('sincronizado');
+        return;
+    }
+    
     syncInProgress = true;
     atualizarSyncStatus('sincronizando');
+    
     try {
-        let deletados = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+        // Preparar dados não sincronizados
         const unsynced = { transacoes: [], contas: [], metas: [], categorias: [] };
-        let temDadosParaEnviar = false;
-
         for (const store of ['transacoes', 'contas', 'metas', 'categorias']) {
             const items = await getAllFromStore(store);
             unsynced[store] = items.filter(i => !i.sinc);
-            if (unsynced[store].length > 0 || deletados[store].length > 0) temDadosParaEnviar = true;
         }
-
-        if (temDadosParaEnviar) {
-            const payload = { ...unsynced, deletados, token: authToken };
-            const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-            if (response.ok) {
-                const result = await response.json();
-                if (result.error) throw new Error(result.error);
-                localStorage.setItem('deletados', '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
-                for (const store of ['transacoes', 'contas', 'metas', 'categorias']) {
-                    for (const item of unsynced[store]) {
-                        item.sinc = true;
-                        await putToStore(store, item);
+        
+        const payload = { ...unsynced, deletados, token: authToken };
+        
+        const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const result = await response.json();
+        if (result.error) {
+            // Se for erro de autenticação, logout
+            if (result.error.includes("Acesso negado") || result.error.includes("Senha incorreta")) {
+                logout();
+                return;
+            }
+            throw new Error(result.error);
+        }
+        
+        // Sucesso: limpa deletados e marca itens como sincronizados
+        localStorage.setItem('deletados', '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
+        for (const store of ['transacoes', 'contas', 'metas', 'categorias']) {
+            for (const item of unsynced[store]) {
+                item.sinc = true;
+                await putToStore(store, item);
+            }
+        }
+        
+        // Pull após envio bem-sucedido
+        await pullFromServer();
+        
+        atualizarSyncStatus('sincronizado');
+        carregarDadosLocais();
+        clearRetry(); // Sucesso, reseta contagem de retry
+        
+    } catch (error) {
+        console.error('Sync error:', error);
+        atualizarSyncStatus('erro');
+        
+        // Só agenda retry se for erro de rede (fetch falhou) e não ultrapassou limite
+        if (error.message.includes('fetch') || error.message.includes('Network') || error.message.includes('Failed to fetch')) {
+            if (syncRetryCount < MAX_SYNC_RETRIES) {
+                syncRetryCount++;
+                const delay = 10000 * Math.pow(2, syncRetryCount - 1); // 10s, 20s, 40s
+                syncRetryTimer = setTimeout(() => {
+                    if (navigator.onLine && authToken) {
+                        scheduleSync(true);
                     }
-                }
-            } else throw new Error('Sync failed');
+                    syncRetryTimer = null;
+                }, delay);
+            } else {
+                atualizarSyncStatus('erro');
+                // Reset contagem após um tempo
+                setTimeout(() => { syncRetryCount = 0; }, 60000 * 5);
+            }
+        } else {
+            // Erro não relacionado a rede, não tenta novamente automaticamente
+            atualizarSyncStatus('erro');
         }
+    } finally {
+        syncInProgress = false;
+    }
+}
 
+async function pullFromServer() {
+    try {
         const pullResponse = await fetch(`${API_URL}?action=getAll&token=${encodeURIComponent(authToken)}`);
         const remoteData = await pullResponse.json();
         if (remoteData && !remoteData.error) {
@@ -339,24 +408,14 @@ async function syncWithServer() {
                     if (item.vencimento !== undefined) item.vencimento = parseDataBR(item.vencimento);
                     if (item.data_limite !== undefined) item.data_limite = parseDataBR(item.data_limite);
                     item.sinc = true;
-                    if (!idsLocais.has(item.id)) await putToStore(store, item);
-                    else await putToStore(store, item);
+                    await putToStore(store, item);
                 }
             }
         } else if (remoteData.error === "Acesso negado.") {
             logout();
-            return;
         }
-        atualizarSyncStatus('sincronizado');
-        carregarDadosLocais();
-        clearSyncRetry(); // Sucesso: reseta contagem de retry
-    } catch (error) {
-        console.error('Sync error', error);
-        atualizarSyncStatus('erro');
-        // Agendar nova tentativa automática
-        scheduleSyncRetry();
-    } finally {
-        syncInProgress = false;
+    } catch (e) {
+        console.warn('Pull falhou:', e);
     }
 }
 
@@ -376,6 +435,7 @@ function putToStore(store, item) {
 
 function atualizarSyncStatus(status) {
     const el = document.getElementById('syncStatus');
+    if (!el) return;
     if (status === 'sincronizando') {
         el.innerHTML = '🔄 Sincronizando...';
         el.className = 'sync-status status-pending';
@@ -384,7 +444,7 @@ function atualizarSyncStatus(status) {
         el.className = 'sync-status status-synced';
         setTimeout(() => { if (el.innerHTML === '✅ Sincronizado') el.innerHTML = '🔄 Sincronizado'; }, 2000);
     } else if (status === 'erro') {
-        el.innerHTML = '⚠️ Erro de sincronia (tentando novamente...)';
+        el.innerHTML = '⚠️ Erro de sincronia';
         el.className = 'sync-status status-pending';
     } else if (status === 'offline') {
         el.innerHTML = '📴 Offline';
@@ -472,17 +532,14 @@ function atualizarDashboard() {
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
 
-    // Transações do período (pagas)
     let transacoesPeriodo = getTransacoesPeriodoBase();
 
-    // Aplicar filtros de texto e categoria para os TOTAIS e para a lista
     let transacoesFiltradas = transacoesPeriodo.filter(t => {
         if (searchTerm && !t.descricao.toLowerCase().includes(searchTerm)) return false;
         if (catFilter && t.categoria_id !== catFilter) return false;
         return true;
     });
 
-    // Totais das transações filtradas (visíveis) EXCLUINDO categoria de transferência
     let receitasFiltradas = 0, despesasFiltradas = 0;
     transacoesFiltradas.forEach(t => {
         if (t.categoria_id === 'cat_transferencia') return;
@@ -490,7 +547,6 @@ function atualizarDashboard() {
         else if (t.tipo === 'despesa') despesasFiltradas += t.valor;
     });
 
-    // MONTANTE TOTAL (soma do saldo atual de TODAS as contas)
     let montanteTotal = 0;
     contas.forEach(conta => {
         let saldoConta = conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite;
@@ -507,7 +563,6 @@ function atualizarDashboard() {
     document.getElementById('totalRec').innerText = `R$ ${receitasFiltradas.toFixed(2)}`;
     document.getElementById('totalDes').innerText = `R$ ${despesasFiltradas.toFixed(2)}`;
 
-    // Lista de contas (sem alteração)
     let htmlContas = '';
     contas.forEach(c => {
         let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
@@ -525,7 +580,6 @@ function atualizarDashboard() {
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
 
-    // Lista de transações
     let htmlTransacoes = '';
     transacoesFiltradas.sort((a,b) => (a.data < b.data ? 1 : -1));
     transacoesFiltradas.forEach(t => {
@@ -549,7 +603,6 @@ function atualizarDashboard() {
     });
     document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div class="card">Nenhuma transação no período com os filtros aplicados.</div>';
 
-    // Metas
     let htmlMetas = '';
     metas.forEach(m => {
         let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
@@ -644,6 +697,7 @@ async function salvarTransacao() {
             fecharModais();
             salvando = false;
             if (btn) btn.disabled = false;
+            scheduleSync(); // Agenda sincronização
             return;
         }
 
@@ -692,6 +746,7 @@ async function salvarTransacao() {
             }
         }
         fecharModais();
+        scheduleSync(); // Agenda sincronização
     } catch (err) {
         console.error(err);
         alert('Erro ao salvar transação.');
@@ -727,6 +782,7 @@ function salvarConta() {
         salvarItemDB('contas', novaConta);
     }
     fecharModais();
+    scheduleSync();
 }
 
 function salvarMeta() {
@@ -756,6 +812,7 @@ function salvarMeta() {
         salvarItemDB('metas', novaMeta);
     }
     fecharModais();
+    scheduleSync();
 }
 
 function editarTransacao(id) {
@@ -960,13 +1017,13 @@ document.getElementById('dataFimFiltro').addEventListener('change', aplicarFiltr
 document.getElementById('monthPicker').value = mesAtual;
 
 window.addEventListener('online', () => {
-    if (authToken && !syncInProgress) syncWithServer();
+    if (authToken) scheduleSync(true);
 });
 
-// Sincronizar quando a aba voltar a ficar visível
 document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && authToken && !syncInProgress && navigator.onLine) {
-        syncWithServer();
+    if (!document.hidden && authToken && navigator.onLine) {
+        const temPendencias = transacoes.some(t => !t.sinc) || contas.some(c => !c.sinc) || metas.some(m => !m.sinc);
+        if (temPendencias) scheduleSync(true);
     }
 });
 
@@ -977,6 +1034,11 @@ async function forcarSincronizacao() {
     if (el) {
         el.style.pointerEvents = 'none';
         atualizarSyncStatus('sincronizando');
+    }
+    clearRetry(); // Cancela qualquer retry pendente
+    if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = null;
     }
     await syncWithServer();
     if (el) el.style.pointerEvents = 'auto';
