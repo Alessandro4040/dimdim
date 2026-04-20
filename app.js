@@ -8,6 +8,11 @@ let temaAtual = localStorage.getItem('tema') || 'claro';
 let syncInProgress = false;
 let authToken = localStorage.getItem('authToken');
 
+// Controle de retry da sincronização
+let syncRetryCount = 0;
+let syncRetryTimer = null;
+const MAX_SYNC_RETRIES = 5;
+
 // Filtros de data personalizados
 let filtroDataInicio = '';
 let filtroDataFim = '';
@@ -128,8 +133,13 @@ function iniciarApp() {
     req.onsuccess = (e) => {
         db = e.target.result;
         carregarDadosLocais();
-        syncWithServer();
-        setInterval(() => { if (!syncInProgress) syncWithServer(); }, 300000);
+        // Primeira sincronização ao iniciar (se online)
+        if (navigator.onLine) {
+            syncWithServer();
+        }
+        setInterval(() => {
+            if (!syncInProgress && navigator.onLine) syncWithServer();
+        }, 300000);
     };
 }
 
@@ -241,9 +251,42 @@ function parseDataBR(dataStr) {
     return dataStr;
 }
 
-// ========== SINCRONIZAÇÃO ==========
+// ========== SINCRONIZAÇÃO (COM RETRY AUTOMÁTICO) ==========
+function clearSyncRetry() {
+    if (syncRetryTimer) {
+        clearTimeout(syncRetryTimer);
+        syncRetryTimer = null;
+    }
+    syncRetryCount = 0;
+}
+
+function scheduleSyncRetry() {
+    if (syncRetryCount >= MAX_SYNC_RETRIES) {
+        console.warn('Número máximo de tentativas de sincronização atingido.');
+        atualizarSyncStatus('erro');
+        syncRetryCount = 0;
+        return;
+    }
+    // Backoff exponencial: 10s, 30s, 1min, 2min, 5min...
+    const baseDelay = 10000; // 10 segundos
+    const delay = baseDelay * Math.pow(2, syncRetryCount);
+    syncRetryTimer = setTimeout(() => {
+        if (navigator.onLine && authToken && !syncInProgress) {
+            syncWithServer();
+        } else {
+            // Se ainda offline, reagendar com mesmo contador
+            scheduleSyncRetry();
+        }
+    }, delay);
+    syncRetryCount++;
+}
+
 async function syncWithServer() {
     if (syncInProgress || !authToken) return;
+    if (!navigator.onLine) {
+        atualizarSyncStatus('offline');
+        return;
+    }
     syncInProgress = true;
     atualizarSyncStatus('sincronizando');
     try {
@@ -306,9 +349,12 @@ async function syncWithServer() {
         }
         atualizarSyncStatus('sincronizado');
         carregarDadosLocais();
+        clearSyncRetry(); // Sucesso: reseta contagem de retry
     } catch (error) {
         console.error('Sync error', error);
         atualizarSyncStatus('erro');
+        // Agendar nova tentativa automática
+        scheduleSyncRetry();
     } finally {
         syncInProgress = false;
     }
@@ -338,7 +384,10 @@ function atualizarSyncStatus(status) {
         el.className = 'sync-status status-synced';
         setTimeout(() => { if (el.innerHTML === '✅ Sincronizado') el.innerHTML = '🔄 Sincronizado'; }, 2000);
     } else if (status === 'erro') {
-        el.innerHTML = '⚠️ Erro de sincronia';
+        el.innerHTML = '⚠️ Erro de sincronia (tentando novamente...)';
+        el.className = 'sync-status status-pending';
+    } else if (status === 'offline') {
+        el.innerHTML = '📴 Offline';
         el.className = 'sync-status status-pending';
     } else {
         const unsyncedCount = transacoes.filter(t => !t.sinc).length + contas.filter(c => !c.sinc).length + metas.filter(m => !m.sinc).length;
@@ -910,7 +959,17 @@ document.getElementById('dataInicioFiltro').addEventListener('change', aplicarFi
 document.getElementById('dataFimFiltro').addEventListener('change', aplicarFiltroData);
 document.getElementById('monthPicker').value = mesAtual;
 
-window.addEventListener('online', () => { if (authToken && !syncInProgress) syncWithServer(); });
+window.addEventListener('online', () => {
+    if (authToken && !syncInProgress) syncWithServer();
+});
+
+// Sincronizar quando a aba voltar a ficar visível
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && authToken && !syncInProgress && navigator.onLine) {
+        syncWithServer();
+    }
+});
+
 window.addEventListener('load', () => { checkStoredToken(); });
 
 async function forcarSincronizacao() {
