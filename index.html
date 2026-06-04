@@ -2,7 +2,7 @@
 <html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
     <title>Finanças Familiar</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,264 +12,347 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
         :root {
-            /* Cores Nativas iOS - Light Mode */
-            --bg: #F2F2F7; /* Fundo agrupado */
-            --card: #FFFFFF;
-            --txt: #000000;
-            --txt-sec: #8E8E93;
-            --p: #007AFF; /* System Blue */
-            --s: #34C759; /* System Green */
-            --d: #FF3B30; /* System Red */
-            --w: #FF9500; /* System Orange */
-            --border: rgba(60, 60, 67, 0.18);
-            --blur-bg: rgba(242, 242, 247, 0.85);
-            --shadow: 0 4px 20px rgba(0,0,0,0.06);
-            --input-bg: rgba(118, 118, 128, 0.12);
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --txt: #0f172a;
+            --p: #2563eb;
+            --s: #16a34a;
+            --d: #dc2626;
+            --w: #f59e0b;
+            --border: #e2e8f0;
+            --shadow: 0 4px 12px rgba(0,0,0,0.05);
         }
         [data-theme='escuro'] {
-            /* Cores Nativas iOS - Dark Mode */
-            --bg: #000000;
-            --card: #1C1C1E;
-            --txt: #FFFFFF;
-            --txt-sec: #EBEBF5;
-            --border: rgba(84, 84, 88, 0.65);
-            --blur-bg: rgba(0, 0, 0, 0.85);
-            --shadow: 0 4px 20px rgba(0,0,0,0.4);
-            --input-bg: rgba(118, 118, 128, 0.24);
+            --bg: #0f172a;
+            --card: #1e293b;
+            --txt: #f8fafc;
+            --border: #334155;
+            --shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
-
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            /* Fonte nativa do sistema Apple */
-            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-            -webkit-tap-highlight-color: transparent;
+            font-family: -apple-system, system-ui, Roboto, sans-serif;
         }
-
         body {
             background-color: var(--bg);
             color: var(--txt);
-            transition: background-color 0.3s ease;
-            padding-bottom: calc(90px + env(safe-area-inset-bottom));
+            transition: 0.3s;
+            padding-bottom: 90px;
+            padding-top: env(safe-area-inset-top, 20px);
         }
-
-        /* Telas de Bloqueio */
         .fullscreen {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: var(--bg);
             z-index: 9999;
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            gap: 24px; padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 20px;
         }
         .fullscreen.hidden { display: none; }
-        .fullscreen h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
-
         .btn-bio, .btn-password {
-            padding: 16px 32px;
-            font-size: 17px; font-weight: 600;
-            background: var(--p); color: white;
-            border: none; border-radius: 14px;
-            cursor: pointer; min-width: 220px;
-            transition: transform 0.1s ease, opacity 0.2s ease;
+            padding: 15px 30px;
+            font-size: 18px;
+            background: var(--p);
+            color: white;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            min-width: 200px;
         }
-        .btn-bio:active, .btn-password:active { transform: scale(0.96); opacity: 0.9; }
-        
         .password-input {
-            width: 100%; max-width: 320px;
-            padding: 16px; border-radius: 14px;
-            border: none; background: var(--card);
-            color: var(--txt); font-size: 17px;
-            text-align: center; box-shadow: var(--shadow);
+            width: 80%;
+            max-width: 300px;
+            padding: 14px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--txt);
+            font-size: 16px;
+            text-align: center;
         }
-
-        /* Header iOS (Glassmorphism e Dynamic Island Safe Area) */
+        .error-msg {
+            color: var(--d);
+            font-size: 14px;
+            margin-top: 10px;
+        }
         header {
-            padding: calc(16px + env(safe-area-inset-top)) 16px 16px 16px;
-            background: var(--blur-bg);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            position: sticky; top: 0; z-index: 99;
-            border-bottom: 0.5px solid var(--border);
+            padding: 12px 16px;
+            background: var(--card);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 99;
+            border-bottom: 1px solid var(--border);
         }
-
-        .filters { display: flex; flex-direction: column; gap: 14px; }
-        
+        .filters {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
         .filter-row {
-            display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
         }
-
-        .filter-row input, .filter-row select {
-            flex: 1; min-width: 110px;
-            padding: 12px 14px; font-size: 16px;
-            border-radius: 12px; border: none;
-            background: var(--input-bg); color: var(--txt);
+        .filter-row input, .filter-row select, .filter-row button {
+            flex: 1;
+            min-width: 100px;
+            padding: 10px 12px;
+            font-size: 15px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--txt);
         }
-
         .btn-menu {
-            background: var(--input-bg);
-            border: none; border-radius: 14px;
-            padding: 10px; cursor: pointer;
-            font-size: 20px; display: inline-flex;
-            align-items: center; justify-content: center;
-            min-width: 46px; min-height: 46px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 48px;
+            min-height: 48px;
         }
-
         .sync-status {
-            display: inline-flex; align-items: center; gap: 6px;
-            background: var(--input-bg); padding: 8px 16px;
-            border-radius: 20px; font-size: 13px; font-weight: 600;
-            cursor: pointer; white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card);
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 14px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            white-space: nowrap;
         }
         .status-pending { color: var(--w); }
         .status-synced { color: var(--s); }
-
-        /* Cards Estilo Widgets iOS */
         .dashboard-pyramid {
-            display: flex; flex-direction: column; gap: 16px;
-            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            padding: 20px;
         }
-        
+        .card-top { width: 100%; max-width: 400px; text-align: center; }
         .card-bottom-row {
-            display: flex; justify-content: space-between; gap: 16px; width: 100%;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            gap: 15px;
         }
-
+        .card-bottom-row .card { flex: 1; text-align: center; }
         .card {
-            background: var(--card); padding: 20px 16px;
-            border-radius: 20px; box-shadow: var(--shadow);
-            text-align: center; border: 0.5px solid var(--border);
-            flex: 1;
+            background: var(--card);
+            padding: 18px 12px;
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            text-align: center;
+            border: 1px solid var(--border);
         }
-
-        .card h3 { font-size: 13px; font-weight: 500; color: var(--txt-sec); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .card p { font-weight: 700; font-size: 26px; letter-spacing: -0.5px; }
-        .card-top { width: 100%; }
-
-        /* Listas / Sections */
-        .section-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin: 28px 0 12px; padding: 0 16px;
-        }
-        .section-header h3 { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; }
-        .section-header button {
-            background: var(--input-bg); color: var(--p);
-            border: none; padding: 6px 14px; border-radius: 16px;
-            font-size: 14px; font-weight: 600;
-        }
-
+        .card h3 { font-size: 1rem; margin-bottom: 8px; opacity: 0.8; }
+        .card p { font-weight: bold; font-size: 1.4rem; }
         #listaContas, #listaMetas, #listaTransacoes {
-            display: flex; flex-direction: column; gap: 12px; padding: 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 10px;
         }
-
-        /* Floating Action Button */
         .fab {
             position: fixed;
-            bottom: calc(20px + env(safe-area-inset-bottom));
+            bottom: max(20px, env(safe-area-inset-bottom));
             right: 20px;
-            background: var(--p); color: white;
-            width: 56px; height: 56px; border-radius: 28px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 30px; font-weight: 300;
-            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.4);
-            border: none; z-index: 100;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: var(--p);
+            color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: var(--shadow);
+            border: none;
+            z-index: 100;
+            cursor: pointer;
+            transition: transform 0.1s ease;
         }
-        .fab:active { transform: scale(0.9); }
-
-        /* Modais Transformados em Bottom Sheets (Estilo iOS) */
+        .fab:active { transform: scale(0.96); }
         .modal {
-            display: block; position: fixed;
-            top: auto; bottom: 0; left: 0;
-            transform: translateY(100%);
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             background: var(--card);
-            padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
-            border-radius: 32px 32px 0 0;
-            z-index: 1000; width: 100%; max-height: 90vh;
-            overflow-y: auto; box-shadow: 0 -10px 40px rgba(0,0,0,0.15);
-            transition: transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+            padding: 24px 20px;
+            border-radius: 28px;
+            z-index: 1000;
+            width: 90%;
+            max-width: 450px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
         }
-        .modal.active { transform: translateY(0); }
-        
-        /* Indicador de puxar do Sheet */
-        .modal::before {
-            content: ''; display: block;
-            width: 36px; height: 5px;
-            background: var(--border); border-radius: 3px;
-            margin: 0 auto 20px auto;
-        }
-
-        .modal h3 { font-size: 22px; font-weight: 700; margin-bottom: 20px; text-align: center; }
-
+        .modal.active { display: block; }
         .overlay {
-            display: none; position: fixed; top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
-            z-index: 999; opacity: 0; transition: opacity 0.3s ease;
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 999;
         }
-        .overlay.active { display: block; opacity: 1; }
-
-        /* Inputs de Modal */
-        .modal input, .modal select {
-            width: 100%; padding: 16px; margin-bottom: 12px; margin-top: 0;
-            border-radius: 14px; border: none;
-            background: var(--input-bg); color: var(--txt);
-            font-size: 17px; /* 17px previne o zoom no iOS */
+        .overlay.active { display: block; }
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--txt);
+            font-size: 16px;
         }
-        
         button {
-            cursor: pointer; background: var(--p); color: white;
-            font-weight: 600; border: none; padding: 16px;
-            border-radius: 14px; font-size: 17px;
+            cursor: pointer;
+            background: var(--p);
+            color: white;
+            font-weight: 600;
+            border: none;
         }
-        button.danger { background: var(--input-bg); color: var(--d); }
-        
+        button.btn-primary { background: var(--p); }
+        button.danger { background: var(--d); }
         .modal-actions {
-            display: flex; gap: 12px; margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 20px;
         }
         .modal-actions button { flex: 1; margin-top: 0; }
-
-        /* Visualizador de Imagem */
         #imageViewer {
-            display: none; position: fixed; top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); backdrop-filter: blur(10px);
-            z-index: 10000; align-items: center; justify-content: center;
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.92);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
         }
         #imageViewer img {
-            max-width: 95%; max-height: 80%;
-            border-radius: 24px; transition: transform 0.3s ease;
+            max-width: 90%;
+            max-height: 85%;
+            transition: transform 0.2s ease;
+            cursor: zoom-in;
+            border-radius: 16px;
         }
         .fechar-zoom {
-            position: absolute; top: calc(20px + env(safe-area-inset-top)); right: 20px;
-            width: 40px; height: 40px; background: rgba(255,255,255,0.2);
-            border-radius: 20px; display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 20px; cursor: pointer; backdrop-filter: blur(5px);
+            position: absolute;
+            top: max(20px, env(safe-area-inset-top));
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10001;
+            backdrop-filter: blur(4px);
         }
-
         #alertasPendentes {
-            padding: 12px 20px; margin: 16px 16px 0;
-            background: rgba(255, 149, 0, 0.15); border-radius: 16px;
-            color: var(--w); font-weight: 600; text-align: center; font-size: 14px;
+            padding: 10px 20px;
+            margin: 8px 16px;
+            background: rgba(245,158,11,0.15);
+            border-radius: 40px;
+            color: var(--w);
+            font-weight: bold;
+            text-align: center;
         }
-
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin: 20px 0 8px;
+        }
+        .section-header h3 { font-size: 1.2rem; }
+        .section-header button {
+            width: auto;
+            padding: 6px 14px;
+            margin: 0;
+            background: var(--p);
+            border-radius: 30px;
+            font-size: 14px;
+        }
         .label-small {
-            font-size: 13px; font-weight: 500; margin: 4px 0 8px 4px;
-            display: block; color: var(--txt-sec);
+            font-size: 13px;
+            margin-bottom: 4px;
+            display: block;
+            color: var(--txt);
+            opacity: 0.7;
         }
-
         .date-range {
-            display: flex; gap: 10px; flex: 2; align-items: flex-end; width: 100%;
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+            flex: 2;
+            align-items: flex-end;
         }
-        .date-field { flex: 1; }
-        .date-field label { font-size: 12px; color: var(--txt-sec); display: block; margin-bottom: 6px; margin-left: 4px;}
-        .date-field input { width: 100%; margin: 0; }
-
+        .date-field {
+            flex: 1;
+            min-width: 0;
+        }
+        .date-field label {
+            font-size: 12px;
+            display: block;
+            margin-bottom: 4px;
+            opacity: 0.7;
+        }
+        .date-field input {
+            margin-top: 0;
+            width: 100%;
+        }
         @media (max-width: 480px) {
-            .card p { font-size: 22px; }
-            .date-range { flex-direction: row; }
+            .filter-row {
+                flex-wrap: wrap;
+            }
+            .date-range {
+                width: 100%;
+                flex-direction: row !important;
+                flex-wrap: nowrap;
+            }
+            .date-field {
+                flex: 1;
+            }
+            .card p {
+                font-size: 1.2rem;
+            }
         }
     </style>
 </head>
@@ -278,12 +361,12 @@
         <h2>🔐 Acesso Restrito</h2>
         <input type="password" id="passwordInput" class="password-input" placeholder="Senha mestra" autocomplete="off">
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
-        <div id="passwordError" class="error-msg" style="color: var(--d); font-size: 14px;"></div>
+        <div id="passwordError" class="error-msg"></div>
     </div>
 
     <div id="lockScreen" class="fullscreen hidden">
         <h2>💰 Finanças Familiar</h2>
-        <button class="btn-bio" onclick="autenticarBiometria()">🔓 Desbloquear</button>
+        <button class="btn-bio" onclick="autenticarBiometria()">🔓 Desbloquear (Face ID / Touch)</button>
     </div>
 
     <div id="appContent" style="display: none;">
@@ -293,27 +376,27 @@
                     <input type="month" id="monthPicker" value="">
                     <div class="date-range">
                         <div class="date-field">
-                            <label>Início</label>
+                            <label>📅 Início</label>
                             <input type="date" id="dataInicioFiltro">
                         </div>
                         <div class="date-field">
-                            <label>Fim</label>
+                            <label>📅 Fim</label>
                             <input type="date" id="dataFimFiltro">
                         </div>
                     </div>
                     <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
                 </div>
                 <div class="filter-row">
-                    <input type="text" id="globalSearch" placeholder="🔍 Buscar...">
+                    <input type="text" id="globalSearch" placeholder="🔍 Buscar por descrição...">
                     <select id="categoryFilter">
-                        <option value="">📂 Categorias</option>
+                        <option value="">📂 Todas categorias</option>
                     </select>
                     <button class="btn-menu" onclick="alternarTema()" title="Tema">🌓</button>
                     <button class="btn-menu" onclick="abrirModal('modalExportar')" title="Exportar">📊</button>
                     <button class="btn-menu" onclick="logout()" title="Sair">🚪</button>
                 </div>
-                <div class="filter-row" style="justify-content: center; margin-top: 4px;">
-                    <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()">🔄 Sincronizando...</div>
+                <div class="filter-row">
+                    <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()" title="Clique para sincronizar">🔄 Sincronizando...</div>
                 </div>
             </div>
         </header>
@@ -322,53 +405,49 @@
 
         <div class="dashboard-pyramid">
             <div class="card card-top">
-                <h3>Montante Total</h3>
+                <h3>💰 Montante Total (todas as contas)</h3>
                 <p id="saldoTotal">R$ 0,00</p>
             </div>
             <div class="card-bottom-row">
                 <div class="card">
-                    <h3>Despesas</h3>
+                    <h3>📉 Despesas (filtro)</h3>
                     <p id="totalDes" style="color: var(--d);">R$ 0,00</p>
                 </div>
                 <div class="card">
-                    <h3>Receitas</h3>
+                    <h3>📈 Receitas (filtro)</h3>
                     <p id="totalRec" style="color: var(--s);">R$ 0,00</p>
                 </div>
             </div>
-            <div class="card" style="padding: 12px; background: transparent; border: none; box-shadow: none;">
-                <p style="font-size: 13px; color: var(--txt-sec); font-weight: 400; line-height: 1.4;">
-                    Valores referentes às transações <strong>pagas</strong> no período.<br>Transferências não alteram os totais.
-                </p>
+            <div class="card" style="width:100%; max-width:400px; padding:10px; background: var(--card);">
+                <p style="font-size:12px; opacity:0.7;">⬆️ Os valores acima são das transações <strong>pagas</strong> no período e que correspondem à busca e categoria selecionadas.<br>🔄 Transferências não entram nos totais.</p>
             </div>
         </div>
 
-        <div>
+        <div style="padding: 0 20px 20px 20px;">
             <div class="section-header">
-                <h3>Cartões e Contas</h3>
+                <h3>💳 Contas e Cartões</h3>
                 <button onclick="abrirModal('modalConta')">+ Adicionar</button>
             </div>
             <div id="listaContas"></div>
             
             <div class="section-header">
-                <h3>Metas</h3>
-                <button onclick="abrirModal('modalMeta')">+ Nova</button>
+                <h3>🎯 Cofrinhos / Metas</h3>
+                <button onclick="abrirModal('modalMeta')">+ Novo</button>
             </div>
             <div id="listaMetas"></div>
 
             <div class="section-header">
-                <h3>Transações</h3>
+                <h3>📋 Transações</h3>
             </div>
             <div id="listaTransacoes"></div>
         </div>
 
-        <button class="fab" onclick="abrirModal('modalTransacao')">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        </button>
+        <button class="fab" onclick="abrirModal('modalTransacao')">+</button>
     </div>
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
-    <!-- Modais Estilo iOS Bottom Sheet -->
+    <!-- Modal Transação -->
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal">Nova Transação</h3>
         <input type="hidden" id="tId">
@@ -379,64 +458,63 @@
         </select>
         <input type="text" id="tDescricao" placeholder="Descrição (opcional)">
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
-        <label class="label-small">Data da transação:</label>
+        <label class="label-small">📅 Data da transação:</label>
         <input type="date" id="tData">
-        <select id="tConta"><option value="">Conta/Cartão (Origem)</option></select>
-        <select id="tContaDestino" style="display: none;"><option value="">Cartão (Destino)</option></select>
+        <select id="tConta"><option value="">Selecione a Conta/Cartão (Origem)</option></select>
+        <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão (Destino)</option></select>
         <select id="tCategoria"></select>
         <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº Parcelas (1 = à vista)">
         <select id="tStatus">
             <option value="true">✅ Pago / Recebido</option>
             <option value="false">⏳ Pendente</option>
         </select>
-        <label class="label-small">Comprovante (opcional):</label>
-        <input type="file" id="tFoto" accept="image/*" style="padding: 12px; font-size: 14px;">
+        <input type="file" id="tFoto" accept="image/*">
         <div class="modal-actions">
-            <button id="btnExcluirTransacao" class="danger" style="display: none;" onclick="excluirItem('transacoes', 'tId')">Excluir</button>
-            <button onclick="salvarTransacao()">Guardar</button>
+            <button id="btnExcluirTransacao" class="danger" style="display: none;" onclick="excluirItem('transacoes', 'tId')">🗑 Excluir</button>
+            <button class="btn-primary" onclick="salvarTransacao()">💾 Guardar</button>
         </div>
     </div>
 
     <div class="modal" id="modalConta">
-        <h3 id="cTituloModal">Nova Conta</h3>
+        <h3 id="cTituloModal">Nova Conta / Cartão</h3>
         <input type="hidden" id="cId">
         <input type="text" id="cNome" placeholder="Nome (ex: Nubank)">
         <select id="cTipo">
             <option value="corrente">🏦 Conta Corrente</option>
             <option value="cartao">💳 Cartão de Crédito</option>
         </select>
-        <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial / Limite">
-        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (1-31)" min="1" max="31">
+        <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial / Limite do Cartão">
+        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (1-31) - Opcional" min="1" max="31">
         <div class="modal-actions">
-            <button id="btnExcluirConta" class="danger" style="display: none;" onclick="excluirItem('contas', 'cId')">Excluir</button>
-            <button onclick="salvarConta()">Guardar</button>
+            <button id="btnExcluirConta" class="danger" style="display: none;" onclick="excluirItem('contas', 'cId')">🗑 Excluir</button>
+            <button class="btn-primary" onclick="salvarConta()">💾 Guardar</button>
         </div>
     </div>
 
     <div class="modal" id="modalMeta">
-        <h3 id="mTituloModal">Nova Meta</h3>
+        <h3 id="mTituloModal">Novo Cofrinho</h3>
         <input type="hidden" id="mId">
         <input type="text" id="mNome" placeholder="Objetivo (ex: Viagem)">
         <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
-        <input type="number" id="mAtual" step="0.01" placeholder="Valor Guardado (Opcional)">
-        <label class="label-small">Data limite:</label>
+        <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado (opcional)">
+        <label class="label-small">📅 Data limite:</label>
         <input type="date" id="mData">
         <select id="mConta"><option value="">Conta associada (opcional)</option></select>
         <div class="modal-actions">
-            <button id="btnExcluirMeta" class="danger" style="display: none;" onclick="excluirItem('metas', 'mId')">Excluir</button>
-            <button onclick="salvarMeta()">Guardar</button>
+            <button id="btnExcluirMeta" class="danger" style="display: none;" onclick="excluirItem('metas', 'mId')">🗑 Excluir</button>
+            <button class="btn-primary" onclick="salvarMeta()">💾 Guardar</button>
         </div>
     </div>
 
     <div class="modal" id="modalExportar">
-        <h3>Exportar Relatório</h3>
+        <h3>📎 Exportar Relatório</h3>
         <label class="label-small">Data inicial:</label>
         <input type="date" id="eDataIni">
         <label class="label-small">Data final:</label>
         <input type="date" id="eDataFim">
         <div class="modal-actions">
-            <button style="background: var(--input-bg); color: var(--txt);" onclick="baixarRelatorio()">CSV</button>
-            <button onclick="baixarPDF()">PDF</button>
+            <button class="btn-primary" onclick="baixarRelatorio()">📄 CSV</button>
+            <button class="btn-primary" onclick="baixarPDF()">📑 PDF</button>
         </div>
     </div>
 
