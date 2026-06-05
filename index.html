@@ -211,7 +211,6 @@
             border: 1px solid var(--border);
         }
         .modal.active { display: block; }
-        /* Estilo especial para o chat: display flex quando ativo */
         #modalChat.active {
             display: flex;
             flex-direction: column;
@@ -498,7 +497,7 @@
         <button class="fab" onclick="iniciarChat()">+</button>
     </div>
 
-    <!-- Modal Chat (Assistente de Lançamento) – SEM display inline -->
+    <!-- Modal Chat (Assistente de Lançamento) -->
     <div class="modal" id="modalChat" style="max-height: 85vh; height: 600px; max-width: 500px;">
         <div style="padding: 16px; background: var(--p); color: white; border-radius: 28px 28px 0 0; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 1.2rem;">💬 Assistente</h3>
@@ -518,6 +517,9 @@
             <button onclick="enviarMensagemChatInput()" style="margin: 0; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; padding: 0; background: var(--p); color: white; border: none;">📤</button>
         </div>
     </div>
+
+    <!-- Input de foto escondido para o chat -->
+    <input type="file" id="chatFotoInput" accept="image/*" style="display:none" onchange="handleChatPhoto()">
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
