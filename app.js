@@ -176,11 +176,10 @@ function carregarDadosLocais() {
     };
 }
 
-// Agora retorna uma Promise para que await funcione corretamente
+// Salvar no IndexedDB – versão robusta com retry caso db não esteja pronto
 function salvarItemDB(store, item) {
     return new Promise((resolve, reject) => {
         if (!db) {
-            // DB ainda não está pronto, tenta novamente em instantes
             setTimeout(() => {
                 salvarItemDB(store, item).then(resolve).catch(reject);
             }, 200);
@@ -904,17 +903,25 @@ function abrirModal(id) {
 }
 
 function fecharModais() {
-    // Fecha todos os modais e o overlay
+    // Fecha todos os modais (remove a classe active)
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('overlay').classList.remove('active');
     
-    // Reseta o estado do chat para que uma nova conversa seja limpa
+    // Reseta estado do chat e limpa mensagens
     chatFluxo = { ativo: false, etapa: 0, dadosTemp: {} };
+    const chatMsg = document.getElementById('chatMessages');
+    if (chatMsg) chatMsg.innerHTML = '';
+    const quick = document.getElementById('chatQuickReplies');
+    if (quick) {
+        quick.innerHTML = '';
+        quick.style.display = 'none';
+    }
+    const input = document.getElementById('chatInput');
+    if (input) input.value = '';
     
-    // Reseta campos do modal de transação
-    const tId = document.getElementById('tId');
-    if (tId) {
-        tId.value = '';
+    // Reseta campos do modal de transação (se existirem)
+    if (document.getElementById('tId')) {
+        document.getElementById('tId').value = '';
         document.getElementById('cId') ? document.getElementById('cId').value = '' : null;
         document.getElementById('mId') ? document.getElementById('mId').value = '' : null;
         document.getElementById('tTituloModal').innerText = 'Nova Transação';
