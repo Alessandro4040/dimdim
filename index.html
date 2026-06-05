@@ -211,6 +211,13 @@
             border: 1px solid var(--border);
         }
         .modal.active { display: block; }
+        /* Estilo especial para o chat: display flex quando ativo */
+        #modalChat.active {
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            overflow: hidden;
+        }
         .overlay {
             display: none;
             position: fixed;
@@ -491,8 +498,8 @@
         <button class="fab" onclick="iniciarChat()">+</button>
     </div>
 
-    <!-- Modal Chat (Assistente de Lançamento) -->
-    <div class="modal" id="modalChat" style="padding: 0; display: flex; flex-direction: column; max-height: 85vh; height: 600px; overflow: hidden; max-width: 500px;">
+    <!-- Modal Chat (Assistente de Lançamento) – SEM display inline -->
+    <div class="modal" id="modalChat" style="max-height: 85vh; height: 600px; max-width: 500px;">
         <div style="padding: 16px; background: var(--p); color: white; border-radius: 28px 28px 0 0; display: flex; justify-content: space-between; align-items: center;">
             <h3 style="margin: 0; font-size: 1.2rem;">💬 Assistente</h3>
             <button onclick="fecharModais()" style="background: none; border: none; color: white; font-size: 1.5rem; width: auto; padding: 0; margin: 0; cursor: pointer;">&times;</button>
