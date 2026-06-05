@@ -176,7 +176,7 @@ function carregarDadosLocais() {
     };
 }
 
-// Salvar no IndexedDB – versão robusta com retry caso db não esteja pronto
+// Salvar no IndexedDB (com retry se db não estiver pronto)
 function salvarItemDB(store, item) {
     return new Promise((resolve, reject) => {
         if (!db) {
@@ -903,11 +903,10 @@ function abrirModal(id) {
 }
 
 function fecharModais() {
-    // Fecha todos os modais (remove a classe active)
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('overlay').classList.remove('active');
     
-    // Reseta estado do chat e limpa mensagens
+    // Reseta chat
     chatFluxo = { ativo: false, etapa: 0, dadosTemp: {} };
     const chatMsg = document.getElementById('chatMessages');
     if (chatMsg) chatMsg.innerHTML = '';
@@ -919,7 +918,7 @@ function fecharModais() {
     const input = document.getElementById('chatInput');
     if (input) input.value = '';
     
-    // Reseta campos do modal de transação (se existirem)
+    // Reseta campos de formulário
     if (document.getElementById('tId')) {
         document.getElementById('tId').value = '';
         document.getElementById('cId') ? document.getElementById('cId').value = '' : null;
@@ -1072,7 +1071,7 @@ let chatFluxo = {
 };
 
 function iniciarChat() {
-    chatFluxo = { ativo: true, etapa: 0, dadosTemp: {} };
+    chatFluxo = { ativo: true, etapa: 0, dadosTemp: { fotoBase64: null } };
     document.getElementById('chatMessages').innerHTML = '';
     document.getElementById('chatQuickReplies').style.display = 'none';
     document.getElementById('chatInput').value = '';
@@ -1198,15 +1197,76 @@ function processarMensagemChat(valor, labelExibicao) {
         
     } else if (etapaAtual === 5) {
         if (valor === 'sim') {
-            finalizarSalvamentoChat();
+            // Confirmação: vai para etapa de foto (6)
+            chatFluxo.etapa = 6;
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'Deseja anexar uma foto do comprovante?');
+                mostrarBotoesRapidos([
+                    {label: '📷 Sim, anexar', valor: 'foto_sim'},
+                    {label: '⏭️ Pular', valor: 'foto_nao'}
+                ]);
+            }, 500);
         } else {
             adicionarBalaoChat('bot', 'Certo, lançamento cancelado! 🧹');
+            setTimeout(() => fecharModais(), 1500);
+        }
+    } else if (etapaAtual === 6) {
+        if (valor === 'foto_sim') {
+            // Abre o seletor de arquivo escondido
+            document.getElementById('chatFotoInput').click();
+            // O fluxo continua quando o arquivo for escolhido (handleChatPhoto)
+        } else if (valor === 'foto_nao') {
+            // Salva sem foto
+            finalizarSalvamentoChat(null);
+        }
+    } else if (etapaAtual === 7) {
+        // Etapa extra: após salvar, pergunta se quer ver resumo do mês
+        if (valor === 'resumo_sim') {
+            mostrarResumoMes();
+            setTimeout(() => fecharModais(), 4000);
+        } else if (valor === 'resumo_nao') {
+            adicionarBalaoChat('bot', 'Ok! Até a próxima 👋');
             setTimeout(() => fecharModais(), 1500);
         }
     }
 }
 
-async function finalizarSalvamentoChat() {
+// Função chamada quando o usuário seleciona uma foto no chat
+async function handleChatPhoto() {
+    const fileInput = document.getElementById('chatFotoInput');
+    const file = fileInput.files[0];
+    if (!file) {
+        // Se o usuário cancelar, volta para etapa 6 e pergunta de novo
+        chatFluxo.etapa = 6;
+        adicionarBalaoChat('bot', 'Nenhuma foto selecionada. Deseja anexar uma foto?');
+        mostrarBotoesRapidos([
+            {label: '📷 Sim, anexar', valor: 'foto_sim'},
+            {label: '⏭️ Pular', valor: 'foto_nao'}
+        ]);
+        return;
+    }
+    
+    try {
+        const base64 = await resizeImage(file);
+        chatFluxo.dadosTemp.fotoBase64 = base64;
+        adicionarBalaoChat('bot', '📸 Foto anexada! Salvando...');
+        // Aguarda um pouco para o usuário ver a mensagem
+        setTimeout(() => {
+            finalizarSalvamentoChat(base64);
+        }, 600);
+    } catch (err) {
+        console.error(err);
+        adicionarBalaoChat('bot', '❌ Erro ao processar a foto. Salvando sem foto.');
+        setTimeout(() => {
+            finalizarSalvamentoChat(null);
+        }, 600);
+    }
+    
+    // Limpa o input para permitir nova seleção futura
+    fileInput.value = '';
+}
+
+async function finalizarSalvamentoChat(fotoBase64) {
     adicionarBalaoChat('bot', '⏳ Salvando e sincronizando...');
     
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
@@ -1221,7 +1281,7 @@ async function finalizarSalvamentoChat() {
                 valor: chatFluxo.dadosTemp.valor, data: dataStr,
                 conta_id: chatFluxo.dadosTemp.conta_id, categoria_id: 'cat_transferencia',
                 pago: true, parcela_num: 1, parcela_total: 1,
-                foto: null, sinc: false, updated_at: new Date().toISOString()
+                foto: fotoBase64 || null, sinc: false, updated_at: new Date().toISOString()
             };
             const entrada = {
                 id: uuidv4(), id_original: idOriginal,
@@ -1229,7 +1289,7 @@ async function finalizarSalvamentoChat() {
                 valor: chatFluxo.dadosTemp.valor, data: dataStr,
                 conta_id: chatFluxo.dadosTemp.conta_destino_id, categoria_id: 'cat_transferencia',
                 pago: true, parcela_num: 1, parcela_total: 1,
-                foto: null, sinc: false, updated_at: new Date().toISOString()
+                foto: fotoBase64 || null, sinc: false, updated_at: new Date().toISOString()
             };
             await salvarItemDB('transacoes', saida);
             await salvarItemDB('transacoes', entrada);
@@ -1246,20 +1306,48 @@ async function finalizarSalvamentoChat() {
                 pago: true,
                 parcela_num: 1,
                 parcela_total: 1,
-                foto: null,
+                foto: fotoBase64 || null,
                 sinc: false,
                 updated_at: new Date().toISOString()
             };
             await salvarItemDB('transacoes', transacao);
         }
         
-        adicionarBalaoChat('bot', '✅ Tudo pronto!');
+        adicionarBalaoChat('bot', '✅ Transação registrada com sucesso!');
         scheduleSync();
-        setTimeout(() => fecharModais(), 1500);
+        
+        // Etapa 7: perguntar sobre resumo do mês
+        chatFluxo.etapa = 7;
+        setTimeout(() => {
+            adicionarBalaoChat('bot', 'Quer ver o resumo do mês atual?');
+            mostrarBotoesRapidos([
+                {label: '📊 Sim, mostrar', valor: 'resumo_sim'},
+                {label: '❌ Não, sair', valor: 'resumo_nao'}
+            ]);
+        }, 800);
         
     } catch (err) {
         console.error(err);
         adicionarBalaoChat('bot', '❌ Erro ao salvar. Tente novamente.');
         setTimeout(() => fecharModais(), 2000);
     }
+}
+
+function mostrarResumoMes() {
+    // Calcula receitas e despesas do mês atual (usando mesAtual)
+    const [ano, mes] = mesAtual.split('-');
+    const inicio = `${ano}-${mes}-01`;
+    const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
+    const fim = `${ano}-${mes}-${String(ultimoDia).padStart(2,'0')}`;
+    
+    let totalRec = 0, totalDes = 0;
+    transacoes.forEach(t => {
+        if (t.pago && t.data >= inicio && t.data <= fim && t.categoria_id !== 'cat_transferencia') {
+            if (t.tipo === 'receita') totalRec += t.valor;
+            else if (t.tipo === 'despesa') totalDes += t.valor;
+        }
+    });
+    
+    const saldo = totalRec - totalDes;
+    adicionarBalaoChat('bot', `📊 Resumo do mês:\n💰 Receitas: R$ ${totalRec.toFixed(2)}\n💸 Despesas: R$ ${totalDes.toFixed(2)}\n📌 Saldo: R$ ${saldo.toFixed(2)}`);
 }
