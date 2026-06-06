@@ -1130,12 +1130,14 @@ function processarMensagemChat(valor, labelExibicao) {
     
     const etapaAtual = chatFluxo.etapa;
     
+    // Etapa 0: tipo
     if (etapaAtual === 0) {
         chatFluxo.dadosTemp.tipo = valor.toLowerCase().trim();
         chatFluxo.etapa = 1;
         setTimeout(() => adicionarBalaoChat('bot', 'Qual é o valor? (ex: 150,50)'), 500);
-        
-    } else if (etapaAtual === 1) {
+    }
+    // Etapa 1: valor
+    else if (etapaAtual === 1) {
         let v = parseFloat(valor.replace('R$', '').replace(',', '.').trim());
         if (isNaN(v)) {
             setTimeout(() => adicionarBalaoChat('bot', 'Isso não parece um número. Por favor, digite apenas o valor.'), 500);
@@ -1144,8 +1146,9 @@ function processarMensagemChat(valor, labelExibicao) {
         chatFluxo.dadosTemp.valor = v;
         chatFluxo.etapa = 2;
         setTimeout(() => adicionarBalaoChat('bot', 'Qual é a descrição? (ex: Mercado, Gasolina, Salário)'), 500);
-        
-    } else if (etapaAtual === 2) {
+    }
+    // Etapa 2: descrição
+    else if (etapaAtual === 2) {
         chatFluxo.dadosTemp.descricao = valor;
         chatFluxo.etapa = 3;
         setTimeout(() => {
@@ -1154,18 +1157,29 @@ function processarMensagemChat(valor, labelExibicao) {
             let opsContas = contas.map(c => ({ label: c.nome, valor: c.id }));
             mostrarBotoesRapidos(opsContas);
         }, 500);
-        
-    } else if (etapaAtual === 3) {
+    }
+    // Etapa 3: conta de origem
+    else if (etapaAtual === 3) {
         chatFluxo.dadosTemp.conta_id = valor;
+        const contaSelecionada = contas.find(c => c.id === valor);
         
         if (chatFluxo.dadosTemp.tipo === 'transferencia') {
+            // Transferência: pula para escolha do destino
             chatFluxo.etapa = 3.5;
             setTimeout(() => {
                 adicionarBalaoChat('bot', 'Para qual conta o dinheiro vai ENTRAR?');
                 let opsContasDestino = contas.filter(c => c.id !== valor).map(c => ({ label: c.nome, valor: c.id }));
                 mostrarBotoesRapidos(opsContasDestino);
             }, 500);
+        }
+        else if (chatFluxo.dadosTemp.tipo === 'despesa' && contaSelecionada && contaSelecionada.tipo === 'cartao') {
+            // Despesa com cartão: perguntar parcelas
+            chatFluxo.etapa = 3.1;
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'Em quantas vezes deseja parcelar? (digite o número, ex: 3)');
+            }, 500);
         } else {
+            // Outros casos: vai direto para categoria
             chatFluxo.etapa = 4;
             setTimeout(() => {
                 adicionarBalaoChat('bot', 'Qual é a categoria?');
@@ -1173,32 +1187,54 @@ function processarMensagemChat(valor, labelExibicao) {
                 mostrarBotoesRapidos(opsCat);
             }, 500);
         }
-        
-    } else if (etapaAtual === 3.5) {
+    }
+    // Etapa 3.1: parcelas (somente despesa com cartão)
+    else if (etapaAtual === 3.1) {
+        let parcelas = parseInt(valor);
+        if (isNaN(parcelas) || parcelas < 1) {
+            setTimeout(() => adicionarBalaoChat('bot', 'Por favor, digite um número válido de parcelas (mínimo 1).'), 500);
+            return;
+        }
+        chatFluxo.dadosTemp.parcelas = parcelas;
+        chatFluxo.etapa = 4;
+        setTimeout(() => {
+            adicionarBalaoChat('bot', 'Qual é a categoria?');
+            let opsCat = categorias.filter(c => c.id !== 'cat_transferencia').map(c => ({ label: c.nome, valor: c.id }));
+            mostrarBotoesRapidos(opsCat);
+        }, 500);
+    }
+    // Etapa 3.5: conta destino (transferência)
+    else if (etapaAtual === 3.5) {
         chatFluxo.dadosTemp.conta_destino_id = valor;
-        chatFluxo.etapa = 5;
+        chatFluxo.etapa = 5; // resumo
         setTimeout(() => {
             const origem = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
             const destino = contas.find(c => c.id === valor)?.nome;
             adicionarBalaoChat('bot', `Resumo:\n🔄 Transf. de R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDe: ${origem}\nPara: ${destino}\nDesc: ${chatFluxo.dadosTemp.descricao}\n\nPosso salvar?`);
             mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
         }, 500);
-
-    } else if (etapaAtual === 4) {
+    }
+    // Etapa 4: categoria
+    else if (etapaAtual === 4) {
         chatFluxo.dadosTemp.categoria_id = valor;
         chatFluxo.etapa = 5;
         setTimeout(() => {
             const conta = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
             const cat = categorias.find(c => c.id === valor)?.nome;
             const icone = chatFluxo.dadosTemp.tipo === 'despesa' ? '💸' : '💰';
-            adicionarBalaoChat('bot', `Resumo:\n${icone} ${chatFluxo.dadosTemp.tipo.toUpperCase()} - R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDesc: ${chatFluxo.dadosTemp.descricao}\nConta: ${conta}\nCat: ${cat}\n\nPosso salvar?`);
+            let resumo = `${icone} ${chatFluxo.dadosTemp.tipo.toUpperCase()} - R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDesc: ${chatFluxo.dadosTemp.descricao}\nConta: ${conta}\nCat: ${cat}`;
+            if (chatFluxo.dadosTemp.parcelas && chatFluxo.dadosTemp.parcelas > 1) {
+                resumo += `\n📆 Parcelas: ${chatFluxo.dadosTemp.parcelas}x`;
+            }
+            resumo += '\n\nPosso salvar?';
+            adicionarBalaoChat('bot', resumo);
             mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
         }, 500);
-        
-    } else if (etapaAtual === 5) {
+    }
+    // Etapa 5: confirmação
+    else if (etapaAtual === 5) {
         if (valor === 'sim') {
-            // Confirmação: vai para etapa de foto (6)
-            chatFluxo.etapa = 6;
+            chatFluxo.etapa = 6; // etapa da foto
             setTimeout(() => {
                 adicionarBalaoChat('bot', 'Deseja anexar uma foto do comprovante?');
                 mostrarBotoesRapidos([
@@ -1210,23 +1246,50 @@ function processarMensagemChat(valor, labelExibicao) {
             adicionarBalaoChat('bot', 'Certo, lançamento cancelado! 🧹');
             setTimeout(() => fecharModais(), 1500);
         }
-    } else if (etapaAtual === 6) {
+    }
+    // Etapa 6: foto
+    else if (etapaAtual === 6) {
         if (valor === 'foto_sim') {
-            // Abre o seletor de arquivo escondido
             document.getElementById('chatFotoInput').click();
-            // O fluxo continua quando o arquivo for escolhido (handleChatPhoto)
         } else if (valor === 'foto_nao') {
-            // Salva sem foto
             finalizarSalvamentoChat(null);
         }
-    } else if (etapaAtual === 7) {
-        // Etapa extra: após salvar, pergunta se quer ver resumo do mês
+    }
+    // Etapa 7: após salvar, pergunta sobre resumo
+    else if (etapaAtual === 7) {
         if (valor === 'resumo_sim') {
             mostrarResumoMes();
-            setTimeout(() => fecharModais(), 4000);
+            // Etapa 8: opções pós-resumo
+            chatFluxo.etapa = 8;
+            setTimeout(() => {
+                mostrarBotoesRapidos([
+                    {label: '➕ Nova Transação', valor: 'nova'},
+                    {label: '🚪 Sair', valor: 'sair'}
+                ]);
+            }, 500);
         } else if (valor === 'resumo_nao') {
             adicionarBalaoChat('bot', 'Ok! Até a próxima 👋');
             setTimeout(() => fecharModais(), 1500);
+        }
+    }
+    // Etapa 8: após resumo, escolher ação
+    else if (etapaAtual === 8) {
+        if (valor === 'nova') {
+            // Reinicia o chat imediatamente (limpa estado e reinicia fluxo)
+            chatFluxo = { ativo: true, etapa: 0, dadosTemp: { fotoBase64: null } };
+            document.getElementById('chatMessages').innerHTML = '';
+            document.getElementById('chatQuickReplies').innerHTML = '';
+            document.getElementById('chatQuickReplies').style.display = 'none';
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'O que você quer registrar agora?');
+                mostrarBotoesRapidos([
+                    { label: '💸 Despesa', valor: 'despesa' },
+                    { label: '💰 Receita', valor: 'receita' },
+                    { label: '🔄 Transferência', valor: 'transferencia' }
+                ]);
+            }, 300);
+        } else if (valor === 'sair') {
+            fecharModais();
         }
     }
 }
@@ -1236,7 +1299,6 @@ async function handleChatPhoto() {
     const fileInput = document.getElementById('chatFotoInput');
     const file = fileInput.files[0];
     if (!file) {
-        // Se o usuário cancelar, volta para etapa 6 e pergunta de novo
         chatFluxo.etapa = 6;
         adicionarBalaoChat('bot', 'Nenhuma foto selecionada. Deseja anexar uma foto?');
         mostrarBotoesRapidos([
@@ -1250,7 +1312,6 @@ async function handleChatPhoto() {
         const base64 = await resizeImage(file);
         chatFluxo.dadosTemp.fotoBase64 = base64;
         adicionarBalaoChat('bot', '📸 Foto anexada! Salvando...');
-        // Aguarda um pouco para o usuário ver a mensagem
         setTimeout(() => {
             finalizarSalvamentoChat(base64);
         }, 600);
@@ -1262,7 +1323,6 @@ async function handleChatPhoto() {
         }, 600);
     }
     
-    // Limpa o input para permitir nova seleção futura
     fileInput.value = '';
 }
 
@@ -1271,9 +1331,11 @@ async function finalizarSalvamentoChat(fotoBase64) {
     
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
     const dataStr = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
+    const parcelas = chatFluxo.dadosTemp.parcelas || 1;
     
     try {
         if (chatFluxo.dadosTemp.tipo === 'transferencia') {
+            // Transferência (parcelas ignoradas, sempre 1)
             const idOriginal = uuidv4();
             const saida = {
                 id: uuidv4(), id_original: idOriginal,
@@ -1294,29 +1356,38 @@ async function finalizarSalvamentoChat(fotoBase64) {
             await salvarItemDB('transacoes', saida);
             await salvarItemDB('transacoes', entrada);
         } else {
-            const transacao = {
-                id: uuidv4(),
-                id_original: uuidv4(),
-                tipo: chatFluxo.dadosTemp.tipo,
-                descricao: chatFluxo.dadosTemp.descricao,
-                valor: chatFluxo.dadosTemp.valor,
-                data: dataStr,
-                conta_id: chatFluxo.dadosTemp.conta_id,
-                categoria_id: chatFluxo.dadosTemp.categoria_id,
-                pago: true,
-                parcela_num: 1,
-                parcela_total: 1,
-                foto: fotoBase64 || null,
-                sinc: false,
-                updated_at: new Date().toISOString()
-            };
-            await salvarItemDB('transacoes', transacao);
+            // Transação comum com possíveis parcelas
+            const idOriginal = uuidv4();
+            const dataInicial = new Date(dataStr + 'T00:00:00'); // força meia-noite
+            const valorParcela = chatFluxo.dadosTemp.valor / parcelas;
+            
+            for (let i = 0; i < parcelas; i++) {
+                let dataParcela = new Date(dataInicial);
+                dataParcela.setMonth(dataParcela.getMonth() + i);
+                const transacao = {
+                    id: uuidv4(),
+                    id_original: idOriginal,
+                    tipo: chatFluxo.dadosTemp.tipo,
+                    descricao: parcelas > 1 ? `${chatFluxo.dadosTemp.descricao} (${i+1}/${parcelas})` : chatFluxo.dadosTemp.descricao,
+                    valor: valorParcela,
+                    data: dataParcela.toISOString().split('T')[0],
+                    conta_id: chatFluxo.dadosTemp.conta_id,
+                    categoria_id: chatFluxo.dadosTemp.categoria_id,
+                    pago: true,
+                    parcela_num: i + 1,
+                    parcela_total: parcelas,
+                    foto: fotoBase64 || null,
+                    sinc: false,
+                    updated_at: new Date().toISOString()
+                };
+                await salvarItemDB('transacoes', transacao);
+            }
         }
         
         adicionarBalaoChat('bot', '✅ Transação registrada com sucesso!');
         scheduleSync();
         
-        // Etapa 7: perguntar sobre resumo do mês
+        // Perguntar sobre resumo
         chatFluxo.etapa = 7;
         setTimeout(() => {
             adicionarBalaoChat('bot', 'Quer ver o resumo do mês atual?');
@@ -1334,7 +1405,6 @@ async function finalizarSalvamentoChat(fotoBase64) {
 }
 
 function mostrarResumoMes() {
-    // Calcula receitas e despesas do mês atual (usando mesAtual)
     const [ano, mes] = mesAtual.split('-');
     const inicio = `${ano}-${mes}-01`;
     const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
