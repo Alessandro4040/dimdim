@@ -85,13 +85,8 @@
             margin-top: 10px;
         }
         header {
-            padding: 12px 16px;
-            background: var(--card);
-            box-shadow: var(--shadow);
-            position: sticky;
-            top: 0;
-            z-index: 99;
-            border-bottom: 1px solid var(--border);
+            /* removido */
+            display: none;
         }
         .filters {
             display: flex;
@@ -147,6 +142,7 @@
             align-items: center;
             gap: 15px;
             padding: 20px;
+            padding-top: 60px; /* espaço para o botão de menu */
         }
         .card-top { width: 100%; max-width: 400px; text-align: center; }
         .card-bottom-row {
@@ -193,6 +189,27 @@
             transition: transform 0.1s ease;
         }
         .fab:active { transform: scale(0.96); }
+        .fab-menu {
+            position: fixed;
+            top: max(10px, env(safe-area-inset-top, 10px));
+            right: 10px;
+            background: var(--card);
+            color: var(--txt);
+            width: 48px;
+            height: 48px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            z-index: 101;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+            background: var(--card);
+        }
+        .fab-menu:active { transform: scale(0.96); }
         .modal {
             display: none;
             position: fixed;
@@ -422,36 +439,7 @@
     </div>
 
     <div id="appContent" style="display: none;">
-        <header>
-            <div class="filters">
-                <div class="filter-row">
-                    <input type="month" id="monthPicker" value="">
-                    <div class="date-range">
-                        <div class="date-field">
-                            <label>📅 Início</label>
-                            <input type="date" id="dataInicioFiltro">
-                        </div>
-                        <div class="date-field">
-                            <label>📅 Fim</label>
-                            <input type="date" id="dataFimFiltro">
-                        </div>
-                    </div>
-                    <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
-                </div>
-                <div class="filter-row">
-                    <input type="text" id="globalSearch" placeholder="🔍 Buscar por descrição...">
-                    <select id="categoryFilter">
-                        <option value="">📂 Todas categorias</option>
-                    </select>
-                    <button class="btn-menu" onclick="alternarTema()" title="Tema">🌓</button>
-                    <button class="btn-menu" onclick="abrirModal('modalExportar')" title="Exportar">📊</button>
-                    <button class="btn-menu" onclick="logout()" title="Sair">🚪</button>
-                </div>
-                <div class="filter-row">
-                    <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()" title="Clique para sincronizar">🔄 Sincronizando...</div>
-                </div>
-            </div>
-        </header>
+        <!-- Cabeçalho removido, agora é um botão flutuante -->
 
         <div id="alertasPendentes"></div>
 
@@ -494,7 +482,47 @@
             <div id="listaTransacoes"></div>
         </div>
 
+        <!-- Botões flutuantes -->
+        <button class="fab-menu" onclick="abrirModal('modalMenu')" title="Menu / Filtros">⚙️</button>
         <button class="fab" onclick="iniciarChat()">+</button>
+    </div>
+
+    <!-- Modal MENU (agrupa todos os controles que estavam no header) -->
+    <div class="modal" id="modalMenu">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3>🔍 Filtros e ações</h3>
+            <button onclick="fecharModais()" style="width: auto; padding: 8px 16px; background: var(--d);">Fechar</button>
+        </div>
+        <div class="filters">
+            <div class="filter-row">
+                <input type="month" id="monthPicker" value="">
+                <div class="date-range">
+                    <div class="date-field">
+                        <label>📅 Início</label>
+                        <input type="date" id="dataInicioFiltro">
+                    </div>
+                    <div class="date-field">
+                        <label>📅 Fim</label>
+                        <input type="date" id="dataFimFiltro">
+                    </div>
+                </div>
+                <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
+            </div>
+            <div class="filter-row">
+                <input type="text" id="globalSearch" placeholder="🔍 Buscar por descrição...">
+                <select id="categoryFilter">
+                    <option value="">📂 Todas categorias</option>
+                </select>
+            </div>
+            <div class="filter-row">
+                <button class="btn-menu" onclick="alternarTema()" title="Alternar tema">🌓 Tema</button>
+                <button class="btn-menu" onclick="abrirModal('modalExportar')" title="Exportar relatório">📊 Exportar</button>
+                <button class="btn-menu" onclick="logout()" title="Sair">🚪 Sair</button>
+            </div>
+            <div class="filter-row">
+                <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()" title="Clique para sincronizar">🔄 Sincronizando...</div>
+            </div>
+        </div>
     </div>
 
     <!-- Modal Chat (Assistente de Lançamento) -->
@@ -505,11 +533,9 @@
         </div>
         
         <div id="chatMessages" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--bg);">
-            <!-- Mensagens vão aparecer aqui -->
         </div>
 
         <div id="chatQuickReplies" style="padding: 12px 16px; display: none; gap: 8px; overflow-x: auto; background: var(--card); border-top: 1px solid var(--border); white-space: nowrap;">
-            <!-- Botões rápidos vão aparecer aqui -->
         </div>
 
         <div style="padding: 12px 16px; background: var(--card); border-radius: 0 0 28px 28px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center;">
@@ -518,7 +544,6 @@
         </div>
     </div>
 
-    <!-- Input de foto escondido para o chat -->
     <input type="file" id="chatFotoInput" accept="image/*" style="display:none" onchange="handleChatPhoto()">
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
