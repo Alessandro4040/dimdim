@@ -176,6 +176,7 @@ function carregarDadosLocais() {
     };
 }
 
+// Salvar no IndexedDB (com retry se db não estiver pronto)
 function salvarItemDB(store, item) {
     return new Promise((resolve, reject) => {
         if (!db) {
@@ -513,6 +514,7 @@ function toggleTransferencia() {
     }
 }
 
+// Retorna as transações do período (pagas) sem aplicar filtros de busca/categoria
 function getTransacoesPeriodoBase() {
     let dataInicio = filtroDataInicio;
     let dataFim = filtroDataFim;
@@ -527,7 +529,7 @@ function getTransacoesPeriodoBase() {
     return transacoes.filter(t => t.pago && t.data >= dataInicio && t.data <= dataFim);
 }
 
-// ========== DASHBOARD ==========
+// ========== FUNÇÃO PRINCIPAL: DASHBOARD COM MONTANTE TOTAL ==========
 function atualizarDashboard() {
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
@@ -658,6 +660,7 @@ async function salvarTransacao() {
             if (existente) fotoBase64 = existente.foto;
         }
 
+        // === TRANSFERÊNCIA ===
         if (tipo === 'transferencia') {
             const contaDestinoId = document.getElementById('tContaDestino').value;
             if (!contaDestinoId || contaId === contaDestinoId) {
@@ -700,6 +703,7 @@ async function salvarTransacao() {
             return;
         }
 
+        // === TRANSAÇÃO NORMAL ===
         if (idEdit) {
             const index = transacoes.findIndex(t => t.id === idEdit);
             if (index !== -1) {
@@ -813,9 +817,207 @@ function salvarMeta() {
     scheduleSync();
 }
 
-// … (demais funções de edição, modais, zoom, exportação, etc. permanecem idênticas às da versão anterior)
+function editarTransacao(id) {
+    const t = transacoes.find(x => x.id === id);
+    if (!t) return;
+    
+    const isTransfer = t.categoria_id === 'cat_transferencia';
+    let related = [];
+    if (isTransfer && t.id_original) {
+        related = transacoes.filter(x => x.id_original === t.id_original);
+    }
+    
+    document.getElementById('tId').value = t.id;
+    
+    if (isTransfer && related.length === 2) {
+        document.getElementById('tTipo').value = 'transferencia';
+        toggleTransferencia();
+        const outra = related.find(x => x.id !== t.id);
+        if (t.tipo === 'despesa') {
+            document.getElementById('tConta').value = t.conta_id;
+            document.getElementById('tContaDestino').value = outra.conta_id;
+        } else {
+            document.getElementById('tConta').value = outra.conta_id;
+            document.getElementById('tContaDestino').value = t.conta_id;
+        }
+        document.getElementById('tDescricao').value = t.descricao.replace(' (Fatura Recebida)', '').replace(' (Pagamento Fatura / Transf.)', '');
+        document.getElementById('tValor').value = t.valor;
+        document.getElementById('tData').value = t.data;
+        document.getElementById('tStatus').value = t.pago.toString();
+        document.getElementById('tParcelas').value = 1;
+        document.getElementById('tParcelas').disabled = true;
+    } else {
+        document.getElementById('tTipo').value = t.tipo;
+        toggleTransferencia();
+        document.getElementById('tDescricao').value = t.descricao;
+        document.getElementById('tValor').value = t.valor;
+        document.getElementById('tData').value = t.data;
+        document.getElementById('tConta').value = t.conta_id;
+        document.getElementById('tCategoria').value = t.categoria_id;
+        document.getElementById('tStatus').value = t.pago.toString();
+        document.getElementById('tParcelas').value = t.parcela_total || 1;
+        document.getElementById('tParcelas').disabled = false;
+    }
+    
+    document.getElementById('tTituloModal').innerText = isTransfer ? 'Editar Transferência' : 'Editar Transação';
+    document.getElementById('btnExcluirTransacao').style.display = 'block';
+    abrirModal('modalTransacao');
+}
 
-// ========== EVENTOS ==========
+function editarConta(id) {
+    const c = contas.find(x => x.id === id);
+    if (!c) return;
+    document.getElementById('cId').value = c.id;
+    document.getElementById('cNome').value = c.nome;
+    document.getElementById('cTipo').value = c.tipo;
+    document.getElementById('cSaldoLimite').value = c.tipo === 'cartao' ? c.limite : c.saldo_inicial;
+    document.getElementById('cVencimento').value = c.vencimento || '';
+    document.getElementById('cTituloModal').innerText = 'Editar Conta / Cartão';
+    document.getElementById('btnExcluirConta').style.display = 'block';
+    abrirModal('modalConta');
+}
+
+function editarMeta(id) {
+    const m = metas.find(x => x.id === id);
+    if (!m) return;
+    document.getElementById('mId').value = m.id;
+    document.getElementById('mNome').value = m.nome;
+    document.getElementById('mObjetivo').value = m.valor_objetivo;
+    document.getElementById('mAtual').value = m.valor_atual;
+    document.getElementById('mData').value = m.data_limite || '';
+    document.getElementById('mConta').value = m.conta_id || '';
+    document.getElementById('mTituloModal').innerText = 'Editar Cofrinho';
+    document.getElementById('btnExcluirMeta').style.display = 'block';
+    abrirModal('modalMeta');
+}
+
+// ========== UTILITÁRIOS ==========
+function abrirModal(id) {
+    document.getElementById(id).classList.add('active');
+    document.getElementById('overlay').classList.add('active');
+    if (id === 'modalTransacao' && !document.getElementById('tId').value) {
+        document.getElementById('tFoto').value = '';
+        document.getElementById('tTipo').value = 'despesa';
+        toggleTransferencia();
+    }
+}
+
+function fecharModais() {
+    document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
+    document.getElementById('overlay').classList.remove('active');
+    
+    // Reseta chat
+    chatFluxo = { ativo: false, etapa: 0, dadosTemp: {} };
+    const chatMsg = document.getElementById('chatMessages');
+    if (chatMsg) chatMsg.innerHTML = '';
+    const quick = document.getElementById('chatQuickReplies');
+    if (quick) {
+        quick.innerHTML = '';
+        quick.style.display = 'none';
+    }
+    const input = document.getElementById('chatInput');
+    if (input) input.value = '';
+    
+    // Reseta campos de formulário
+    if (document.getElementById('tId')) {
+        document.getElementById('tId').value = '';
+        document.getElementById('cId') ? document.getElementById('cId').value = '' : null;
+        document.getElementById('mId') ? document.getElementById('mId').value = '' : null;
+        document.getElementById('tTituloModal').innerText = 'Nova Transação';
+        document.getElementById('cTituloModal').innerText = 'Nova Conta / Cartão';
+        document.getElementById('mTituloModal').innerText = 'Novo Cofrinho';
+        document.getElementById('tParcelas').disabled = false;
+        document.getElementById('btnExcluirTransacao').style.display = 'none';
+        document.getElementById('btnExcluirConta').style.display = 'none';
+        document.getElementById('btnExcluirMeta').style.display = 'none';
+        document.getElementById('tDescricao').value = '';
+        document.getElementById('tValor').value = '';
+        document.getElementById('cNome') ? document.getElementById('cNome').value = '' : null;
+        document.getElementById('cSaldoLimite') ? document.getElementById('cSaldoLimite').value = '' : null;
+        document.getElementById('mNome') ? document.getElementById('mNome').value = '' : null;
+        document.getElementById('mObjetivo') ? document.getElementById('mObjetivo').value = '' : null;
+        document.getElementById('mAtual') ? document.getElementById('mAtual').value = '' : null;
+        document.getElementById('tFoto') ? document.getElementById('tFoto').value = '' : null;
+        document.getElementById('tTipo').value = 'despesa';
+        toggleTransferencia();
+        document.getElementById('tContaDestino').value = '';
+    }
+}
+
+function aplicarFiltroData() {
+    const inicio = document.getElementById('dataInicioFiltro').value;
+    const fim = document.getElementById('dataFimFiltro').value;
+    filtroDataInicio = inicio;
+    filtroDataFim = fim;
+    atualizarDashboard();
+}
+
+function limparFiltroData() {
+    document.getElementById('dataInicioFiltro').value = '';
+    document.getElementById('dataFimFiltro').value = '';
+    filtroDataInicio = '';
+    filtroDataFim = '';
+    atualizarDashboard();
+}
+
+function abrirZoom(base64) {
+    const viewer = document.getElementById('imageViewer');
+    const img = document.getElementById('zoomImg');
+    img.src = base64;
+    img.style.transform = 'scale(1)';
+    viewer.style.display = 'flex';
+    img.onclick = () => fecharZoom();
+    viewer.onclick = (e) => {
+        if (e.target === viewer) fecharZoom();
+    };
+}
+
+function fecharZoom() {
+    document.getElementById('imageViewer').style.display = 'none';
+    const img = document.getElementById('zoomImg');
+    img.onclick = null;
+    document.getElementById('imageViewer').onclick = null;
+}
+
+function aplicarZoom(img) {
+    img.style.transform = img.style.transform === 'scale(2)' ? 'scale(1)' : 'scale(2)';
+}
+
+function baixarRelatorio() {
+    const ini = document.getElementById('eDataIni').value;
+    const fim = document.getElementById('eDataFim').value;
+    let filtrado = transacoes.filter(t => t.data >= ini && t.data <= fim);
+    let csv = "Data,Tipo,Descrição,Valor,Status,Categoria\n";
+    filtrado.forEach(t => {
+        const catNome = categorias.find(c => c.id === t.categoria_id)?.nome || '';
+        csv += `${t.data},${t.tipo},${t.descricao},${t.valor},${t.pago ? 'Pago' : 'Pendente'},${catNome}\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'relatorio_financas.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function baixarPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const ini = document.getElementById('eDataIni').value;
+    const fim = document.getElementById('eDataFim').value;
+    let filtrado = transacoes.filter(t => t.data >= ini && t.data <= fim);
+    const tableData = filtrado.map(t => [
+        t.data, t.tipo, t.descricao, `R$ ${t.valor.toFixed(2)}`,
+        t.pago ? 'Pago' : 'Pendente',
+        categorias.find(c => c.id === t.categoria_id)?.nome || ''
+    ]);
+    doc.text('Relatório de Transações', 14, 16);
+    doc.autoTable({ head: [['Data', 'Tipo', 'Descrição', 'Valor', 'Status', 'Categoria']], body: tableData, startY: 20 });
+    doc.save('relatorio.pdf');
+}
+
+// ========== EVENTOS E INICIALIZAÇÃO ==========
 document.getElementById('monthPicker').addEventListener('change', (e) => {
     mesAtual = e.target.value;
     document.getElementById('dataInicioFiltro').value = '';
@@ -843,9 +1045,379 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('load', () => { checkStoredToken(); });
 
-// … (chat, sincronização forçada, etc. – tudo como antes)
+async function forcarSincronizacao() {
+    const el = document.getElementById('syncStatus');
+    if (el) {
+        el.style.pointerEvents = 'none';
+        atualizarSyncStatus('sincronizando');
+    }
+    clearRetry();
+    if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = null;
+    }
+    await syncWithServer();
+    if (el) el.style.pointerEvents = 'auto';
+}
 
 // ==========================================
-// CHATBOT (mantido na íntegra, com parcelamento e resumo)
+// MÁQUINA DE ESTADOS DO CHATBOT FINANCEIRO
 // ==========================================
-// ... (código do chat permanece o mesmo)
+
+let chatFluxo = {
+    ativo: false,
+    etapa: 0,
+    dadosTemp: {}
+};
+
+function iniciarChat() {
+    chatFluxo = { ativo: true, etapa: 0, dadosTemp: { fotoBase64: null } };
+    document.getElementById('chatMessages').innerHTML = '';
+    document.getElementById('chatQuickReplies').style.display = 'none';
+    document.getElementById('chatInput').value = '';
+    
+    document.getElementById('modalChat').classList.add('active');
+    document.getElementById('overlay').classList.add('active');
+    
+    setTimeout(() => {
+        adicionarBalaoChat('bot', 'Olá! O que você quer registrar agora?');
+        mostrarBotoesRapidos([
+            { label: '💸 Despesa', valor: 'despesa' },
+            { label: '💰 Receita', valor: 'receita' },
+            { label: '🔄 Transferência', valor: 'transferencia' }
+        ]);
+    }, 300);
+}
+
+function adicionarBalaoChat(remetente, texto) {
+    const chat = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = `chat-bubble chat-${remetente}`;
+    div.innerText = texto;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+}
+
+function mostrarBotoesRapidos(opcoes) {
+    const container = document.getElementById('chatQuickReplies');
+    container.innerHTML = '';
+    if (opcoes.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    opcoes.forEach(op => {
+        const btn = document.createElement('button');
+        btn.className = 'chat-quick-btn';
+        btn.innerText = op.label;
+        btn.onclick = () => processarMensagemChat(op.valor, op.label);
+        container.appendChild(btn);
+    });
+    container.style.display = 'flex';
+}
+
+function enviarMensagemChatInput() {
+    const input = document.getElementById('chatInput');
+    const texto = input.value.trim();
+    if (!texto) return;
+    input.value = '';
+    processarMensagemChat(texto, texto);
+}
+
+function processarMensagemChat(valor, labelExibicao) {
+    adicionarBalaoChat('user', labelExibicao);
+    mostrarBotoesRapidos([]);
+    
+    const etapaAtual = chatFluxo.etapa;
+    
+    // Etapa 0: tipo
+    if (etapaAtual === 0) {
+        chatFluxo.dadosTemp.tipo = valor.toLowerCase().trim();
+        chatFluxo.etapa = 1;
+        setTimeout(() => adicionarBalaoChat('bot', 'Qual é o valor? (ex: 150,50)'), 500);
+    }
+    // Etapa 1: valor
+    else if (etapaAtual === 1) {
+        let v = parseFloat(valor.replace('R$', '').replace(',', '.').trim());
+        if (isNaN(v)) {
+            setTimeout(() => adicionarBalaoChat('bot', 'Isso não parece um número. Por favor, digite apenas o valor.'), 500);
+            return;
+        }
+        chatFluxo.dadosTemp.valor = v;
+        chatFluxo.etapa = 2;
+        setTimeout(() => adicionarBalaoChat('bot', 'Qual é a descrição? (ex: Mercado, Gasolina, Salário)'), 500);
+    }
+    // Etapa 2: descrição
+    else if (etapaAtual === 2) {
+        chatFluxo.dadosTemp.descricao = valor;
+        chatFluxo.etapa = 3;
+        setTimeout(() => {
+            let msg = chatFluxo.dadosTemp.tipo === 'transferencia' ? 'De qual conta/cartão vai SAIR o dinheiro?' : 'Em qual conta/cartão?';
+            adicionarBalaoChat('bot', msg);
+            let opsContas = contas.map(c => ({ label: c.nome, valor: c.id }));
+            mostrarBotoesRapidos(opsContas);
+        }, 500);
+    }
+    // Etapa 3: conta de origem
+    else if (etapaAtual === 3) {
+        chatFluxo.dadosTemp.conta_id = valor;
+        const contaSelecionada = contas.find(c => c.id === valor);
+        
+        if (chatFluxo.dadosTemp.tipo === 'transferencia') {
+            // Transferência: pula para escolha do destino
+            chatFluxo.etapa = 3.5;
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'Para qual conta o dinheiro vai ENTRAR?');
+                let opsContasDestino = contas.filter(c => c.id !== valor).map(c => ({ label: c.nome, valor: c.id }));
+                mostrarBotoesRapidos(opsContasDestino);
+            }, 500);
+        }
+        else if (chatFluxo.dadosTemp.tipo === 'despesa' && contaSelecionada && contaSelecionada.tipo === 'cartao') {
+            // Despesa com cartão: perguntar parcelas
+            chatFluxo.etapa = 3.1;
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'Em quantas vezes deseja parcelar? (digite o número, ex: 3)');
+            }, 500);
+        } else {
+            // Outros casos: vai direto para categoria
+            chatFluxo.etapa = 4;
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'Qual é a categoria?');
+                let opsCat = categorias.filter(c => c.id !== 'cat_transferencia').map(c => ({ label: c.nome, valor: c.id }));
+                mostrarBotoesRapidos(opsCat);
+            }, 500);
+        }
+    }
+    // Etapa 3.1: parcelas (somente despesa com cartão)
+    else if (etapaAtual === 3.1) {
+        let parcelas = parseInt(valor);
+        if (isNaN(parcelas) || parcelas < 1) {
+            setTimeout(() => adicionarBalaoChat('bot', 'Por favor, digite um número válido de parcelas (mínimo 1).'), 500);
+            return;
+        }
+        chatFluxo.dadosTemp.parcelas = parcelas;
+        chatFluxo.etapa = 4;
+        setTimeout(() => {
+            adicionarBalaoChat('bot', 'Qual é a categoria?');
+            let opsCat = categorias.filter(c => c.id !== 'cat_transferencia').map(c => ({ label: c.nome, valor: c.id }));
+            mostrarBotoesRapidos(opsCat);
+        }, 500);
+    }
+    // Etapa 3.5: conta destino (transferência)
+    else if (etapaAtual === 3.5) {
+        chatFluxo.dadosTemp.conta_destino_id = valor;
+        chatFluxo.etapa = 5; // resumo
+        setTimeout(() => {
+            const origem = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
+            const destino = contas.find(c => c.id === valor)?.nome;
+            adicionarBalaoChat('bot', `Resumo:\n🔄 Transf. de R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDe: ${origem}\nPara: ${destino}\nDesc: ${chatFluxo.dadosTemp.descricao}\n\nPosso salvar?`);
+            mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
+        }, 500);
+    }
+    // Etapa 4: categoria
+    else if (etapaAtual === 4) {
+        chatFluxo.dadosTemp.categoria_id = valor;
+        chatFluxo.etapa = 5;
+        setTimeout(() => {
+            const conta = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
+            const cat = categorias.find(c => c.id === valor)?.nome;
+            const icone = chatFluxo.dadosTemp.tipo === 'despesa' ? '💸' : '💰';
+            let resumo = `${icone} ${chatFluxo.dadosTemp.tipo.toUpperCase()} - R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDesc: ${chatFluxo.dadosTemp.descricao}\nConta: ${conta}\nCat: ${cat}`;
+            if (chatFluxo.dadosTemp.parcelas && chatFluxo.dadosTemp.parcelas > 1) {
+                resumo += `\n📆 Parcelas: ${chatFluxo.dadosTemp.parcelas}x`;
+            }
+            resumo += '\n\nPosso salvar?';
+            adicionarBalaoChat('bot', resumo);
+            mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
+        }, 500);
+    }
+    // Etapa 5: confirmação
+    else if (etapaAtual === 5) {
+        if (valor === 'sim') {
+            chatFluxo.etapa = 6; // etapa da foto
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'Deseja anexar uma foto do comprovante?');
+                mostrarBotoesRapidos([
+                    {label: '📷 Sim, anexar', valor: 'foto_sim'},
+                    {label: '⏭️ Pular', valor: 'foto_nao'}
+                ]);
+            }, 500);
+        } else {
+            adicionarBalaoChat('bot', 'Certo, lançamento cancelado! 🧹');
+            setTimeout(() => fecharModais(), 1500);
+        }
+    }
+    // Etapa 6: foto
+    else if (etapaAtual === 6) {
+        if (valor === 'foto_sim') {
+            document.getElementById('chatFotoInput').click();
+        } else if (valor === 'foto_nao') {
+            finalizarSalvamentoChat(null);
+        }
+    }
+    // Etapa 7: após salvar, pergunta sobre resumo
+    else if (etapaAtual === 7) {
+        if (valor === 'resumo_sim') {
+            mostrarResumoMes();
+            // Etapa 8: opções pós-resumo
+            chatFluxo.etapa = 8;
+            setTimeout(() => {
+                mostrarBotoesRapidos([
+                    {label: '➕ Nova Transação', valor: 'nova'},
+                    {label: '🚪 Sair', valor: 'sair'}
+                ]);
+            }, 500);
+        } else if (valor === 'resumo_nao') {
+            adicionarBalaoChat('bot', 'Ok! Até a próxima 👋');
+            setTimeout(() => fecharModais(), 1500);
+        }
+    }
+    // Etapa 8: após resumo, escolher ação
+    else if (etapaAtual === 8) {
+        if (valor === 'nova') {
+            // Reinicia o chat imediatamente (limpa estado e reinicia fluxo)
+            chatFluxo = { ativo: true, etapa: 0, dadosTemp: { fotoBase64: null } };
+            document.getElementById('chatMessages').innerHTML = '';
+            document.getElementById('chatQuickReplies').innerHTML = '';
+            document.getElementById('chatQuickReplies').style.display = 'none';
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'O que você quer registrar agora?');
+                mostrarBotoesRapidos([
+                    { label: '💸 Despesa', valor: 'despesa' },
+                    { label: '💰 Receita', valor: 'receita' },
+                    { label: '🔄 Transferência', valor: 'transferencia' }
+                ]);
+            }, 300);
+        } else if (valor === 'sair') {
+            fecharModais();
+        }
+    }
+}
+
+// Função chamada quando o usuário seleciona uma foto no chat
+async function handleChatPhoto() {
+    const fileInput = document.getElementById('chatFotoInput');
+    const file = fileInput.files[0];
+    if (!file) {
+        chatFluxo.etapa = 6;
+        adicionarBalaoChat('bot', 'Nenhuma foto selecionada. Deseja anexar uma foto?');
+        mostrarBotoesRapidos([
+            {label: '📷 Sim, anexar', valor: 'foto_sim'},
+            {label: '⏭️ Pular', valor: 'foto_nao'}
+        ]);
+        return;
+    }
+    
+    try {
+        const base64 = await resizeImage(file);
+        chatFluxo.dadosTemp.fotoBase64 = base64;
+        adicionarBalaoChat('bot', '📸 Foto anexada! Salvando...');
+        setTimeout(() => {
+            finalizarSalvamentoChat(base64);
+        }, 600);
+    } catch (err) {
+        console.error(err);
+        adicionarBalaoChat('bot', '❌ Erro ao processar a foto. Salvando sem foto.');
+        setTimeout(() => {
+            finalizarSalvamentoChat(null);
+        }, 600);
+    }
+    
+    fileInput.value = '';
+}
+
+async function finalizarSalvamentoChat(fotoBase64) {
+    adicionarBalaoChat('bot', '⏳ Salvando e sincronizando...');
+    
+    const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+    const dataStr = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
+    const parcelas = chatFluxo.dadosTemp.parcelas || 1;
+    
+    try {
+        if (chatFluxo.dadosTemp.tipo === 'transferencia') {
+            // Transferência (parcelas ignoradas, sempre 1)
+            const idOriginal = uuidv4();
+            const saida = {
+                id: uuidv4(), id_original: idOriginal,
+                tipo: 'despesa', descricao: chatFluxo.dadosTemp.descricao,
+                valor: chatFluxo.dadosTemp.valor, data: dataStr,
+                conta_id: chatFluxo.dadosTemp.conta_id, categoria_id: 'cat_transferencia',
+                pago: true, parcela_num: 1, parcela_total: 1,
+                foto: fotoBase64 || null, sinc: false, updated_at: new Date().toISOString()
+            };
+            const entrada = {
+                id: uuidv4(), id_original: idOriginal,
+                tipo: 'receita', descricao: chatFluxo.dadosTemp.descricao,
+                valor: chatFluxo.dadosTemp.valor, data: dataStr,
+                conta_id: chatFluxo.dadosTemp.conta_destino_id, categoria_id: 'cat_transferencia',
+                pago: true, parcela_num: 1, parcela_total: 1,
+                foto: fotoBase64 || null, sinc: false, updated_at: new Date().toISOString()
+            };
+            await salvarItemDB('transacoes', saida);
+            await salvarItemDB('transacoes', entrada);
+        } else {
+            // Transação comum com possíveis parcelas
+            const idOriginal = uuidv4();
+            const dataInicial = new Date(dataStr + 'T00:00:00'); // força meia-noite
+            const valorParcela = chatFluxo.dadosTemp.valor / parcelas;
+            
+            for (let i = 0; i < parcelas; i++) {
+                let dataParcela = new Date(dataInicial);
+                dataParcela.setMonth(dataParcela.getMonth() + i);
+                const transacao = {
+                    id: uuidv4(),
+                    id_original: idOriginal,
+                    tipo: chatFluxo.dadosTemp.tipo,
+                    descricao: parcelas > 1 ? `${chatFluxo.dadosTemp.descricao} (${i+1}/${parcelas})` : chatFluxo.dadosTemp.descricao,
+                    valor: valorParcela,
+                    data: dataParcela.toISOString().split('T')[0],
+                    conta_id: chatFluxo.dadosTemp.conta_id,
+                    categoria_id: chatFluxo.dadosTemp.categoria_id,
+                    pago: true,
+                    parcela_num: i + 1,
+                    parcela_total: parcelas,
+                    foto: fotoBase64 || null,
+                    sinc: false,
+                    updated_at: new Date().toISOString()
+                };
+                await salvarItemDB('transacoes', transacao);
+            }
+        }
+        
+        adicionarBalaoChat('bot', '✅ Transação registrada com sucesso!');
+        scheduleSync();
+        
+        // Perguntar sobre resumo
+        chatFluxo.etapa = 7;
+        setTimeout(() => {
+            adicionarBalaoChat('bot', 'Quer ver o resumo do mês atual?');
+            mostrarBotoesRapidos([
+                {label: '📊 Sim, mostrar', valor: 'resumo_sim'},
+                {label: '❌ Não, sair', valor: 'resumo_nao'}
+            ]);
+        }, 800);
+        
+    } catch (err) {
+        console.error(err);
+        adicionarBalaoChat('bot', '❌ Erro ao salvar. Tente novamente.');
+        setTimeout(() => fecharModais(), 2000);
+    }
+}
+
+function mostrarResumoMes() {
+    const [ano, mes] = mesAtual.split('-');
+    const inicio = `${ano}-${mes}-01`;
+    const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
+    const fim = `${ano}-${mes}-${String(ultimoDia).padStart(2,'0')}`;
+    
+    let totalRec = 0, totalDes = 0;
+    transacoes.forEach(t => {
+        if (t.pago && t.data >= inicio && t.data <= fim && t.categoria_id !== 'cat_transferencia') {
+            if (t.tipo === 'receita') totalRec += t.valor;
+            else if (t.tipo === 'despesa') totalDes += t.valor;
+        }
+    });
+    
+    const saldo = totalRec - totalDes;
+    adicionarBalaoChat('bot', `📊 Resumo do mês:\n💰 Receitas: R$ ${totalRec.toFixed(2)}\n💸 Despesas: R$ ${totalDes.toFixed(2)}\n📌 Saldo: R$ ${saldo.toFixed(2)}`);
+}
