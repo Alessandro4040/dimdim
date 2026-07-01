@@ -293,6 +293,7 @@ function scheduleSync(immediate = false) {
     }
 }
 
+// Limpar retentativas
 function clearRetry() {
     if (syncRetryTimer) {
         clearTimeout(syncRetryTimer);
@@ -393,8 +394,6 @@ async function pullFromServer() {
             for (const store of ['transacoes', 'contas', 'metas', 'categorias']) {
                 const remoteItems = remoteData[store] || [];
                 const deletadosAtuais = JSON.parse(localStorage.getItem('deletados') || '{"transacoes":[], "contas":[], "metas":[], "categorias":[]}');
-                const locais = await getAllFromStore(store);
-                const idsLocais = new Set(locais.map(i => i.id));
                 for (const item of remoteItems) {
                     if (deletadosAtuais[store].includes(item.id)) continue;
                     if (item.valor !== undefined) item.valor = parseMoedaBR(item.valor);
@@ -467,12 +466,27 @@ function atualizarSyncStatus(status) {
 function atualizarSelectContas() {
     const sel = document.getElementById('tConta');
     const selDestino = document.getElementById('tContaDestino');
-    sel.innerHTML = '<option value="">Selecione a Origem...</option>';
-    if (selDestino) selDestino.innerHTML = '<option value="">Selecione o Destino...</option>';
+    if (!sel) return;
+
+    // Detecta o tipo atual para aplicar a legenda correta e amigável
+    const tTipoEl = document.getElementById('tTipo');
+    const tipoAtual = tTipoEl ? tTipoEl.value : 'despesa';
+
+    if (tipoAtual === 'receita') {
+        sel.innerHTML = '<option value="">Selecione a Conta de Destino...</option>';
+    } else if (tipoAtual === 'transferencia') {
+        sel.innerHTML = '<option value="">Selecione a Conta de Origem...</option>';
+    } else {
+        sel.innerHTML = '<option value="">Selecione a Conta/Cartão de Origem...</option>';
+    }
+
+    if (selDestino) selDestino.innerHTML = '<option value="">Selecione a Conta de Destino...</option>';
+    
     contas.forEach(c => {
         sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
         if (selDestino) selDestino.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
     });
+
     const selMeta = document.getElementById('mConta');
     if (selMeta) {
         selMeta.innerHTML = '<option value="">Nenhuma</option>';
@@ -482,6 +496,7 @@ function atualizarSelectContas() {
 
 function atualizarSelectCategorias() {
     const sel = document.getElementById('tCategoria');
+    if (!sel) return;
     sel.innerHTML = '';
     categorias.filter(c => c.id !== 'cat_transferencia').forEach(c => {
         sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
@@ -490,9 +505,10 @@ function atualizarSelectCategorias() {
 
 function atualizarFiltroCategorias() {
     const sel = document.getElementById('categoryFilter');
+    if (!sel) return;
     sel.innerHTML = '<option value="">📂 Todas categorias</option>';
     categorias.filter(c => c.id !== 'cat_transferencia').forEach(c => {
-        sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
+        sel.innerHTML += `<option value="${c.id}">${c.nome}</option>';
     });
 }
 
@@ -501,16 +517,34 @@ function toggleTransferencia() {
     const contaDestino = document.getElementById('tContaDestino');
     const categoria = document.getElementById('tCategoria');
     const parcelas = document.getElementById('tParcelas');
+    const contaOrigem = document.getElementById('tConta');
     
+    // Força a atualização do select para readequar as labels (Origem vs Destino)
+    atualizarSelectContas();
+
     if (tipo === 'transferencia') {
-        contaDestino.style.display = 'block';
-        categoria.disabled = true;
-        parcelas.disabled = true;
-        parcelas.value = '1';
+        if (contaDestino) contaDestino.style.display = 'block';
+        if (categoria) {
+            categoria.disabled = true;
+            categoria.value = 'cat_transferencia';
+        }
+        if (parcelas) {
+            parcelas.disabled = true;
+            parcelas.value = '1';
+        }
+    } else if (tipo === 'receita') {
+        if (contaDestino) contaDestino.style.display = 'none';
+        if (categoria) categoria.disabled = false;
+        if (parcelas) {
+            parcelas.disabled = true;
+            parcelas.value = '1'; // Receitas não possuem parcelamento
+        }
+        if (contaOrigem) contaOrigem.style.display = 'block'; // Garante visibilidade no iOS
     } else {
-        contaDestino.style.display = 'none';
-        categoria.disabled = false;
-        parcelas.disabled = false;
+        if (contaDestino) contaDestino.style.display = 'none';
+        if (categoria) categoria.disabled = false;
+        if (parcelas) parcelas.disabled = false;
+        if (contaOrigem) contaOrigem.style.display = 'block';
     }
 }
 
@@ -856,7 +890,7 @@ function editarTransacao(id) {
         document.getElementById('tCategoria').value = t.categoria_id;
         document.getElementById('tStatus').value = t.pago.toString();
         document.getElementById('tParcelas').value = t.parcela_total || 1;
-        document.getElementById('tParcelas').disabled = false;
+        document.getElementById('tParcelas').disabled = t.tipo === 'receita';
     }
     
     document.getElementById('tTituloModal').innerText = isTransfer ? 'Editar Transferência' : 'Editar Transação';
@@ -921,8 +955,8 @@ function fecharModais() {
     // Reseta campos de formulário
     if (document.getElementById('tId')) {
         document.getElementById('tId').value = '';
-        document.getElementById('cId') ? document.getElementById('cId').value = '' : null;
-        document.getElementById('mId') ? document.getElementById('mId').value = '' : null;
+        if(document.getElementById('cId')) document.getElementById('cId').value = '';
+        if(document.getElementById('mId')) document.getElementById('mId').value = '';
         document.getElementById('tTituloModal').innerText = 'Nova Transação';
         document.getElementById('cTituloModal').innerText = 'Nova Conta / Cartão';
         document.getElementById('mTituloModal').innerText = 'Novo Cofrinho';
@@ -932,12 +966,12 @@ function fecharModais() {
         document.getElementById('btnExcluirMeta').style.display = 'none';
         document.getElementById('tDescricao').value = '';
         document.getElementById('tValor').value = '';
-        document.getElementById('cNome') ? document.getElementById('cNome').value = '' : null;
-        document.getElementById('cSaldoLimite') ? document.getElementById('cSaldoLimite').value = '' : null;
-        document.getElementById('mNome') ? document.getElementById('mNome').value = '' : null;
-        document.getElementById('mObjetivo') ? document.getElementById('mObjetivo').value = '' : null;
-        document.getElementById('mAtual') ? document.getElementById('mAtual').value = '' : null;
-        document.getElementById('tFoto') ? document.getElementById('tFoto').value = '' : null;
+        if(document.getElementById('cNome')) document.getElementById('cNome').value = '';
+        if(document.getElementById('cSaldoLimite')) document.getElementById('cSaldoLimite').value = '';
+        if(document.getElementById('mNome')) document.getElementById('mNome').value = '';
+        if(document.getElementById('mObjetivo')) document.getElementById('mObjetivo').value = '';
+        if(document.getElementById('mAtual')) document.getElementById('mAtual').value = '';
+        if(document.getElementById('tFoto')) document.getElementById('tFoto').value = '';
         document.getElementById('tTipo').value = 'despesa';
         toggleTransferencia();
         document.getElementById('tContaDestino').value = '';
@@ -1031,6 +1065,11 @@ document.getElementById('categoryFilter').addEventListener('change', () => atual
 document.getElementById('dataInicioFiltro').addEventListener('change', aplicarFiltroData);
 document.getElementById('dataFimFiltro').addEventListener('change', aplicarFiltroData);
 document.getElementById('monthPicker').value = mesAtual;
+
+// Escutador nativo adicionado para assegurar compatibilidade total com o iPhone 15 / iOS Safari
+if (document.getElementById('tTipo')) {
+    document.getElementById('tTipo').addEventListener('change', toggleTransferencia);
+}
 
 window.addEventListener('online', () => {
     if (authToken) scheduleSync(true);
@@ -1152,7 +1191,12 @@ function processarMensagemChat(valor, labelExibicao) {
         chatFluxo.dadosTemp.descricao = valor;
         chatFluxo.etapa = 3;
         setTimeout(() => {
-            let msg = chatFluxo.dadosTemp.tipo === 'transferencia' ? 'De qual conta/cartão vai SAIR o dinheiro?' : 'Em qual conta/cartão?';
+            let msg = 'Em qual conta/cartão?';
+            if (chatFluxo.dadosTemp.tipo === 'transferencia') {
+                msg = 'De qual conta/cartão vai SAIR o dinheiro?';
+            } else if (chatFluxo.dadosTemp.tipo === 'receita') {
+                msg = 'Em qual conta o dinheiro vai ENTRAR?';
+            }
             adicionarBalaoChat('bot', msg);
             let opsContas = contas.map(c => ({ label: c.nome, valor: c.id }));
             mostrarBotoesRapidos(opsContas);
@@ -1164,7 +1208,6 @@ function processarMensagemChat(valor, labelExibicao) {
         const contaSelecionada = contas.find(c => c.id === valor);
         
         if (chatFluxo.dadosTemp.tipo === 'transferencia') {
-            // Transferência: pula para escolha do destino
             chatFluxo.etapa = 3.5;
             setTimeout(() => {
                 adicionarBalaoChat('bot', 'Para qual conta o dinheiro vai ENTRAR?');
@@ -1173,13 +1216,11 @@ function processarMensagemChat(valor, labelExibicao) {
             }, 500);
         }
         else if (chatFluxo.dadosTemp.tipo === 'despesa' && contaSelecionada && contaSelecionada.tipo === 'cartao') {
-            // Despesa com cartão: perguntar parcelas
             chatFluxo.etapa = 3.1;
             setTimeout(() => {
                 adicionarBalaoChat('bot', 'Em quantas vezes deseja parcelar? (digite o número, ex: 3)');
             }, 500);
         } else {
-            // Outros casos: vai direto para categoria
             chatFluxo.etapa = 4;
             setTimeout(() => {
                 adicionarBalaoChat('bot', 'Qual é a categoria?');
@@ -1206,7 +1247,7 @@ function processarMensagemChat(valor, labelExibicao) {
     // Etapa 3.5: conta destino (transferência)
     else if (etapaAtual === 3.5) {
         chatFluxo.dadosTemp.conta_destino_id = valor;
-        chatFluxo.etapa = 5; // resumo
+        chatFluxo.etapa = 5;
         setTimeout(() => {
             const origem = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
             const destino = contas.find(c => c.id === valor)?.nome;
@@ -1234,7 +1275,7 @@ function processarMensagemChat(valor, labelExibicao) {
     // Etapa 5: confirmação
     else if (etapaAtual === 5) {
         if (valor === 'sim') {
-            chatFluxo.etapa = 6; // etapa da foto
+            chatFluxo.etapa = 6;
             setTimeout(() => {
                 adicionarBalaoChat('bot', 'Deseja anexar uma foto do comprovante?');
                 mostrarBotoesRapidos([
@@ -1259,7 +1300,6 @@ function processarMensagemChat(valor, labelExibicao) {
     else if (etapaAtual === 7) {
         if (valor === 'resumo_sim') {
             mostrarResumoMes();
-            // Etapa 8: opções pós-resumo
             chatFluxo.etapa = 8;
             setTimeout(() => {
                 mostrarBotoesRapidos([
@@ -1272,10 +1312,9 @@ function processarMensagemChat(valor, labelExibicao) {
             setTimeout(() => fecharModais(), 1500);
         }
     }
-    // Etapa 8: após resumo, escolher ação
+    // Etapa 8: pós resumo, escolher ação
     else if (etapaAtual === 8) {
         if (valor === 'nova') {
-            // Reinicia o chat imediatamente (limpa estado e reinicia fluxo)
             chatFluxo = { ativo: true, etapa: 0, dadosTemp: { fotoBase64: null } };
             document.getElementById('chatMessages').innerHTML = '';
             document.getElementById('chatQuickReplies').innerHTML = '';
@@ -1335,7 +1374,6 @@ async function finalizarSalvamentoChat(fotoBase64) {
     
     try {
         if (chatFluxo.dadosTemp.tipo === 'transferencia') {
-            // Transferência (parcelas ignoradas, sempre 1)
             const idOriginal = uuidv4();
             const saida = {
                 id: uuidv4(), id_original: idOriginal,
@@ -1356,9 +1394,8 @@ async function finalizarSalvamentoChat(fotoBase64) {
             await salvarItemDB('transacoes', saida);
             await salvarItemDB('transacoes', entrada);
         } else {
-            // Transação comum com possíveis parcelas
             const idOriginal = uuidv4();
-            const dataInicial = new Date(dataStr + 'T00:00:00'); // força meia-noite
+            const dataInicial = new Date(dataStr + 'T00:00:00');
             const valorParcela = chatFluxo.dadosTemp.valor / parcelas;
             
             for (let i = 0; i < parcelas; i++) {
@@ -1387,7 +1424,6 @@ async function finalizarSalvamentoChat(fotoBase64) {
         adicionarBalaoChat('bot', '✅ Transação registrada com sucesso!');
         scheduleSync();
         
-        // Perguntar sobre resumo
         chatFluxo.etapa = 7;
         setTimeout(() => {
             adicionarBalaoChat('bot', 'Quer ver o resumo do mês atual?');
