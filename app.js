@@ -1,32 +1,37 @@
-// Configurações
+// ============================================================
+// CONFIGURAÇÕES GLOBAIS
+// ============================================================
 const API_URL = 'https://script.google.com/macros/s/AKfycbznPvhHLdMUEfl2Vbb3BPDqwKmlQaQZxHISujSjeLgPzbwLPSkLqIlnayyvZh-M_p1e/exec';
 const DB_NAME = 'financas_v5';
+const MAX_SYNC_RETRIES = 3;
+const SYNC_DEBOUNCE_MS = 2000;
+
+// Estado global
 let db;
-let transacoes = [], contas = [], metas = [], categorias = [];
+let transacoes = [];
+let contas = [];
+let metas = [];
+let categorias = [];
 let mesAtual = new Date().toISOString().slice(0, 7);
 let temaAtual = localStorage.getItem('tema') || 'claro';
 let syncInProgress = false;
 let authToken = localStorage.getItem('authToken');
-
-// Controle de debounce e retry
 let syncDebounceTimer = null;
 let syncRetryTimer = null;
 let syncRetryCount = 0;
-const MAX_SYNC_RETRIES = 3;
-const SYNC_DEBOUNCE_MS = 2000;
-
-// Filtros de data personalizados
 let filtroDataInicio = '';
 let filtroDataFim = '';
 
-// UUID v4
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
+
 function uuidv4() {
     return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
         (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
     );
 }
 
-// Formatar data ISO (YYYY-MM-DD) para DD/MM/YYYY
 function formatarDataBR(dataISO) {
     if (!dataISO) return '';
     const partes = dataISO.split('-');
@@ -34,7 +39,6 @@ function formatarDataBR(dataISO) {
     return `${partes[2]}/${partes[1]}/${partes[0]}`;
 }
 
-// Redimensionar imagem
 function resizeImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -56,15 +60,40 @@ function resizeImage(file, maxWidth = 800, maxHeight = 800, quality = 0.7) {
     });
 }
 
-// Tema
+function parseMoedaBR(valor) {
+    if (typeof valor === 'number') return valor;
+    if (!valor) return 0;
+    let str = String(valor).replace(/[^0-9,\-]/g, '');
+    str = str.replace(',', '.');
+    return parseFloat(str) || 0;
+}
+
+function parseDataBR(dataStr) {
+    if (!dataStr) return '';
+    if (String(dataStr).includes('-') && String(dataStr).length === 10) return dataStr;
+    if (String(dataStr).includes('/')) {
+        const partes = String(dataStr).split(' ')[0].split('/');
+        if (partes.length === 3) {
+            return `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
+        }
+    }
+    return dataStr;
+}
+
+// ============================================================
+// TEMA
+// ============================================================
 document.documentElement.setAttribute('data-theme', temaAtual);
+
 function alternarTema() {
     temaAtual = temaAtual === 'claro' ? 'escuro' : 'claro';
     document.documentElement.setAttribute('data-theme', temaAtual);
     localStorage.setItem('tema', temaAtual);
 }
 
-// ========== AUTENTICAÇÃO ==========
+// ============================================================
+// AUTENTICAÇÃO
+// ============================================================
 async function submitPassword() {
     const password = document.getElementById('passwordInput').value;
     const errorDiv = document.getElementById('passwordError');
@@ -122,11 +151,13 @@ async function autenticarBiometria() {
     }
 }
 
-// ========== INDEXEDDB ==========
+// ============================================================
+// INDEXEDDB
+// ============================================================
 function iniciarApp() {
     const req = indexedDB.open(DB_NAME, 1);
     req.onupgradeneeded = (e) => {
-        let db = e.target.result;
+        const db = e.target.result;
         if (!db.objectStoreNames.contains('transacoes')) db.createObjectStore('transacoes', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('contas')) db.createObjectStore('contas', { keyPath: 'id' });
         if (!db.objectStoreNames.contains('metas')) db.createObjectStore('metas', { keyPath: 'id' });
@@ -135,9 +166,7 @@ function iniciarApp() {
     req.onsuccess = (e) => {
         db = e.target.result;
         carregarDadosLocais();
-        if (navigator.onLine) {
-            scheduleSync(true);
-        }
+        if (navigator.onLine) scheduleSync(true);
         setInterval(() => {
             if (!syncInProgress && navigator.onLine) {
                 const temPendencias = transacoes.some(t => !t.sinc) || contas.some(c => !c.sinc) || metas.some(m => !m.sinc);
@@ -150,7 +179,10 @@ function iniciarApp() {
 function carregarDadosLocais() {
     const tx = db.transaction(['transacoes', 'contas', 'metas', 'categorias'], 'readonly');
     tx.objectStore('transacoes').getAll().onsuccess = e => { transacoes = e.target.result; };
-    tx.objectStore('contas').getAll().onsuccess = e => { contas = e.target.result; atualizarSelectContas(); };
+    tx.objectStore('contas').getAll().onsuccess = e => {
+        contas = e.target.result;
+        atualizarSelectContas();
+    };
     tx.objectStore('metas').getAll().onsuccess = e => { metas = e.target.result; };
     tx.objectStore('categorias').getAll().onsuccess = e => {
         categorias = e.target.result;
@@ -176,7 +208,6 @@ function carregarDadosLocais() {
     };
 }
 
-// Salvar no IndexedDB (com retry se db não estiver pronto)
 function salvarItemDB(store, item) {
     return new Promise((resolve, reject) => {
         if (!db) {
@@ -199,7 +230,20 @@ function salvarItemDB(store, item) {
     });
 }
 
-// Deleção em cascata para transferências
+function getAllFromStore(store) {
+    return new Promise((resolve) => {
+        const tx = db.transaction(store, 'readonly');
+        tx.objectStore(store).getAll().onsuccess = e => resolve(e.target.result);
+    });
+}
+
+function putToStore(store, item) {
+    return new Promise((resolve) => {
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).put(item).onsuccess = () => resolve();
+    });
+}
+
 async function excluirItem(store, inputId) {
     const id = document.getElementById(inputId).value;
     if (!id || !confirm('Tem certeza que deseja excluir este item?')) return;
@@ -251,34 +295,14 @@ async function excluirItem(store, inputId) {
     scheduleSync();
 }
 
-// ========== FUNÇÕES DE CONVERSÃO ==========
-function parseMoedaBR(valor) {
-    if (typeof valor === 'number') return valor;
-    if (!valor) return 0;
-    let str = String(valor).replace(/[^0-9,\-]/g, '');
-    str = str.replace(',', '.');
-    return parseFloat(str) || 0;
-}
-
-function parseDataBR(dataStr) {
-    if (!dataStr) return '';
-    if (String(dataStr).includes('-') && String(dataStr).length === 10) return dataStr;
-    if (String(dataStr).includes('/')) {
-        const partes = String(dataStr).split(' ')[0].split('/');
-        if (partes.length === 3) {
-            return `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
-        }
-    }
-    return dataStr;
-}
-
-// ========== AGENDAMENTO DE SINCRONIZAÇÃO ==========
+// ============================================================
+// SINCRONIZAÇÃO
+// ============================================================
 function scheduleSync(immediate = false) {
     if (syncDebounceTimer) {
         clearTimeout(syncDebounceTimer);
         syncDebounceTimer = null;
     }
-    
     if (immediate) {
         if (!syncInProgress && navigator.onLine && authToken) {
             syncWithServer();
@@ -293,7 +317,6 @@ function scheduleSync(immediate = false) {
     }
 }
 
-// Limpar retentativas
 function clearRetry() {
     if (syncRetryTimer) {
         clearTimeout(syncRetryTimer);
@@ -302,7 +325,6 @@ function clearRetry() {
     syncRetryCount = 0;
 }
 
-// ========== SINCRONIZAÇÃO (COM RETRY CONTROLADO) ==========
 async function syncWithServer() {
     if (syncInProgress || !authToken) return;
     if (!navigator.onLine) {
@@ -333,7 +355,6 @@ async function syncWithServer() {
         }
         
         const payload = { ...unsynced, deletados, token: authToken };
-        
         const response = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         
@@ -355,7 +376,6 @@ async function syncWithServer() {
         }
         
         await pullFromServer();
-        
         atualizarSyncStatus('sincronizado');
         carregarDadosLocais();
         clearRetry();
@@ -420,20 +440,6 @@ async function pullFromServer() {
     }
 }
 
-function getAllFromStore(store) {
-    return new Promise((resolve) => {
-        const tx = db.transaction(store, 'readonly');
-        tx.objectStore(store).getAll().onsuccess = e => resolve(e.target.result);
-    });
-}
-
-function putToStore(store, item) {
-    return new Promise((resolve) => {
-        const tx = db.transaction(store, 'readwrite');
-        tx.objectStore(store).put(item).onsuccess = () => resolve();
-    });
-}
-
 function atualizarSyncStatus(status) {
     const el = document.getElementById('syncStatus');
     if (!el) return;
@@ -462,16 +468,32 @@ function atualizarSyncStatus(status) {
     }
 }
 
-// ========== FUNÇÕES DE UI ==========
+async function forcarSincronizacao() {
+    const el = document.getElementById('syncStatus');
+    if (el) {
+        el.style.pointerEvents = 'none';
+        atualizarSyncStatus('sincronizando');
+    }
+    clearRetry();
+    if (syncDebounceTimer) {
+        clearTimeout(syncDebounceTimer);
+        syncDebounceTimer = null;
+    }
+    await syncWithServer();
+    if (el) el.style.pointerEvents = 'auto';
+}
+
+// ============================================================
+// UI – SELECTS E CONTROLES
+// ============================================================
 function atualizarSelectContas() {
     const sel = document.getElementById('tConta');
     const selDestino = document.getElementById('tContaDestino');
     if (!sel) return;
-
-    // Detecta o tipo atual para aplicar a legenda correta e amigável
+    
     const tTipoEl = document.getElementById('tTipo');
     const tipoAtual = tTipoEl ? tTipoEl.value : 'despesa';
-
+    
     if (tipoAtual === 'receita') {
         sel.innerHTML = '<option value="">Selecione a Conta de Destino...</option>';
     } else if (tipoAtual === 'transferencia') {
@@ -479,14 +501,14 @@ function atualizarSelectContas() {
     } else {
         sel.innerHTML = '<option value="">Selecione a Conta/Cartão de Origem...</option>';
     }
-
+    
     if (selDestino) selDestino.innerHTML = '<option value="">Selecione a Conta de Destino...</option>';
     
     contas.forEach(c => {
         sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
         if (selDestino) selDestino.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
     });
-
+    
     const selMeta = document.getElementById('mConta');
     if (selMeta) {
         selMeta.innerHTML = '<option value="">Nenhuma</option>';
@@ -508,7 +530,7 @@ function atualizarFiltroCategorias() {
     if (!sel) return;
     sel.innerHTML = '<option value="">📂 Todas categorias</option>';
     categorias.filter(c => c.id !== 'cat_transferencia').forEach(c => {
-        sel.innerHTML += `<option value="${c.id}">${c.nome}</option>';
+        sel.innerHTML += `<option value="${c.id}">${c.nome}</option>`;
     });
 }
 
@@ -519,9 +541,8 @@ function toggleTransferencia() {
     const parcelas = document.getElementById('tParcelas');
     const contaOrigem = document.getElementById('tConta');
     
-    // Força a atualização do select para readequar as labels (Origem vs Destino)
     atualizarSelectContas();
-
+    
     if (tipo === 'transferencia') {
         if (contaDestino) contaDestino.style.display = 'block';
         if (categoria) {
@@ -537,9 +558,9 @@ function toggleTransferencia() {
         if (categoria) categoria.disabled = false;
         if (parcelas) {
             parcelas.disabled = true;
-            parcelas.value = '1'; // Receitas não possuem parcelamento
+            parcelas.value = '1';
         }
-        if (contaOrigem) contaOrigem.style.display = 'block'; // Garante visibilidade no iOS
+        if (contaOrigem) contaOrigem.style.display = 'block';
     } else {
         if (contaDestino) contaDestino.style.display = 'none';
         if (categoria) categoria.disabled = false;
@@ -548,11 +569,13 @@ function toggleTransferencia() {
     }
 }
 
-// Retorna as transações do período (pagas) sem aplicar filtros de busca/categoria
+// ============================================================
+// DASHBOARD
+// ============================================================
 function getTransacoesPeriodoBase() {
     let dataInicio = filtroDataInicio;
     let dataFim = filtroDataFim;
-
+    
     if (!dataInicio || !dataFim) {
         if (!mesAtual) return [];
         const [ano, mes] = mesAtual.split('-');
@@ -563,26 +586,24 @@ function getTransacoesPeriodoBase() {
     return transacoes.filter(t => t.pago && t.data >= dataInicio && t.data <= dataFim);
 }
 
-// ========== FUNÇÃO PRINCIPAL: DASHBOARD COM MONTANTE TOTAL ==========
 function atualizarDashboard() {
     const searchTerm = document.getElementById('globalSearch').value.toLowerCase();
     const catFilter = document.getElementById('categoryFilter').value;
-
+    
     let transacoesPeriodo = getTransacoesPeriodoBase();
-
     let transacoesFiltradas = transacoesPeriodo.filter(t => {
         if (searchTerm && !t.descricao.toLowerCase().includes(searchTerm)) return false;
         if (catFilter && t.categoria_id !== catFilter) return false;
         return true;
     });
-
+    
     let receitasFiltradas = 0, despesasFiltradas = 0;
     transacoesFiltradas.forEach(t => {
         if (t.categoria_id === 'cat_transferencia') return;
         if (t.tipo === 'receita') receitasFiltradas += t.valor;
         else if (t.tipo === 'despesa') despesasFiltradas += t.valor;
     });
-
+    
     let montanteTotal = 0;
     contas.forEach(conta => {
         let saldoConta = conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite;
@@ -594,11 +615,11 @@ function atualizarDashboard() {
         });
         montanteTotal += saldoConta;
     });
-
+    
     document.getElementById('saldoTotal').innerText = `R$ ${montanteTotal.toFixed(2)}`;
     document.getElementById('totalRec').innerText = `R$ ${receitasFiltradas.toFixed(2)}`;
     document.getElementById('totalDes').innerText = `R$ ${despesasFiltradas.toFixed(2)}`;
-
+    
     let htmlContas = '';
     contas.forEach(c => {
         let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
@@ -615,7 +636,7 @@ function atualizarDashboard() {
         </div>`;
     });
     document.getElementById('listaContas').innerHTML = htmlContas;
-
+    
     let htmlTransacoes = '';
     transacoesFiltradas.sort((a,b) => (a.data < b.data ? 1 : -1));
     transacoesFiltradas.forEach(t => {
@@ -638,7 +659,7 @@ function atualizarDashboard() {
         </div>`;
     });
     document.getElementById('listaTransacoes').innerHTML = htmlTransacoes || '<div class="card">Nenhuma transação no período com os filtros aplicados.</div>';
-
+    
     let htmlMetas = '';
     metas.forEach(m => {
         let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
@@ -668,8 +689,11 @@ function verificarPendencias() {
     }
 }
 
-// ========== SALVAR TRANSAÇÃO ==========
+// ============================================================
+// CRUD – TRANSAÇÕES, CONTAS, METAS
+// ============================================================
 let salvando = false;
+
 async function salvarTransacao() {
     if (salvando) return;
     salvando = true;
@@ -686,29 +710,25 @@ async function salvarTransacao() {
         const categoriaId = document.getElementById('tCategoria').value;
         const pago = document.getElementById('tStatus').value === "true";
         const fotoFile = document.getElementById('tFoto').files[0];
-
+        
         let fotoBase64 = null;
         if (fotoFile) fotoBase64 = await resizeImage(fotoFile);
         else if (idEdit) {
             const existente = transacoes.find(t => t.id === idEdit);
             if (existente) fotoBase64 = existente.foto;
         }
-
-        // === TRANSFERÊNCIA ===
+        
         if (tipo === 'transferencia') {
             const contaDestinoId = document.getElementById('tContaDestino').value;
             if (!contaDestinoId || contaId === contaDestinoId) {
                 alert("Selecione uma conta de destino válida e diferente da origem.");
-                salvando = false;
-                if (btn) btn.disabled = false;
                 return;
             }
-
             const dataInicial = new Date(dataInput);
             dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
             const dataStr = dataInicial.toISOString().split('T')[0];
             const idOriginal = uuidv4();
-
+            
             const saida = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'despesa', descricao: descricao || 'Pagamento Fatura / Transf.',
@@ -717,7 +737,6 @@ async function salvarTransacao() {
                 pago: pago, parcela_num: 1, parcela_total: 1,
                 foto: fotoBase64, sinc: false, updated_at: new Date().toISOString()
             };
-
             const entrada = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'receita', descricao: descricao || 'Fatura Recebida',
@@ -726,59 +745,51 @@ async function salvarTransacao() {
                 pago: pago, parcela_num: 1, parcela_total: 1,
                 foto: fotoBase64, sinc: false, updated_at: new Date().toISOString()
             };
-
             await salvarItemDB('transacoes', saida);
             await salvarItemDB('transacoes', entrada);
-
-            fecharModais();
-            salvando = false;
-            if (btn) btn.disabled = false;
-            scheduleSync();
-            return;
-        }
-
-        // === TRANSAÇÃO NORMAL ===
-        if (idEdit) {
-            const index = transacoes.findIndex(t => t.id === idEdit);
-            if (index !== -1) {
-                const t = transacoes[index];
-                t.descricao = descricao;
-                t.valor = valorTotal;
-                t.data = dataInput;
-                t.tipo = tipo;
-                t.conta_id = contaId;
-                t.categoria_id = categoriaId;
-                t.pago = pago;
-                t.foto = fotoBase64;
-                t.sinc = false;
-                t.updated_at = new Date().toISOString();
-                await salvarItemDB('transacoes', t);
-            }
         } else {
-            const dataInicial = new Date(dataInput);
-            dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
-            const idOriginal = uuidv4();
-            const valorParcela = valorTotal / parcelas;
-            for (let i = 0; i < parcelas; i++) {
-                let dataParcela = new Date(dataInicial);
-                dataParcela.setMonth(dataParcela.getMonth() + i);
-                const transacao = {
-                    id: uuidv4(),
-                    id_original: idOriginal,
-                    tipo: tipo,
-                    descricao: parcelas > 1 ? `${descricao} (${i+1}/${parcelas})` : descricao,
-                    valor: valorParcela,
-                    data: dataParcela.toISOString().split('T')[0],
-                    conta_id: contaId,
-                    categoria_id: categoriaId,
-                    pago: pago,
-                    parcela_num: i + 1,
-                    parcela_total: parcelas,
-                    foto: fotoBase64,
-                    sinc: false,
-                    updated_at: new Date().toISOString()
-                };
-                await salvarItemDB('transacoes', transacao);
+            if (idEdit) {
+                const index = transacoes.findIndex(t => t.id === idEdit);
+                if (index !== -1) {
+                    const t = transacoes[index];
+                    t.descricao = descricao;
+                    t.valor = valorTotal;
+                    t.data = dataInput;
+                    t.tipo = tipo;
+                    t.conta_id = contaId;
+                    t.categoria_id = categoriaId;
+                    t.pago = pago;
+                    t.foto = fotoBase64;
+                    t.sinc = false;
+                    t.updated_at = new Date().toISOString();
+                    await salvarItemDB('transacoes', t);
+                }
+            } else {
+                const dataInicial = new Date(dataInput);
+                dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
+                const idOriginal = uuidv4();
+                const valorParcela = valorTotal / parcelas;
+                for (let i = 0; i < parcelas; i++) {
+                    let dataParcela = new Date(dataInicial);
+                    dataParcela.setMonth(dataParcela.getMonth() + i);
+                    const transacao = {
+                        id: uuidv4(),
+                        id_original: idOriginal,
+                        tipo: tipo,
+                        descricao: parcelas > 1 ? `${descricao} (${i+1}/${parcelas})` : descricao,
+                        valor: valorParcela,
+                        data: dataParcela.toISOString().split('T')[0],
+                        conta_id: contaId,
+                        categoria_id: categoriaId,
+                        pago: pago,
+                        parcela_num: i + 1,
+                        parcela_total: parcelas,
+                        foto: fotoBase64,
+                        sinc: false,
+                        updated_at: new Date().toISOString()
+                    };
+                    await salvarItemDB('transacoes', transacao);
+                }
             }
         }
         fecharModais();
@@ -854,15 +865,12 @@ function salvarMeta() {
 function editarTransacao(id) {
     const t = transacoes.find(x => x.id === id);
     if (!t) return;
-    
     const isTransfer = t.categoria_id === 'cat_transferencia';
     let related = [];
     if (isTransfer && t.id_original) {
         related = transacoes.filter(x => x.id_original === t.id_original);
     }
-    
     document.getElementById('tId').value = t.id;
-    
     if (isTransfer && related.length === 2) {
         document.getElementById('tTipo').value = 'transferencia';
         toggleTransferencia();
@@ -892,7 +900,6 @@ function editarTransacao(id) {
         document.getElementById('tParcelas').value = t.parcela_total || 1;
         document.getElementById('tParcelas').disabled = t.tipo === 'receita';
     }
-    
     document.getElementById('tTituloModal').innerText = isTransfer ? 'Editar Transferência' : 'Editar Transação';
     document.getElementById('btnExcluirTransacao').style.display = 'block';
     abrirModal('modalTransacao');
@@ -925,7 +932,9 @@ function editarMeta(id) {
     abrirModal('modalMeta');
 }
 
-// ========== UTILITÁRIOS ==========
+// ============================================================
+// MODAIS E FILTROS
+// ============================================================
 function abrirModal(id) {
     document.getElementById(id).classList.add('active');
     document.getElementById('overlay').classList.add('active');
@@ -952,30 +961,28 @@ function fecharModais() {
     const input = document.getElementById('chatInput');
     if (input) input.value = '';
     
-    // Reseta campos de formulário
-    if (document.getElementById('tId')) {
-        document.getElementById('tId').value = '';
-        if(document.getElementById('cId')) document.getElementById('cId').value = '';
-        if(document.getElementById('mId')) document.getElementById('mId').value = '';
-        document.getElementById('tTituloModal').innerText = 'Nova Transação';
-        document.getElementById('cTituloModal').innerText = 'Nova Conta / Cartão';
-        document.getElementById('mTituloModal').innerText = 'Novo Cofrinho';
-        document.getElementById('tParcelas').disabled = false;
-        document.getElementById('btnExcluirTransacao').style.display = 'none';
-        document.getElementById('btnExcluirConta').style.display = 'none';
-        document.getElementById('btnExcluirMeta').style.display = 'none';
-        document.getElementById('tDescricao').value = '';
-        document.getElementById('tValor').value = '';
-        if(document.getElementById('cNome')) document.getElementById('cNome').value = '';
-        if(document.getElementById('cSaldoLimite')) document.getElementById('cSaldoLimite').value = '';
-        if(document.getElementById('mNome')) document.getElementById('mNome').value = '';
-        if(document.getElementById('mObjetivo')) document.getElementById('mObjetivo').value = '';
-        if(document.getElementById('mAtual')) document.getElementById('mAtual').value = '';
-        if(document.getElementById('tFoto')) document.getElementById('tFoto').value = '';
-        document.getElementById('tTipo').value = 'despesa';
-        toggleTransferencia();
-        document.getElementById('tContaDestino').value = '';
-    }
+    // Reseta formulários
+    document.getElementById('tId').value = '';
+    if (document.getElementById('cId')) document.getElementById('cId').value = '';
+    if (document.getElementById('mId')) document.getElementById('mId').value = '';
+    document.getElementById('tTituloModal').innerText = 'Nova Transação';
+    document.getElementById('cTituloModal').innerText = 'Nova Conta / Cartão';
+    document.getElementById('mTituloModal').innerText = 'Novo Cofrinho';
+    document.getElementById('tParcelas').disabled = false;
+    document.getElementById('btnExcluirTransacao').style.display = 'none';
+    document.getElementById('btnExcluirConta').style.display = 'none';
+    document.getElementById('btnExcluirMeta').style.display = 'none';
+    document.getElementById('tDescricao').value = '';
+    document.getElementById('tValor').value = '';
+    if (document.getElementById('cNome')) document.getElementById('cNome').value = '';
+    if (document.getElementById('cSaldoLimite')) document.getElementById('cSaldoLimite').value = '';
+    if (document.getElementById('mNome')) document.getElementById('mNome').value = '';
+    if (document.getElementById('mObjetivo')) document.getElementById('mObjetivo').value = '';
+    if (document.getElementById('mAtual')) document.getElementById('mAtual').value = '';
+    if (document.getElementById('tFoto')) document.getElementById('tFoto').value = '';
+    document.getElementById('tTipo').value = 'despesa';
+    toggleTransferencia();
+    document.getElementById('tContaDestino').value = '';
 }
 
 function aplicarFiltroData() {
@@ -1051,7 +1058,9 @@ function baixarPDF() {
     doc.save('relatorio.pdf');
 }
 
-// ========== EVENTOS E INICIALIZAÇÃO ==========
+// ============================================================
+// EVENTOS GLOBAIS
+// ============================================================
 document.getElementById('monthPicker').addEventListener('change', (e) => {
     mesAtual = e.target.value;
     document.getElementById('dataInicioFiltro').value = '';
@@ -1066,7 +1075,6 @@ document.getElementById('dataInicioFiltro').addEventListener('change', aplicarFi
 document.getElementById('dataFimFiltro').addEventListener('change', aplicarFiltroData);
 document.getElementById('monthPicker').value = mesAtual;
 
-// Escutador nativo adicionado para assegurar compatibilidade total com o iPhone 15 / iOS Safari
 if (document.getElementById('tTipo')) {
     document.getElementById('tTipo').addEventListener('change', toggleTransferencia);
 }
@@ -1084,25 +1092,9 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('load', () => { checkStoredToken(); });
 
-async function forcarSincronizacao() {
-    const el = document.getElementById('syncStatus');
-    if (el) {
-        el.style.pointerEvents = 'none';
-        atualizarSyncStatus('sincronizando');
-    }
-    clearRetry();
-    if (syncDebounceTimer) {
-        clearTimeout(syncDebounceTimer);
-        syncDebounceTimer = null;
-    }
-    await syncWithServer();
-    if (el) el.style.pointerEvents = 'auto';
-}
-
-// ==========================================
-// MÁQUINA DE ESTADOS DO CHATBOT FINANCEIRO
-// ==========================================
-
+// ============================================================
+// CHAT – ASSISTENTE FINANCEIRO
+// ============================================================
 let chatFluxo = {
     ativo: false,
     etapa: 0,
@@ -1144,7 +1136,6 @@ function mostrarBotoesRapidos(opcoes) {
         container.style.display = 'none';
         return;
     }
-    
     opcoes.forEach(op => {
         const btn = document.createElement('button');
         btn.className = 'chat-quick-btn';
@@ -1173,13 +1164,13 @@ function processarMensagemChat(valor, labelExibicao) {
     if (etapaAtual === 0) {
         chatFluxo.dadosTemp.tipo = valor.toLowerCase().trim();
         chatFluxo.etapa = 1;
-        setTimeout(() => adicionarBalaoChat('bot', 'Qual é o valor? (ex: 150,50)'), 500);
+        setTimeout(() => adicionarBalaoChat('bot', 'Qual é o valor? (ex: 150,50 ou 200)'), 500);
     }
     // Etapa 1: valor
     else if (etapaAtual === 1) {
         let v = parseFloat(valor.replace('R$', '').replace(',', '.').trim());
-        if (isNaN(v)) {
-            setTimeout(() => adicionarBalaoChat('bot', 'Isso não parece um número. Por favor, digite apenas o valor.'), 500);
+        if (isNaN(v) || v <= 0) {
+            setTimeout(() => adicionarBalaoChat('bot', 'Isso não parece um valor válido. Por favor, digite apenas o número (ex: 45,90).'), 500);
             return;
         }
         chatFluxo.dadosTemp.valor = v;
@@ -1333,7 +1324,6 @@ function processarMensagemChat(valor, labelExibicao) {
     }
 }
 
-// Função chamada quando o usuário seleciona uma foto no chat
 async function handleChatPhoto() {
     const fileInput = document.getElementById('chatFotoInput');
     const file = fileInput.files[0];
@@ -1346,7 +1336,6 @@ async function handleChatPhoto() {
         ]);
         return;
     }
-    
     try {
         const base64 = await resizeImage(file);
         chatFluxo.dadosTemp.fotoBase64 = base64;
@@ -1361,13 +1350,11 @@ async function handleChatPhoto() {
             finalizarSalvamentoChat(null);
         }, 600);
     }
-    
     fileInput.value = '';
 }
 
 async function finalizarSalvamentoChat(fotoBase64) {
     adicionarBalaoChat('bot', '⏳ Salvando e sincronizando...');
-    
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
     const dataStr = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
     const parcelas = chatFluxo.dadosTemp.parcelas || 1;
@@ -1397,7 +1384,6 @@ async function finalizarSalvamentoChat(fotoBase64) {
             const idOriginal = uuidv4();
             const dataInicial = new Date(dataStr + 'T00:00:00');
             const valorParcela = chatFluxo.dadosTemp.valor / parcelas;
-            
             for (let i = 0; i < parcelas; i++) {
                 let dataParcela = new Date(dataInicial);
                 dataParcela.setMonth(dataParcela.getMonth() + i);
@@ -1420,10 +1406,8 @@ async function finalizarSalvamentoChat(fotoBase64) {
                 await salvarItemDB('transacoes', transacao);
             }
         }
-        
         adicionarBalaoChat('bot', '✅ Transação registrada com sucesso!');
         scheduleSync();
-        
         chatFluxo.etapa = 7;
         setTimeout(() => {
             adicionarBalaoChat('bot', 'Quer ver o resumo do mês atual?');
@@ -1432,7 +1416,6 @@ async function finalizarSalvamentoChat(fotoBase64) {
                 {label: '❌ Não, sair', valor: 'resumo_nao'}
             ]);
         }, 800);
-        
     } catch (err) {
         console.error(err);
         adicionarBalaoChat('bot', '❌ Erro ao salvar. Tente novamente.');
@@ -1445,7 +1428,6 @@ function mostrarResumoMes() {
     const inicio = `${ano}-${mes}-01`;
     const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
     const fim = `${ano}-${mes}-${String(ultimoDia).padStart(2,'0')}`;
-    
     let totalRec = 0, totalDes = 0;
     transacoes.forEach(t => {
         if (t.pago && t.data >= inicio && t.data <= fim && t.categoria_id !== 'cat_transferencia') {
@@ -1453,7 +1435,6 @@ function mostrarResumoMes() {
             else if (t.tipo === 'despesa') totalDes += t.valor;
         }
     });
-    
     const saldo = totalRec - totalDes;
     adicionarBalaoChat('bot', `📊 Resumo do mês:\n💰 Receitas: R$ ${totalRec.toFixed(2)}\n💸 Despesas: R$ ${totalDes.toFixed(2)}\n📌 Saldo: R$ ${saldo.toFixed(2)}`);
 }
