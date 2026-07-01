@@ -11,8 +11,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
+        /* -------------------- Variáveis -------------------- */
         :root {
-            --bg: #f8fafc;
+            --bg: #f1f5f9;
             --card: #ffffff;
             --txt: #0f172a;
             --txt-muted: #64748b;
@@ -25,7 +26,8 @@
             --w: #d97706;
             --w-light: #fffbeb;
             --border: #e2e8f0;
-            --shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+            --shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+            --shadow-hover: 0 8px 32px rgba(15, 23, 42, 0.10);
             --radius-sm: 12px;
             --radius-md: 18px;
             --radius-lg: 28px;
@@ -38,17 +40,19 @@
             --txt: #f8fafc;
             --txt-muted: #94a3b8;
             --p: #60a5fa;
-            --p-light: rgba(96, 165, 250, 0.1);
+            --p-light: rgba(96, 165, 250, 0.12);
             --s: #4ade80;
-            --s-light: rgba(74, 222, 128, 0.1);
+            --s-light: rgba(74, 222, 128, 0.12);
             --d: #f87171;
-            --d-light: rgba(248, 113, 113, 0.1);
+            --d-light: rgba(248, 113, 113, 0.12);
             --w: #fbbf24;
-            --w-light: rgba(251, 191, 36, 0.1);
+            --w-light: rgba(251, 191, 36, 0.12);
             --border: #334155;
-            --shadow: 0 4px 25px rgba(0, 0, 0, 0.25);
+            --shadow: 0 4px 28px rgba(0, 0, 0, 0.30);
+            --shadow-hover: 0 8px 36px rgba(0, 0, 0, 0.40);
         }
 
+        /* -------------------- Reset -------------------- */
         * {
             box-sizing: border-box;
             margin: 0;
@@ -68,7 +72,7 @@
             overflow-x: hidden;
         }
 
-        /* Telas de Bloqueio Autônomas */
+        /* -------------------- Telas de bloqueio -------------------- */
         .fullscreen {
             position: fixed;
             top: 0;
@@ -93,7 +97,7 @@
         }
 
         .fullscreen h2 {
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 700;
             letter-spacing: -0.5px;
         }
@@ -148,18 +152,18 @@
             animation: fadeIn 0.3s ease;
         }
 
-        header {
+        /* -------------------- Layout principal -------------------- */
+        #appContent {
             display: none;
         }
 
-        /* Layout do Painel Principal */
         .dashboard-pyramid {
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 16px;
-            padding: 24px 20px;
-            padding-top: calc(12px + env(safe-area-inset-top, 20px));
+            padding: 20px 20px 8px;
+            padding-top: calc(8px + env(safe-area-inset-top, 20px));
         }
 
         .card-top {
@@ -168,15 +172,21 @@
             background: linear-gradient(135deg, var(--p) 0%, #1d4ed8 100%);
             color: white !important;
             border: none !important;
+            padding: 24px 20px;
         }
 
         .card-top h3 {
-            color: rgba(255, 255, 255, 0.8);
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
         }
 
         .card-top p {
-            font-size: 1.8rem !important;
+            font-size: 2rem !important;
             letter-spacing: -0.5px;
+            font-weight: 700;
         }
 
         .card-bottom-row {
@@ -193,7 +203,7 @@
 
         .card {
             background: var(--card);
-            padding: 20px 16px;
+            padding: 18px 14px;
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow);
             text-align: center;
@@ -201,17 +211,21 @@
             transition: var(--transition);
         }
 
+        .card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
         .card h3 {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 6px;
+            letter-spacing: 0.4px;
+            margin-bottom: 4px;
             color: var(--txt-muted);
         }
 
         .card p {
             font-weight: 700;
-            font-size: 1.35rem;
+            font-size: 1.3rem;
         }
 
         .info-box {
@@ -221,15 +235,16 @@
             background: var(--card);
             border-radius: var(--radius-md);
             border: 1px solid var(--border);
+            box-shadow: var(--shadow);
         }
 
         .info-box p {
-            font-size: 11px;
+            font-size: 12px;
             line-height: 1.5;
             color: var(--txt-muted);
         }
 
-        /* Seções de Listas */
+        /* -------------------- Seções de listas -------------------- */
         .section-header {
             display: flex;
             justify-content: space-between;
@@ -239,7 +254,7 @@
         }
 
         .section-header h3 {
-            font-size: 1.15rem;
+            font-size: 1.1rem;
             font-weight: 700;
             letter-spacing: -0.3px;
         }
@@ -253,6 +268,7 @@
             border-radius: 30px;
             font-size: 13px;
             font-weight: 600;
+            border: 1px solid transparent;
             transition: var(--transition);
         }
 
@@ -268,10 +284,9 @@
             margin-top: 8px;
         }
 
-        /* Elementos das Listas (Injetados via JS - Estilos Base) */
         .item-row {
             background: var(--card);
-            padding: 16px;
+            padding: 14px 16px;
             border-radius: var(--radius-md);
             border: 1px solid var(--border);
             box-shadow: var(--shadow);
@@ -281,7 +296,7 @@
             transition: var(--transition);
         }
 
-        /* Botões Flutuantes (FAB) */
+        /* -------------------- Botões flutuantes -------------------- */
         .fab {
             position: fixed;
             bottom: max(24px, env(safe-area-inset-bottom, 24px));
@@ -331,7 +346,7 @@
             background: var(--border);
         }
 
-        /* Modais e Sistemas de Diálogo */
+        /* -------------------- Modais -------------------- */
         .overlay {
             display: none;
             position: fixed;
@@ -437,7 +452,7 @@
             margin-top: 0;
         }
 
-        /* Estrutura de Filtros Inteligentes (Menu) */
+        /* -------------------- Filtros (menu) -------------------- */
         .filters {
             display: flex;
             flex-direction: column;
@@ -486,27 +501,35 @@
             cursor: pointer;
             width: 100%;
             text-align: center;
+            transition: var(--transition);
+        }
+
+        .sync-status:active {
+            transform: scale(0.97);
         }
 
         .status-pending { color: var(--w); background: var(--w-light); border-color: rgba(217, 119, 6, 0.2); }
         .status-synced { color: var(--s); background: var(--s-light); border-color: rgba(22, 163, 74, 0.2); }
 
-        /* Componente de Chat / Assistente de Lançamento */
+        /* -------------------- Chat (assistente) -------------------- */
         #modalChat.active {
             display: flex;
             flex-direction: column;
             padding: 0;
             overflow: hidden;
+            height: 560px;
+            max-height: 85vh;
         }
 
         .chat-header {
-            padding: 18px 20px;
+            padding: 16px 20px;
             background: var(--card);
             color: var(--txt);
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .chat-header-title {
@@ -527,24 +550,24 @@
         #chatMessages {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 16px 20px;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 10px;
             background: var(--bg);
             scroll-behavior: smooth;
             -webkit-overflow-scrolling: touch;
         }
 
         .chat-bubble {
-            max-width: 78%;
-            padding: 14px 18px;
+            max-width: 80%;
+            padding: 12px 16px;
             border-radius: var(--radius-md);
             font-size: 15px;
-            line-height: 1.45;
+            line-height: 1.5;
             animation: chatSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
             word-wrap: break-word;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
 
         .chat-bot {
@@ -564,7 +587,7 @@
         }
 
         #chatQuickReplies {
-            padding: 12px 16px;
+            padding: 10px 16px;
             display: none;
             gap: 8px;
             overflow-x: auto;
@@ -572,6 +595,7 @@
             border-top: 1px solid var(--border);
             white-space: nowrap;
             -webkit-overflow-scrolling: touch;
+            flex-shrink: 0;
         }
 
         #chatQuickReplies::-webkit-scrollbar {
@@ -600,20 +624,21 @@
         }
 
         .chat-input-bar {
-            padding: 14px 16px;
-            padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+            padding: 12px 16px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
             background: var(--card);
             border-top: 1px solid var(--border);
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-shrink: 0;
         }
 
         .chat-input-bar input {
             margin: 0;
             flex: 1;
             border-radius: 24px;
-            padding: 12px 18px;
+            padding: 12px 16px;
             background: var(--bg);
             border: 1px solid var(--border);
             color: var(--txt);
@@ -654,7 +679,7 @@
             border: none;
         }
 
-        /* Feedbacks e Alertas Globais */
+        /* -------------------- Alertas -------------------- */
         #alertasPendentes {
             padding: 12px 20px;
             margin: 16px 20px 0 20px;
@@ -673,7 +698,7 @@
             display: block;
         }
 
-        /* Visualizador Avançado de Imagens/Recibos */
+        /* -------------------- Visualizador de imagens -------------------- */
         #imageViewer {
             display: none;
             position: fixed;
@@ -757,7 +782,7 @@
             width: 100%;
         }
 
-        /* Animações Fluídas */
+        /* -------------------- Animações -------------------- */
         @keyframes fadeIn {
             from { opacity: 0; }
             to { opacity: 1; }
@@ -774,13 +799,13 @@
             100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
         }
 
-        /* Otimizações Responsivas e Mobile First */
+        /* -------------------- Responsivo -------------------- */
         @media (max-width: 480px) {
             .dashboard-pyramid {
-                padding: 16px 16px;
+                padding: 16px 16px 0;
             }
-            .card p {
-                font-size: 1.25rem;
+            .card-top p {
+                font-size: 1.6rem !important;
             }
             .modal {
                 padding: 20px 16px;
@@ -795,6 +820,7 @@
 </head>
 <body>
 
+    <!-- Tela de senha -->
     <div id="passwordScreen" class="fullscreen">
         <h2>🔐 Acesso Restrito</h2>
         <input type="password" id="passwordInput" class="password-input" placeholder="••••" autocomplete="off" inputmode="numeric">
@@ -802,11 +828,13 @@
         <div id="passwordError" class="error-msg" style="display: none;"></div>
     </div>
 
+    <!-- Tela de biometria -->
     <div id="lockScreen" class="fullscreen hidden">
         <h2>💰 Finanças Familiar</h2>
         <button class="btn-bio" onclick="autenticarBiometria()">🔓 Desbloquear App</button>
     </div>
 
+    <!-- Conteúdo principal -->
     <div id="appContent" style="display: none;">
 
         <div id="alertasPendentes"></div>
@@ -827,7 +855,7 @@
                 </div>
             </div>
             <div class="info-box">
-                <p>⬆️ Os valores acima são de transações <strong>pagas</strong> no período filtrado.<br>🔄 Transferências e pagamentos de fatura não alteram os totais.</p>
+                <p>⬆️ Valores de transações <strong>pagas</strong> no período filtrado.<br>🔄 Transferências e pagamentos de fatura não alteram os totais.</p>
             </div>
         </div>
 
@@ -854,6 +882,7 @@
         <button class="fab" onclick="iniciarChat()" title="Assistente Inteligente">+</button>
     </div>
 
+    <!-- Modal Menu -->
     <div class="modal" id="modalMenu">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="font-weight: 700; font-size: 1.2rem;">🔍 Filtros e Ajustes</h3>
@@ -891,7 +920,8 @@
         </div>
     </div>
 
-    <div class="modal" id="modalChat" style="max-height: 85vh; height: 580px; max-width: 460px;">
+    <!-- Modal Chat -->
+    <div class="modal" id="modalChat" style="max-height: 85vh; height: 560px; max-width: 460px;">
         <div class="chat-header">
             <div class="chat-header-title">
                 <div class="chat-status-dot"></div>
@@ -906,7 +936,7 @@
 
         <div class="chat-input-bar">
             <button class="btn-chat-action" onclick="document.getElementById('chatFotoInput').click()" title="Anexar comprovante">📷</button>
-            <input type="text" id="chatInput" placeholder="Ex: Mercado 45.90 ontem" autocomplete="off" autocapitalize="sentences" onkeypress="if(event.key === 'Enter') enviarMensagemChatInput()">
+            <input type="text" id="chatInput" placeholder="Ex: Mercado 45,90" autocomplete="off" autocapitalize="sentences" onkeypress="if(event.key === 'Enter') enviarMensagemChatInput()">
             <button class="btn-chat-action btn-chat-send" onclick="enviarMensagemChatInput()">📤</button>
         </div>
     </div>
@@ -915,6 +945,7 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
+    <!-- Modal Transação -->
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Transação</h3>
         <input type="hidden" id="tId">
@@ -951,6 +982,7 @@
         </div>
     </div>
 
+    <!-- Modal Conta -->
     <div class="modal" id="modalConta">
         <h3 id="cTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Conta / Cartão</h3>
         <input type="hidden" id="cId">
@@ -970,6 +1002,7 @@
         </div>
     </div>
 
+    <!-- Modal Meta -->
     <div class="modal" id="modalMeta">
         <h3 id="mTituloModal" style="font-weight: 700; margin-bottom: 8px;">Novo Objetivo</h3>
         <input type="hidden" id="mId">
@@ -989,6 +1022,7 @@
         </div>
     </div>
 
+    <!-- Modal Exportar -->
     <div class="modal" id="modalExportar">
         <h3 style="font-weight: 700; margin-bottom: 8px;">📊 Extração de Relatórios</h3>
         
@@ -1009,6 +1043,7 @@
         </div>
     </div>
 
+    <!-- Visualizador de imagens -->
     <div id="imageViewer">
         <span class="fechar-zoom" onclick="fecharZoom()">✕</span>
         <img id="zoomImg" src="" onclick="aplicarZoom(this)" alt="Visualização expandida">
