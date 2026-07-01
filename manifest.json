@@ -1,19 +1,19 @@
 {
-  "name": "Finanças Familiar",
-  "short_name": "Finanças",
-  "description": "Controle financeiro completo offline-first com sincronização.",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#f8fafc",
-  "theme_color": "#2563eb",
-  "icons": [
-    {
-      "src": "./money-icon.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ]
+    "name": "FinanÃ§as Familiar",
+    "short_name": "FinanÃ§as",
+    "description": "Controle financeiro completo offline-first com sincronizaÃ§Ã£o.",
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#f1f5f9",
+    "theme_color": "#2563eb",
+    "icons": [
+        {
+            "src": "./money-icon.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
 }
