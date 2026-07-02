@@ -22,6 +22,10 @@ let syncRetryCount = 0;
 let filtroDataInicio = '';
 let filtroDataFim = '';
 
+// Flag para adicionar conta a partir do modal de transação
+let adicionandoContaParaTransacao = false;
+let novaContaId = null;
+
 // ============================================================
 // UTILITÁRIOS
 // ============================================================
@@ -809,6 +813,7 @@ function salvarConta() {
     const tipo = document.getElementById('cTipo').value;
     const saldoLimite = parseFloat(document.getElementById('cSaldoLimite').value) || 0;
     const vencimento = document.getElementById('cVencimento').value || null;
+    
     if (idEdit) {
         const index = contas.findIndex(c => c.id === idEdit);
         if (index !== -1) {
@@ -826,9 +831,30 @@ function salvarConta() {
             id: uuidv4(), nome, tipo, saldo_inicial: saldoLimite, limite: saldoLimite,
             vencimento, sinc: false, updated_at: new Date().toISOString()
         };
+        // Guarda o ID da nova conta para selecionar automaticamente se adicionada do modal de transação
+        novaContaId = novaConta.id;
         salvarItemDB('contas', novaConta);
     }
-    fecharModais();
+    
+    // Se estivermos adicionando uma conta a partir do modal de transação
+    if (adicionandoContaParaTransacao && !idEdit) {
+        // Atualiza o select e seleciona a nova conta
+        setTimeout(() => {
+            atualizarSelectContas();
+            document.getElementById('tConta').value = novaContaId;
+            // Fecha apenas o modal de conta, mantendo o de transação aberto
+            document.getElementById('modalConta').classList.remove('active');
+            // Verifica se há outros modais ativos; se não, esconde o overlay
+            const modaisAtivos = document.querySelectorAll('.modal.active');
+            if (modaisAtivos.length === 0) {
+                document.getElementById('overlay').classList.remove('active');
+            }
+            adicionandoContaParaTransacao = false;
+            novaContaId = null;
+        }, 300);
+    } else {
+        fecharModais();
+    }
     scheduleSync();
 }
 
@@ -983,6 +1009,13 @@ function fecharModais() {
     document.getElementById('tTipo').value = 'despesa';
     toggleTransferencia();
     document.getElementById('tContaDestino').value = '';
+}
+
+function adicionarContaDoModalTransacao() {
+    // Marca que estamos adicionando uma conta a partir do modal de transação
+    adicionandoContaParaTransacao = true;
+    // Abre o modal de conta
+    abrirModal('modalConta');
 }
 
 function aplicarFiltroData() {
