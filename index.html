@@ -121,9 +121,14 @@
             transform: scale(0.97);
         }
 
-        .password-input {
+        .password-input-wrapper {
+            position: relative;
             width: 100%;
             max-width: 280px;
+        }
+
+        .password-input {
+            width: 100%;
             padding: 16px;
             border-radius: var(--radius-md);
             border: 2px solid var(--border);
@@ -139,6 +144,27 @@
         .password-input:focus {
             border-color: var(--p);
             box-shadow: 0 0 0 4px var(--p-light);
+        }
+
+        .toggle-password {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--txt-muted);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            width: auto;
+            height: auto;
+            margin: 0;
+            z-index: 2;
+        }
+
+        .toggle-password:active {
+            opacity: 0.6;
         }
 
         .error-msg {
@@ -823,7 +849,10 @@
     <!-- Tela de senha -->
     <div id="passwordScreen" class="fullscreen">
         <h2>🔐 Acesso Restrito</h2>
-        <input type="password" id="passwordInput" class="password-input" placeholder="••••" autocomplete="off" inputmode="numeric">
+        <div class="password-input-wrapper">
+            <input type="password" id="passwordInput" class="password-input" placeholder="••••" autocomplete="off">
+            <button class="toggle-password" onclick="toggleSenha()" type="button">👁️</button>
+        </div>
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
         <div id="passwordError" class="error-msg" style="display: none;"></div>
     </div>
