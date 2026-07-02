@@ -820,21 +820,18 @@
 </head>
 <body>
 
-    <!-- Tela de senha -->
     <div id="passwordScreen" class="fullscreen">
         <h2>🔐 Acesso Restrito</h2>
-        <input type="password" id="passwordInput" class="password-input" placeholder="••••" autocomplete="off" inputmode="numeric">
+        <input type="password" id="passwordInput" class="password-input" placeholder="Senha" autocomplete="current-password">
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
         <div id="passwordError" class="error-msg" style="display: none;"></div>
     </div>
 
-    <!-- Tela de biometria -->
     <div id="lockScreen" class="fullscreen hidden">
         <h2>💰 Finanças Familiar</h2>
-        <button class="btn-bio" onclick="autenticarBiometria()">🔓 Desbloquear App</button>
+        <button class="btn-bio" onclick="autenticarBiometria()">🧿 Desbloquear com Face ID</button>
     </div>
 
-    <!-- Conteúdo principal -->
     <div id="appContent" style="display: none;">
 
         <div id="alertasPendentes"></div>
@@ -882,7 +879,6 @@
         <button class="fab" onclick="iniciarChat()" title="Assistente Inteligente">+</button>
     </div>
 
-    <!-- Modal Menu -->
     <div class="modal" id="modalMenu">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="font-weight: 700; font-size: 1.2rem;">🔍 Filtros e Ajustes</h3>
@@ -920,7 +916,6 @@
         </div>
     </div>
 
-    <!-- Modal Chat -->
     <div class="modal" id="modalChat" style="max-height: 85vh; height: 560px; max-width: 460px;">
         <div class="chat-header">
             <div class="chat-header-title">
@@ -945,7 +940,6 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
-    <!-- Modal Transação -->
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Transação</h3>
         <input type="hidden" id="tId">
@@ -982,7 +976,6 @@
         </div>
     </div>
 
-    <!-- Modal Conta -->
     <div class="modal" id="modalConta">
         <h3 id="cTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Conta / Cartão</h3>
         <input type="hidden" id="cId">
@@ -1002,7 +995,6 @@
         </div>
     </div>
 
-    <!-- Modal Meta -->
     <div class="modal" id="modalMeta">
         <h3 id="mTituloModal" style="font-weight: 700; margin-bottom: 8px;">Novo Objetivo</h3>
         <input type="hidden" id="mId">
@@ -1022,7 +1014,6 @@
         </div>
     </div>
 
-    <!-- Modal Exportar -->
     <div class="modal" id="modalExportar">
         <h3 style="font-weight: 700; margin-bottom: 8px;">📊 Extração de Relatórios</h3>
         
@@ -1043,7 +1034,6 @@
         </div>
     </div>
 
-    <!-- Visualizador de imagens -->
     <div id="imageViewer">
         <span class="fechar-zoom" onclick="fecharZoom()">✕</span>
         <img id="zoomImg" src="" onclick="aplicarZoom(this)" alt="Visualização expandida">
