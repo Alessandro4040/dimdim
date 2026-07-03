@@ -843,20 +843,15 @@ function salvarConta() {
             id: uuidv4(), nome, tipo, saldo_inicial: saldoLimite, limite: saldoLimite,
             vencimento, sinc: false, updated_at: new Date().toISOString()
         };
-        // Guarda o ID da nova conta para selecionar automaticamente se adicionada do modal de transação
         novaContaId = novaConta.id;
         salvarItemDB('contas', novaConta);
     }
     
-    // Se estivermos adicionando uma conta a partir do modal de transação
     if (adicionandoContaParaTransacao && !idEdit) {
-        // Atualiza o select e seleciona a nova conta
         setTimeout(() => {
             atualizarSelectContas();
             document.getElementById('tConta').value = novaContaId;
-            // Fecha apenas o modal de conta, mantendo o de transação aberto
             document.getElementById('modalConta').classList.remove('active');
-            // Verifica se há outros modais ativos; se não, esconde o overlay
             const modaisAtivos = document.querySelectorAll('.modal.active');
             if (modaisAtivos.length === 0) {
                 document.getElementById('overlay').classList.remove('active');
@@ -1032,9 +1027,7 @@ function fecharModais() {
 }
 
 function adicionarContaDoModalTransacao() {
-    // Marca que estamos adicionando uma conta a partir do modal de transação
     adicionandoContaParaTransacao = true;
-    // Abre o modal de conta
     abrirModal('modalConta');
 }
 
@@ -1213,13 +1206,11 @@ function processarMensagemChat(valor, labelExibicao) {
     
     const etapaAtual = chatFluxo.etapa;
     
-    // Etapa 0: tipo
     if (etapaAtual === 0) {
         chatFluxo.dadosTemp.tipo = valor.toLowerCase().trim();
         chatFluxo.etapa = 1;
         setTimeout(() => adicionarBalaoChat('bot', 'Qual é o valor? (ex: 150,50 ou 200)'), 500);
     }
-    // Etapa 1: valor
     else if (etapaAtual === 1) {
         let v = parseFloat(valor.replace('R$', '').replace(',', '.').trim());
         if (isNaN(v) || v <= 0) {
@@ -1230,7 +1221,6 @@ function processarMensagemChat(valor, labelExibicao) {
         chatFluxo.etapa = 2;
         setTimeout(() => adicionarBalaoChat('bot', 'Qual é a descrição? (ex: Mercado, Gasolina, Salário)'), 500);
     }
-    // Etapa 2: descrição
     else if (etapaAtual === 2) {
         chatFluxo.dadosTemp.descricao = valor;
         chatFluxo.etapa = 2.5;
@@ -1241,7 +1231,6 @@ function processarMensagemChat(valor, labelExibicao) {
             ]);
         }, 500);
     }
-    // Etapa 2.5: observação
     else if (etapaAtual === 2.5) {
         if (valor === 'pular_obs') {
             chatFluxo.dadosTemp.observacao = '';
@@ -1261,7 +1250,6 @@ function processarMensagemChat(valor, labelExibicao) {
             mostrarBotoesRapidos(opsContas);
         }, 500);
     }
-    // Etapa 3: conta de origem
     else if (etapaAtual === 3) {
         chatFluxo.dadosTemp.conta_id = valor;
         const contaSelecionada = contas.find(c => c.id === valor);
@@ -1288,7 +1276,6 @@ function processarMensagemChat(valor, labelExibicao) {
             }, 500);
         }
     }
-    // Etapa 3.1: parcelas (somente despesa com cartão)
     else if (etapaAtual === 3.1) {
         let parcelas = parseInt(valor);
         if (isNaN(parcelas) || parcelas < 1) {
@@ -1303,7 +1290,6 @@ function processarMensagemChat(valor, labelExibicao) {
             mostrarBotoesRapidos(opsCat);
         }, 500);
     }
-    // Etapa 3.5: conta destino (transferência)
     else if (etapaAtual === 3.5) {
         chatFluxo.dadosTemp.conta_destino_id = valor;
         chatFluxo.etapa = 5;
@@ -1314,7 +1300,6 @@ function processarMensagemChat(valor, labelExibicao) {
             mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
         }, 500);
     }
-    // Etapa 4: categoria
     else if (etapaAtual === 4) {
         chatFluxo.dadosTemp.categoria_id = valor;
         chatFluxo.etapa = 5;
@@ -1331,7 +1316,6 @@ function processarMensagemChat(valor, labelExibicao) {
             mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
         }, 500);
     }
-    // Etapa 5: confirmação
     else if (etapaAtual === 5) {
         if (valor === 'sim') {
             chatFluxo.etapa = 6;
@@ -1347,7 +1331,6 @@ function processarMensagemChat(valor, labelExibicao) {
             setTimeout(() => fecharModais(), 1500);
         }
     }
-    // Etapa 6: foto
     else if (etapaAtual === 6) {
         if (valor === 'foto_sim') {
             document.getElementById('chatFotoInput').click();
@@ -1355,7 +1338,6 @@ function processarMensagemChat(valor, labelExibicao) {
             finalizarSalvamentoChat(null);
         }
     }
-    // Etapa 7: após salvar, pergunta sobre resumo
     else if (etapaAtual === 7) {
         if (valor === 'resumo_sim') {
             mostrarResumoMes();
@@ -1371,7 +1353,6 @@ function processarMensagemChat(valor, labelExibicao) {
             setTimeout(() => fecharModais(), 1500);
         }
     }
-    // Etapa 8: pós resumo, escolher ação
     else if (etapaAtual === 8) {
         if (valor === 'nova') {
             chatFluxo = { ativo: true, etapa: 0, dadosTemp: { fotoBase64: null } };
