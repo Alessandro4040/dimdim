@@ -72,7 +72,7 @@
             overflow-x: hidden;
         }
 
-        /* -------------------- Telas de bloqueio -------------------- */
+        /* -------------------- Tela de senha -------------------- */
         .fullscreen {
             position: fixed;
             top: 0;
@@ -102,7 +102,55 @@
             letter-spacing: -0.5px;
         }
 
-        .btn-bio, .btn-password {
+        .password-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        .password-wrapper input {
+            width: 100%;
+            padding: 16px 48px 16px 16px;
+            border-radius: var(--radius-md);
+            border: 2px solid var(--border);
+            background: var(--card);
+            color: var(--txt);
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 4px;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .password-wrapper input:focus {
+            border-color: var(--p);
+            box-shadow: 0 0 0 4px var(--p-light);
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            color: var(--txt-muted);
+            font-size: 20px;
+            width: auto;
+            margin: 0;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .password-toggle:active {
+            opacity: 0.7;
+        }
+
+        .btn-password {
             padding: 16px 32px;
             font-size: 16px;
             font-weight: 600;
@@ -117,54 +165,8 @@
             transition: var(--transition);
         }
 
-        .btn-bio:active, .btn-password:active {
+        .btn-password:active {
             transform: scale(0.97);
-        }
-
-        .password-input-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 280px;
-        }
-
-        .password-input {
-            width: 100%;
-            padding: 16px;
-            border-radius: var(--radius-md);
-            border: 2px solid var(--border);
-            background: var(--card);
-            color: var(--txt);
-            font-size: 18px;
-            text-align: center;
-            letter-spacing: 4px;
-            outline: none;
-            transition: var(--transition);
-        }
-
-        .password-input:focus {
-            border-color: var(--p);
-            box-shadow: 0 0 0 4px var(--p-light);
-        }
-
-        .toggle-password {
-            position: absolute;
-            right: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: transparent;
-            border: none;
-            color: var(--txt-muted);
-            font-size: 20px;
-            cursor: pointer;
-            padding: 0;
-            width: auto;
-            height: auto;
-            margin: 0;
-            z-index: 2;
-        }
-
-        .toggle-password:active {
-            opacity: 0.6;
         }
 
         .error-msg {
@@ -409,6 +411,7 @@
             border: 1px solid var(--border);
             opacity: 0;
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+            -webkit-overflow-scrolling: touch;
         }
 
         .modal.active {
@@ -417,7 +420,7 @@
             opacity: 1;
         }
 
-        input, select, button {
+        input, select, button, textarea {
             width: 100%;
             padding: 14px 16px;
             margin-top: 10px;
@@ -431,7 +434,13 @@
             -webkit-appearance: none;
         }
 
-        input:focus, select:focus {
+        textarea {
+            min-height: 60px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        input:focus, select:focus, textarea:focus {
             border-color: var(--p);
             box-shadow: 0 0 0 3px var(--p-light);
             background: var(--card);
@@ -849,18 +858,12 @@
     <!-- Tela de senha -->
     <div id="passwordScreen" class="fullscreen">
         <h2>🔐 Acesso Restrito</h2>
-        <div class="password-input-wrapper">
-            <input type="password" id="passwordInput" class="password-input" placeholder="••••" autocomplete="off">
-            <button class="toggle-password" onclick="toggleSenha()" type="button">👁️</button>
+        <div class="password-wrapper">
+            <input type="password" id="passwordInput" class="password-input" placeholder="Digite sua senha" autocomplete="off">
+            <button type="button" class="password-toggle" id="passwordToggle" onclick="togglePasswordVisibility()">👁️</button>
         </div>
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
         <div id="passwordError" class="error-msg" style="display: none;"></div>
-    </div>
-
-    <!-- Tela de biometria -->
-    <div id="lockScreen" class="fullscreen hidden">
-        <h2>💰 Finanças Familiar</h2>
-        <button class="btn-bio" onclick="autenticarBiometria()">🔓 Desbloquear App</button>
     </div>
 
     <!-- Conteúdo principal -->
@@ -986,6 +989,8 @@
         </select>
         
         <input type="text" id="tDescricao" placeholder="Descrição (ex: Supermercado)">
+        <textarea id="tObservacao" placeholder="Observação (opcional)" rows="2"></textarea>
+        
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$ 0,00" inputmode="decimal">
         
         <label class="label-small">📅 Data de Competência:</label>
