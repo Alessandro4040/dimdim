@@ -989,14 +989,20 @@
         </select>
         
         <input type="text" id="tDescricao" placeholder="Descrição (ex: Supermercado)">
+        
         <textarea id="tObservacao" placeholder="Observação (opcional)" rows="2"></textarea>
         
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$ 0,00" inputmode="decimal">
         
-        <label class="label-small">📅 Data de Competência:</label>
+        <!-- Campo Data - sempre visível -->
+        <label class="label-small" style="margin-top: 14px;">📅 Data de Competência</label>
         <input type="date" id="tData">
         
         <select id="tConta"><option value="">Selecione a Origem (Conta/Cartão)</option></select>
+        <div style="text-align: right; margin-top: 4px;">
+            <span style="font-size: 13px; color: var(--p); cursor: pointer;" onclick="adicionarContaDoModalTransacao()">➕ Nova Conta</span>
+        </div>
+        
         <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão de Destino</option></select>
         <select id="tCategoria"></select>
         
