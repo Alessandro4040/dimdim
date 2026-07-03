@@ -98,9 +98,9 @@ function alternarTema() {
 // ============================================================
 // AUTENTICAÇÃO
 // ============================================================
-function toggleSenha() {
+function togglePasswordVisibility() {
     const input = document.getElementById('passwordInput');
-    const btn = document.querySelector('.toggle-password');
+    const btn = document.getElementById('passwordToggle');
     if (input.type === 'password') {
         input.type = 'text';
         btn.textContent = '🙈';
@@ -121,7 +121,8 @@ async function submitPassword() {
             authToken = password;
             localStorage.setItem('authToken', authToken);
             document.getElementById('passwordScreen').classList.add('hidden');
-            document.getElementById('lockScreen').classList.remove('hidden');
+            document.getElementById('appContent').style.display = 'block';
+            iniciarApp();
         } else {
             errorDiv.textContent = 'Senha incorreta.';
         }
@@ -137,7 +138,8 @@ async function checkStoredToken() {
         const data = await response.json();
         if (data.success) {
             document.getElementById('passwordScreen').classList.add('hidden');
-            document.getElementById('lockScreen').classList.remove('hidden');
+            document.getElementById('appContent').style.display = 'block';
+            iniciarApp();
             return true;
         } else {
             localStorage.removeItem('authToken');
@@ -145,8 +147,10 @@ async function checkStoredToken() {
             return false;
         }
     } catch (err) {
+        // Se falhar a rede, assume token válido e entra
         document.getElementById('passwordScreen').classList.add('hidden');
-        document.getElementById('lockScreen').classList.remove('hidden');
+        document.getElementById('appContent').style.display = 'block';
+        iniciarApp();
         return true;
     }
 }
@@ -155,16 +159,6 @@ function logout() {
     localStorage.removeItem('authToken');
     authToken = null;
     window.location.reload();
-}
-
-async function autenticarBiometria() {
-    try {
-        document.getElementById('lockScreen').classList.add('hidden');
-        document.getElementById('appContent').style.display = 'block';
-        iniciarApp();
-    } catch (e) {
-        alert("Erro na autenticação.");
-    }
 }
 
 // ============================================================
@@ -608,7 +602,7 @@ function atualizarDashboard() {
     
     let transacoesPeriodo = getTransacoesPeriodoBase();
     let transacoesFiltradas = transacoesPeriodo.filter(t => {
-        if (searchTerm && !t.descricao.toLowerCase().includes(searchTerm)) return false;
+        if (searchTerm && !t.descricao.toLowerCase().includes(searchTerm) && !(t.observacao && t.observacao.toLowerCase().includes(searchTerm))) return false;
         if (catFilter && t.categoria_id !== catFilter) return false;
         return true;
     });
@@ -662,8 +656,9 @@ function atualizarDashboard() {
         const tipoIcon = isTransfer ? '🔄' : (t.tipo === 'receita' ? '💰' : '💸');
         htmlTransacoes += `<div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
             <div style="flex:1;">
-                <strong>${tipoIcon} ${t.descricao}</strong><br>
-                <small style="opacity:0.7;">${dataFormatada} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
+                <strong>${tipoIcon} ${t.descricao}</strong>
+                ${t.observacao ? `<br><small style="opacity:0.7;">📝 ${t.observacao}</small>` : ''}
+                <br><small style="opacity:0.7;">${dataFormatada} - ${categoriaNome} - ${t.pago ? '✅ Pago' : '⏳ Pendente'}</small>
                 ${t.foto ? `<br><a href="#" onclick="abrirZoom('${t.foto}')" style="color:var(--p);font-size:12px;">📎 Ver comprovante</a>` : ''}
             </div>
             <div style="text-align:right; min-width: 90px;">
@@ -718,6 +713,7 @@ async function salvarTransacao() {
     try {
         const idEdit = document.getElementById('tId').value;
         const descricao = document.getElementById('tDescricao').value;
+        const observacao = document.getElementById('tObservacao').value.trim() || '';
         const valorTotal = parseFloat(document.getElementById('tValor').value);
         const dataInput = document.getElementById('tData').value;
         const parcelas = parseInt(document.getElementById('tParcelas').value) || 1;
@@ -748,6 +744,7 @@ async function salvarTransacao() {
             const saida = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'despesa', descricao: descricao || 'Pagamento Fatura / Transf.',
+                observacao: observacao,
                 valor: valorTotal, data: dataStr,
                 conta_id: contaId, categoria_id: 'cat_transferencia',
                 pago: pago, parcela_num: 1, parcela_total: 1,
@@ -756,6 +753,7 @@ async function salvarTransacao() {
             const entrada = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'receita', descricao: descricao || 'Fatura Recebida',
+                observacao: observacao,
                 valor: valorTotal, data: dataStr,
                 conta_id: contaDestinoId, categoria_id: 'cat_transferencia',
                 pago: pago, parcela_num: 1, parcela_total: 1,
@@ -769,6 +767,7 @@ async function salvarTransacao() {
                 if (index !== -1) {
                     const t = transacoes[index];
                     t.descricao = descricao;
+                    t.observacao = observacao;
                     t.valor = valorTotal;
                     t.data = dataInput;
                     t.tipo = tipo;
@@ -793,6 +792,7 @@ async function salvarTransacao() {
                         id_original: idOriginal,
                         tipo: tipo,
                         descricao: parcelas > 1 ? `${descricao} (${i+1}/${parcelas})` : descricao,
+                        observacao: observacao,
                         valor: valorParcela,
                         data: dataParcela.toISOString().split('T')[0],
                         conta_id: contaId,
@@ -843,15 +843,20 @@ function salvarConta() {
             id: uuidv4(), nome, tipo, saldo_inicial: saldoLimite, limite: saldoLimite,
             vencimento, sinc: false, updated_at: new Date().toISOString()
         };
+        // Guarda o ID da nova conta para selecionar automaticamente se adicionada do modal de transação
         novaContaId = novaConta.id;
         salvarItemDB('contas', novaConta);
     }
     
+    // Se estivermos adicionando uma conta a partir do modal de transação
     if (adicionandoContaParaTransacao && !idEdit) {
+        // Atualiza o select e seleciona a nova conta
         setTimeout(() => {
             atualizarSelectContas();
             document.getElementById('tConta').value = novaContaId;
+            // Fecha apenas o modal de conta, mantendo o de transação aberto
             document.getElementById('modalConta').classList.remove('active');
+            // Verifica se há outros modais ativos; se não, esconde o overlay
             const modaisAtivos = document.querySelectorAll('.modal.active');
             if (modaisAtivos.length === 0) {
                 document.getElementById('overlay').classList.remove('active');
@@ -916,6 +921,7 @@ function editarTransacao(id) {
             document.getElementById('tContaDestino').value = t.conta_id;
         }
         document.getElementById('tDescricao').value = t.descricao.replace(' (Fatura Recebida)', '').replace(' (Pagamento Fatura / Transf.)', '');
+        document.getElementById('tObservacao').value = t.observacao || '';
         document.getElementById('tValor').value = t.valor;
         document.getElementById('tData').value = t.data;
         document.getElementById('tStatus').value = t.pago.toString();
@@ -925,6 +931,7 @@ function editarTransacao(id) {
         document.getElementById('tTipo').value = t.tipo;
         toggleTransferencia();
         document.getElementById('tDescricao').value = t.descricao;
+        document.getElementById('tObservacao').value = t.observacao || '';
         document.getElementById('tValor').value = t.valor;
         document.getElementById('tData').value = t.data;
         document.getElementById('tConta').value = t.conta_id;
@@ -971,16 +978,15 @@ function editarMeta(id) {
 function abrirModal(id) {
     document.getElementById(id).classList.add('active');
     document.getElementById('overlay').classList.add('active');
-    if (id === 'modalTransacao' && !document.getElementById('tId').value) {
-        document.getElementById('tFoto').value = '';
-        document.getElementById('tTipo').value = 'despesa';
-        toggleTransferencia();
-        // Preenche a data com a data atual
-        const hoje = new Date();
-        const ano = hoje.getFullYear();
-        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-        const dia = String(hoje.getDate()).padStart(2, '0');
-        document.getElementById('tData').value = `${ano}-${mes}-${dia}`;
+    if (id === 'modalTransacao') {
+        if (!document.getElementById('tId').value) {
+            // Preencher data atual automaticamente
+            const hoje = new Date().toISOString().split('T')[0];
+            document.getElementById('tData').value = hoje;
+            document.getElementById('tFoto').value = '';
+            document.getElementById('tTipo').value = 'despesa';
+            toggleTransferencia();
+        }
     }
 }
 
@@ -988,6 +994,7 @@ function fecharModais() {
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
     document.getElementById('overlay').classList.remove('active');
     
+    // Reseta chat
     chatFluxo = { ativo: false, etapa: 0, dadosTemp: {} };
     const chatMsg = document.getElementById('chatMessages');
     if (chatMsg) chatMsg.innerHTML = '';
@@ -999,6 +1006,7 @@ function fecharModais() {
     const input = document.getElementById('chatInput');
     if (input) input.value = '';
     
+    // Reseta formulários
     document.getElementById('tId').value = '';
     if (document.getElementById('cId')) document.getElementById('cId').value = '';
     if (document.getElementById('mId')) document.getElementById('mId').value = '';
@@ -1010,6 +1018,7 @@ function fecharModais() {
     document.getElementById('btnExcluirConta').style.display = 'none';
     document.getElementById('btnExcluirMeta').style.display = 'none';
     document.getElementById('tDescricao').value = '';
+    document.getElementById('tObservacao').value = '';
     document.getElementById('tValor').value = '';
     if (document.getElementById('cNome')) document.getElementById('cNome').value = '';
     if (document.getElementById('cSaldoLimite')) document.getElementById('cSaldoLimite').value = '';
@@ -1023,7 +1032,9 @@ function fecharModais() {
 }
 
 function adicionarContaDoModalTransacao() {
+    // Marca que estamos adicionando uma conta a partir do modal de transação
     adicionandoContaParaTransacao = true;
+    // Abre o modal de conta
     abrirModal('modalConta');
 }
 
@@ -1070,10 +1081,10 @@ function baixarRelatorio() {
     const ini = document.getElementById('eDataIni').value;
     const fim = document.getElementById('eDataFim').value;
     let filtrado = transacoes.filter(t => t.data >= ini && t.data <= fim);
-    let csv = "Data,Tipo,Descrição,Valor,Status,Categoria\n";
+    let csv = "Data,Tipo,Descrição,Observação,Valor,Status,Categoria\n";
     filtrado.forEach(t => {
         const catNome = categorias.find(c => c.id === t.categoria_id)?.nome || '';
-        csv += `${t.data},${t.tipo},${t.descricao},${t.valor},${t.pago ? 'Pago' : 'Pendente'},${catNome}\n`;
+        csv += `${t.data},${t.tipo},"${t.descricao}","${t.observacao || ''}",${t.valor},${t.pago ? 'Pago' : 'Pendente'},${catNome}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -1202,11 +1213,13 @@ function processarMensagemChat(valor, labelExibicao) {
     
     const etapaAtual = chatFluxo.etapa;
     
+    // Etapa 0: tipo
     if (etapaAtual === 0) {
         chatFluxo.dadosTemp.tipo = valor.toLowerCase().trim();
         chatFluxo.etapa = 1;
         setTimeout(() => adicionarBalaoChat('bot', 'Qual é o valor? (ex: 150,50 ou 200)'), 500);
     }
+    // Etapa 1: valor
     else if (etapaAtual === 1) {
         let v = parseFloat(valor.replace('R$', '').replace(',', '.').trim());
         if (isNaN(v) || v <= 0) {
@@ -1217,8 +1230,24 @@ function processarMensagemChat(valor, labelExibicao) {
         chatFluxo.etapa = 2;
         setTimeout(() => adicionarBalaoChat('bot', 'Qual é a descrição? (ex: Mercado, Gasolina, Salário)'), 500);
     }
+    // Etapa 2: descrição
     else if (etapaAtual === 2) {
         chatFluxo.dadosTemp.descricao = valor;
+        chatFluxo.etapa = 2.5;
+        setTimeout(() => {
+            adicionarBalaoChat('bot', 'Deseja adicionar uma observação? (opcional, digite ou pule)');
+            mostrarBotoesRapidos([
+                { label: '⏭️ Pular', valor: 'pular_obs' }
+            ]);
+        }, 500);
+    }
+    // Etapa 2.5: observação
+    else if (etapaAtual === 2.5) {
+        if (valor === 'pular_obs') {
+            chatFluxo.dadosTemp.observacao = '';
+        } else {
+            chatFluxo.dadosTemp.observacao = valor;
+        }
         chatFluxo.etapa = 3;
         setTimeout(() => {
             let msg = 'Em qual conta/cartão?';
@@ -1232,6 +1261,7 @@ function processarMensagemChat(valor, labelExibicao) {
             mostrarBotoesRapidos(opsContas);
         }, 500);
     }
+    // Etapa 3: conta de origem
     else if (etapaAtual === 3) {
         chatFluxo.dadosTemp.conta_id = valor;
         const contaSelecionada = contas.find(c => c.id === valor);
@@ -1258,6 +1288,7 @@ function processarMensagemChat(valor, labelExibicao) {
             }, 500);
         }
     }
+    // Etapa 3.1: parcelas (somente despesa com cartão)
     else if (etapaAtual === 3.1) {
         let parcelas = parseInt(valor);
         if (isNaN(parcelas) || parcelas < 1) {
@@ -1272,16 +1303,18 @@ function processarMensagemChat(valor, labelExibicao) {
             mostrarBotoesRapidos(opsCat);
         }, 500);
     }
+    // Etapa 3.5: conta destino (transferência)
     else if (etapaAtual === 3.5) {
         chatFluxo.dadosTemp.conta_destino_id = valor;
         chatFluxo.etapa = 5;
         setTimeout(() => {
             const origem = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
             const destino = contas.find(c => c.id === valor)?.nome;
-            adicionarBalaoChat('bot', `Resumo:\n🔄 Transf. de R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDe: ${origem}\nPara: ${destino}\nDesc: ${chatFluxo.dadosTemp.descricao}\n\nPosso salvar?`);
+            adicionarBalaoChat('bot', `Resumo:\n🔄 Transf. de R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDe: ${origem}\nPara: ${destino}\nDesc: ${chatFluxo.dadosTemp.descricao}\nObs: ${chatFluxo.dadosTemp.observacao || '(sem)'}\n\nPosso salvar?`);
             mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
         }, 500);
     }
+    // Etapa 4: categoria
     else if (etapaAtual === 4) {
         chatFluxo.dadosTemp.categoria_id = valor;
         chatFluxo.etapa = 5;
@@ -1289,7 +1322,7 @@ function processarMensagemChat(valor, labelExibicao) {
             const conta = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
             const cat = categorias.find(c => c.id === valor)?.nome;
             const icone = chatFluxo.dadosTemp.tipo === 'despesa' ? '💸' : '💰';
-            let resumo = `${icone} ${chatFluxo.dadosTemp.tipo.toUpperCase()} - R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDesc: ${chatFluxo.dadosTemp.descricao}\nConta: ${conta}\nCat: ${cat}`;
+            let resumo = `${icone} ${chatFluxo.dadosTemp.tipo.toUpperCase()} - R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDesc: ${chatFluxo.dadosTemp.descricao}\nObs: ${chatFluxo.dadosTemp.observacao || '(sem)'}\nConta: ${conta}\nCat: ${cat}`;
             if (chatFluxo.dadosTemp.parcelas && chatFluxo.dadosTemp.parcelas > 1) {
                 resumo += `\n📆 Parcelas: ${chatFluxo.dadosTemp.parcelas}x`;
             }
@@ -1298,6 +1331,7 @@ function processarMensagemChat(valor, labelExibicao) {
             mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
         }, 500);
     }
+    // Etapa 5: confirmação
     else if (etapaAtual === 5) {
         if (valor === 'sim') {
             chatFluxo.etapa = 6;
@@ -1313,6 +1347,7 @@ function processarMensagemChat(valor, labelExibicao) {
             setTimeout(() => fecharModais(), 1500);
         }
     }
+    // Etapa 6: foto
     else if (etapaAtual === 6) {
         if (valor === 'foto_sim') {
             document.getElementById('chatFotoInput').click();
@@ -1320,6 +1355,7 @@ function processarMensagemChat(valor, labelExibicao) {
             finalizarSalvamentoChat(null);
         }
     }
+    // Etapa 7: após salvar, pergunta sobre resumo
     else if (etapaAtual === 7) {
         if (valor === 'resumo_sim') {
             mostrarResumoMes();
@@ -1335,6 +1371,7 @@ function processarMensagemChat(valor, labelExibicao) {
             setTimeout(() => fecharModais(), 1500);
         }
     }
+    // Etapa 8: pós resumo, escolher ação
     else if (etapaAtual === 8) {
         if (valor === 'nova') {
             chatFluxo = { ativo: true, etapa: 0, dadosTemp: { fotoBase64: null } };
@@ -1396,6 +1433,7 @@ async function finalizarSalvamentoChat(fotoBase64) {
             const saida = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'despesa', descricao: chatFluxo.dadosTemp.descricao,
+                observacao: chatFluxo.dadosTemp.observacao || '',
                 valor: chatFluxo.dadosTemp.valor, data: dataStr,
                 conta_id: chatFluxo.dadosTemp.conta_id, categoria_id: 'cat_transferencia',
                 pago: true, parcela_num: 1, parcela_total: 1,
@@ -1404,6 +1442,7 @@ async function finalizarSalvamentoChat(fotoBase64) {
             const entrada = {
                 id: uuidv4(), id_original: idOriginal,
                 tipo: 'receita', descricao: chatFluxo.dadosTemp.descricao,
+                observacao: chatFluxo.dadosTemp.observacao || '',
                 valor: chatFluxo.dadosTemp.valor, data: dataStr,
                 conta_id: chatFluxo.dadosTemp.conta_destino_id, categoria_id: 'cat_transferencia',
                 pago: true, parcela_num: 1, parcela_total: 1,
@@ -1423,6 +1462,7 @@ async function finalizarSalvamentoChat(fotoBase64) {
                     id_original: idOriginal,
                     tipo: chatFluxo.dadosTemp.tipo,
                     descricao: parcelas > 1 ? `${chatFluxo.dadosTemp.descricao} (${i+1}/${parcelas})` : chatFluxo.dadosTemp.descricao,
+                    observacao: chatFluxo.dadosTemp.observacao || '',
                     valor: valorParcela,
                     data: dataParcela.toISOString().split('T')[0],
                     conta_id: chatFluxo.dadosTemp.conta_id,
