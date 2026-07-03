@@ -2,7 +2,7 @@
 <html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Finanças Familiar</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -72,7 +72,7 @@
             overflow-x: hidden;
         }
 
-        /* -------------------- Tela de senha -------------------- */
+        /* -------------------- Telas de bloqueio -------------------- */
         .fullscreen {
             position: fixed;
             top: 0;
@@ -102,54 +102,6 @@
             letter-spacing: -0.5px;
         }
 
-        .password-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 280px;
-        }
-
-        .password-wrapper input {
-            width: 100%;
-            padding: 16px 48px 16px 16px;
-            border-radius: var(--radius-md);
-            border: 2px solid var(--border);
-            background: var(--card);
-            color: var(--txt);
-            font-size: 18px;
-            text-align: center;
-            letter-spacing: 4px;
-            outline: none;
-            transition: var(--transition);
-        }
-
-        .password-wrapper input:focus {
-            border-color: var(--p);
-            box-shadow: 0 0 0 4px var(--p-light);
-        }
-
-        .password-toggle {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 8px;
-            color: var(--txt-muted);
-            font-size: 20px;
-            width: auto;
-            margin: 0;
-            z-index: 2;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .password-toggle:active {
-            opacity: 0.7;
-        }
-
         .btn-password {
             padding: 16px 32px;
             font-size: 16px;
@@ -167,6 +119,49 @@
 
         .btn-password:active {
             transform: scale(0.97);
+        }
+
+        .password-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        .password-input {
+            width: 100%;
+            padding: 16px;
+            padding-right: 50px; /* Espaço para o botão de visualização */
+            border-radius: var(--radius-md);
+            border: 2px solid var(--border);
+            background: var(--card);
+            color: var(--txt);
+            font-size: 18px;
+            text-align: center;
+            letter-spacing: 2px;
+            outline: none;
+            transition: var(--transition);
+            -webkit-appearance: none;
+        }
+
+        .password-input:focus {
+            border-color: var(--p);
+            box-shadow: 0 0 0 4px var(--p-light);
+        }
+
+        .btn-eye {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: var(--txt-muted);
+            cursor: pointer;
+            padding: 8px;
+            margin: 0;
+            width: auto;
+            box-shadow: none;
         }
 
         .error-msg {
@@ -411,7 +406,6 @@
             border: 1px solid var(--border);
             opacity: 0;
             transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
-            -webkit-overflow-scrolling: touch;
         }
 
         .modal.active {
@@ -420,7 +414,8 @@
             opacity: 1;
         }
 
-        input, select, button, textarea {
+        /* MUDANÇA IMPORTANTE: Font-size 16px para inputs e selects evita zoom no iOS */
+        input, select, textarea, button {
             width: 100%;
             padding: 14px 16px;
             margin-top: 10px;
@@ -428,16 +423,15 @@
             border: 1px solid var(--border);
             background: var(--bg);
             color: var(--txt);
-            font-size: 15px;
+            font-size: 16px; 
             outline: none;
             transition: var(--transition);
             -webkit-appearance: none;
         }
 
         textarea {
-            min-height: 60px;
             resize: vertical;
-            font-family: inherit;
+            min-height: 80px;
         }
 
         input:focus, select:focus, textarea:focus {
@@ -677,7 +671,6 @@
             background: var(--bg);
             border: 1px solid var(--border);
             color: var(--txt);
-            font-size: 15px;
         }
 
         .chat-input-bar input:focus {
@@ -783,7 +776,7 @@
         }
 
         .label-small {
-            font-size: 12px;
+            font-size: 14px;
             font-weight: 600;
             margin-top: 14px;
             margin-bottom: 2px;
@@ -855,18 +848,16 @@
 </head>
 <body>
 
-    <!-- Tela de senha -->
     <div id="passwordScreen" class="fullscreen">
         <h2>🔐 Acesso Restrito</h2>
         <div class="password-wrapper">
-            <input type="password" id="passwordInput" class="password-input" placeholder="Digite sua senha" autocomplete="off">
-            <button type="button" class="password-toggle" id="passwordToggle" onclick="togglePasswordVisibility()">👁️</button>
+            <input type="password" id="passwordInput" class="password-input" placeholder="••••" pattern="[0-9]*" inputmode="numeric">
+            <button type="button" class="btn-eye" onclick="togglePasswordView()">👁️</button>
         </div>
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
         <div id="passwordError" class="error-msg" style="display: none;"></div>
     </div>
 
-    <!-- Conteúdo principal -->
     <div id="appContent" style="display: none;">
 
         <div id="alertasPendentes"></div>
@@ -914,7 +905,6 @@
         <button class="fab" onclick="iniciarChat()" title="Assistente Inteligente">+</button>
     </div>
 
-    <!-- Modal Menu -->
     <div class="modal" id="modalMenu">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="font-weight: 700; font-size: 1.2rem;">🔍 Filtros e Ajustes</h3>
@@ -952,7 +942,6 @@
         </div>
     </div>
 
-    <!-- Modal Chat -->
     <div class="modal" id="modalChat" style="max-height: 85vh; height: 560px; max-width: 460px;">
         <div class="chat-header">
             <div class="chat-header-title">
@@ -977,7 +966,6 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
-    <!-- Modal Transação -->
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Transação</h3>
         <input type="hidden" id="tId">
@@ -989,20 +977,12 @@
         </select>
         
         <input type="text" id="tDescricao" placeholder="Descrição (ex: Supermercado)">
-        
-        <textarea id="tObservacao" placeholder="Observação (opcional)" rows="2"></textarea>
-        
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$ 0,00" inputmode="decimal">
         
-        <!-- Campo Data - sempre visível -->
-        <label class="label-small" style="margin-top: 14px;">📅 Data de Competência</label>
+        <label class="label-small">📅 Data da Transação:</label>
         <input type="date" id="tData">
         
         <select id="tConta"><option value="">Selecione a Origem (Conta/Cartão)</option></select>
-        <div style="text-align: right; margin-top: 4px;">
-            <span style="font-size: 13px; color: var(--p); cursor: pointer;" onclick="adicionarContaDoModalTransacao()">➕ Nova Conta</span>
-        </div>
-        
         <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão de Destino</option></select>
         <select id="tCategoria"></select>
         
@@ -1012,8 +992,10 @@
             <option value="true">✅ Efetivado (Pago/Recebido)</option>
             <option value="false">⏳ Realizado (Pendente)</option>
         </select>
+
+        <textarea id="tObservacao" placeholder="Observações (Opcional)"></textarea>
         
-        <label class="label-small">📷 Comprovante Anexo (Opcional):</label>
+        <label class="label-small" style="margin-top: 10px;">📷 Comprovante Anexo (Opcional):</label>
         <input type="file" id="tFoto" accept="image/*" style="border: none; padding: 6px 0; background: transparent;">
         
         <div class="modal-actions">
@@ -1022,7 +1004,6 @@
         </div>
     </div>
 
-    <!-- Modal Conta -->
     <div class="modal" id="modalConta">
         <h3 id="cTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Conta / Cartão</h3>
         <input type="hidden" id="cId">
@@ -1042,7 +1023,6 @@
         </div>
     </div>
 
-    <!-- Modal Meta -->
     <div class="modal" id="modalMeta">
         <h3 id="mTituloModal" style="font-weight: 700; margin-bottom: 8px;">Novo Objetivo</h3>
         <input type="hidden" id="mId">
@@ -1062,7 +1042,6 @@
         </div>
     </div>
 
-    <!-- Modal Exportar -->
     <div class="modal" id="modalExportar">
         <h3 style="font-weight: 700; margin-bottom: 8px;">📊 Extração de Relatórios</h3>
         
@@ -1083,12 +1062,25 @@
         </div>
     </div>
 
-    <!-- Visualizador de imagens -->
     <div id="imageViewer">
         <span class="fechar-zoom" onclick="fecharZoom()">✕</span>
         <img id="zoomImg" src="" onclick="aplicarZoom(this)" alt="Visualização expandida">
     </div>
 
     <script src="./app.js"></script>
+    <script>
+        // Função do Toggle de Senha no HTML
+        function togglePasswordView() {
+            const pwd = document.getElementById('passwordInput');
+            const btn = document.querySelector('.btn-eye');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+                btn.textContent = '🙈';
+            } else {
+                pwd.type = 'password';
+                btn.textContent = '👁️';
+            }
+        }
+    </script>
 </body>
 </html>
