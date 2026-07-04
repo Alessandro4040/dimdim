@@ -104,7 +104,7 @@
 
         .btn-password {
             padding: 16px 32px;
-            font-size: 16px;
+            font-size: 16px !important;
             font-weight: 600;
             background: var(--p);
             color: white;
@@ -122,50 +122,42 @@
         }
 
         .password-wrapper {
-            display: flex;
-            align-items: center;
+            position: relative;
             width: 100%;
             max-width: 280px;
-            background: var(--card);
-            border: 2px solid var(--border);
-            border-radius: var(--radius-md);
-            transition: var(--transition);
-            padding: 0 6px;
         }
-        .password-wrapper:focus-within {
+
+        .password-input {
+            width: 100%;
+            padding: 16px;
+            padding-right: 48px;
+            border-radius: var(--radius-md);
+            border: 2px solid var(--border);
+            background: var(--card);
+            color: var(--txt);
+            font-size: 16px !important; /* IMPORTANTE: Previne o zoom no iPhone */
+            text-align: center;
+            letter-spacing: 2px;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .password-input:focus {
             border-color: var(--p);
             box-shadow: 0 0 0 4px var(--p-light);
         }
 
-        .password-wrapper input {
-            flex: 1;
+        .toggle-password-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
             border: none;
-            background: transparent;
-            padding: 16px 12px;
-            font-size: 18px;
-            color: var(--txt);
-            outline: none;
-            letter-spacing: 4px;
-            min-width: 0;
-        }
-
-        .password-wrapper button {
-            width: 44px;
-            height: 44px;
-            margin: 0;
-            background: transparent;
-            border: none;
-            color: var(--txt-muted);
             font-size: 20px;
+            padding: 4px;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-            padding: 0;
-        }
-        .password-wrapper button:active {
-            color: var(--txt);
+            color: var(--txt-muted);
         }
 
         .error-msg {
@@ -426,7 +418,7 @@
             border: 1px solid var(--border);
             background: var(--bg);
             color: var(--txt);
-            font-size: 15px;
+            font-size: 16px !important; /* Importante para não dar zoom no iOS */
             outline: none;
             transition: var(--transition);
             -webkit-appearance: none;
@@ -506,7 +498,7 @@
             border-radius: var(--radius-sm);
             padding: 12px;
             color: var(--txt);
-            font-size: 15px;
+            font-size: 15px !important;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -635,7 +627,7 @@
             border: 1px solid rgba(37, 99, 235, 0.1);
             border-radius: 20px;
             padding: 8px 16px;
-            font-size: 13px;
+            font-size: 14px !important;
             font-weight: 600;
             white-space: nowrap;
             cursor: pointer;
@@ -669,7 +661,7 @@
             background: var(--bg);
             border: 1px solid var(--border);
             color: var(--txt);
-            font-size: 15px;
+            font-size: 16px !important;
         }
 
         .chat-input-bar input:focus {
@@ -847,18 +839,16 @@
 </head>
 <body>
 
-    <!-- Tela de senha -->
     <div id="passwordScreen" class="fullscreen">
         <h2>🔐 Acesso Restrito</h2>
         <div class="password-wrapper">
-            <input type="password" id="passwordInput" placeholder="••••" autocomplete="off">
-            <button id="togglePasswordBtn" onclick="togglePasswordVisibility()">👁️</button>
+            <input type="password" id="passwordInput" class="password-input" placeholder="Digite sua senha" autocomplete="off">
+            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility()">👁️</button>
         </div>
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
         <div id="passwordError" class="error-msg" style="display: none;"></div>
     </div>
 
-    <!-- Conteúdo principal -->
     <div id="appContent" style="display: none;">
 
         <div id="alertasPendentes"></div>
@@ -906,7 +896,6 @@
         <button class="fab" onclick="iniciarChat()" title="Assistente Inteligente">+</button>
     </div>
 
-    <!-- Modal Menu -->
     <div class="modal" id="modalMenu">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="font-weight: 700; font-size: 1.2rem;">🔍 Filtros e Ajustes</h3>
@@ -944,7 +933,6 @@
         </div>
     </div>
 
-    <!-- Modal Chat -->
     <div class="modal" id="modalChat" style="max-height: 85vh; height: 560px; max-width: 460px;">
         <div class="chat-header">
             <div class="chat-header-title">
@@ -969,7 +957,6 @@
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
-    <!-- Modal Transação -->
     <div class="modal" id="modalTransacao">
         <h3 id="tTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Transação</h3>
         <input type="hidden" id="tId">
@@ -984,7 +971,7 @@
         <input type="number" id="tValor" step="0.01" placeholder="Valor R$ 0,00" inputmode="decimal">
         
         <label class="label-small">📅 Data de Competência:</label>
-        <input type="date" id="tData" required>
+        <input type="date" id="tData">
         
         <select id="tConta"><option value="">Selecione a Origem (Conta/Cartão)</option></select>
         <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão de Destino</option></select>
@@ -1006,7 +993,6 @@
         </div>
     </div>
 
-    <!-- Modal Conta -->
     <div class="modal" id="modalConta">
         <h3 id="cTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Conta / Cartão</h3>
         <input type="hidden" id="cId">
@@ -1026,7 +1012,6 @@
         </div>
     </div>
 
-    <!-- Modal Meta -->
     <div class="modal" id="modalMeta">
         <h3 id="mTituloModal" style="font-weight: 700; margin-bottom: 8px;">Novo Objetivo</h3>
         <input type="hidden" id="mId">
@@ -1046,7 +1031,6 @@
         </div>
     </div>
 
-    <!-- Modal Exportar -->
     <div class="modal" id="modalExportar">
         <h3 style="font-weight: 700; margin-bottom: 8px;">📊 Extração de Relatórios</h3>
         
@@ -1067,12 +1051,21 @@
         </div>
     </div>
 
-    <!-- Visualizador de imagens -->
     <div id="imageViewer">
         <span class="fechar-zoom" onclick="fecharZoom()">✕</span>
         <img id="zoomImg" src="" onclick="aplicarZoom(this)" alt="Visualização expandida">
     </div>
 
     <script src="./app.js"></script>
+    <script>
+        function togglePasswordVisibility() {
+            const pwd = document.getElementById('passwordInput');
+            if (pwd.type === 'password') {
+                pwd.type = 'text';
+            } else {
+                pwd.type = 'password';
+            }
+        }
+    </script>
 </body>
 </html>
