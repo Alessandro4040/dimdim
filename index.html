@@ -11,367 +11,592 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
+        /* -------------------- Variáveis -------------------- */
         :root {
-            --bg: #f8fafc;
+            --bg: #f1f5f9;
             --card: #ffffff;
             --txt: #0f172a;
+            --txt-muted: #64748b;
             --p: #2563eb;
+            --p-light: #eff6ff;
             --s: #16a34a;
+            --s-light: #f0fdf4;
             --d: #dc2626;
-            --w: #f59e0b;
+            --d-light: #fef2f2;
+            --w: #d97706;
+            --w-light: #fffbeb;
             --border: #e2e8f0;
-            --shadow: 0 4px 12px rgba(0,0,0,0.05);
+            --shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
+            --shadow-hover: 0 8px 32px rgba(15, 23, 42, 0.10);
+            --radius-sm: 12px;
+            --radius-md: 18px;
+            --radius-lg: 28px;
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         [data-theme='escuro'] {
             --bg: #0f172a;
             --card: #1e293b;
             --txt: #f8fafc;
+            --txt-muted: #94a3b8;
+            --p: #60a5fa;
+            --p-light: rgba(96, 165, 250, 0.12);
+            --s: #4ade80;
+            --s-light: rgba(74, 222, 128, 0.12);
+            --d: #f87171;
+            --d-light: rgba(248, 113, 113, 0.12);
+            --w: #fbbf24;
+            --w-light: rgba(251, 191, 36, 0.12);
             --border: #334155;
-            --shadow: 0 4px 12px rgba(0,0,0,0.3);
+            --shadow: 0 4px 28px rgba(0, 0, 0, 0.30);
+            --shadow-hover: 0 8px 36px rgba(0, 0, 0, 0.40);
         }
+
+        /* -------------------- Reset -------------------- */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: -apple-system, system-ui, Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
+
         body {
             background-color: var(--bg);
             color: var(--txt);
-            transition: 0.3s;
-            padding-bottom: 90px;
+            transition: var(--transition);
+            padding-bottom: calc(100px + env(safe-area-inset-bottom, 20px));
             padding-top: env(safe-area-inset-top, 20px);
+            min-height: 100vh;
+            overflow-x: hidden;
         }
+
+        /* -------------------- Telas de bloqueio -------------------- */
         .fullscreen {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             background: var(--bg);
             z-index: 9999;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: 20px;
-            padding: 20px;
+            gap: 24px;
+            padding: 30px;
+            transition: var(--transition);
         }
-        .fullscreen.hidden { display: none; }
-        .btn-bio, .btn-password {
-            padding: 15px 30px;
-            font-size: 18px;
+
+        .fullscreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+            display: none;
+        }
+
+        .fullscreen h2 {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .btn-password {
+            padding: 16px 32px;
+            font-size: 16px;
+            font-weight: 600;
             background: var(--p);
             color: white;
             border: none;
-            border-radius: 14px;
+            border-radius: var(--radius-md);
             cursor: pointer;
-            min-width: 200px;
+            width: 100%;
+            max-width: 280px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+            transition: var(--transition);
         }
-        .password-input {
-            width: 80%;
-            max-width: 300px;
-            padding: 14px;
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            background: var(--bg);
+
+        .btn-password:active {
+            transform: scale(0.97);
+        }
+
+        .password-wrapper {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 280px;
+            background: var(--card);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            transition: var(--transition);
+            padding: 0 6px;
+        }
+        .password-wrapper:focus-within {
+            border-color: var(--p);
+            box-shadow: 0 0 0 4px var(--p-light);
+        }
+
+        .password-wrapper input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 16px 12px;
+            font-size: 18px;
             color: var(--txt);
-            font-size: 16px;
-            text-align: center;
+            outline: none;
+            letter-spacing: 4px;
+            min-width: 0;
         }
+
+        .password-wrapper button {
+            width: 44px;
+            height: 44px;
+            margin: 0;
+            background: transparent;
+            border: none;
+            color: var(--txt-muted);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            padding: 0;
+        }
+        .password-wrapper button:active {
+            color: var(--txt);
+        }
+
         .error-msg {
             color: var(--d);
             font-size: 14px;
-            margin-top: 10px;
-        }
-        header {
-            padding: 12px 16px;
-            background: var(--card);
-            box-shadow: var(--shadow);
-            position: sticky;
-            top: 0;
-            z-index: 99;
-            border-bottom: 1px solid var(--border);
-        }
-        .filters {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .filter-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-        }
-        .filter-row input, .filter-row select, .filter-row button {
-            flex: 1;
-            min-width: 100px;
-            padding: 10px 12px;
-            font-size: 15px;
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            background: var(--bg);
-            color: var(--txt);
-        }
-        .btn-menu {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 10px;
-            cursor: pointer;
-            font-size: 20px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 48px;
-            min-height: 48px;
-        }
-        .sync-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: var(--card);
+            font-weight: 500;
+            background: var(--d-light);
             padding: 8px 16px;
-            border-radius: 30px;
-            font-size: 14px;
-            border: 1px solid var(--border);
-            cursor: pointer;
-            white-space: nowrap;
+            border-radius: var(--radius-sm);
+            margin-top: 4px;
+            animation: fadeIn 0.3s ease;
         }
-        .status-pending { color: var(--w); }
-        .status-synced { color: var(--s); }
+
+        /* -------------------- Layout principal -------------------- */
+        #appContent {
+            display: none;
+        }
+
         .dashboard-pyramid {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 15px;
-            padding: 20px;
+            gap: 16px;
+            padding: 20px 20px 8px;
+            padding-top: calc(8px + env(safe-area-inset-top, 20px));
         }
-        .card-top { width: 100%; max-width: 400px; text-align: center; }
+
+        .card-top {
+            width: 100%;
+            max-width: 440px;
+            background: linear-gradient(135deg, var(--p) 0%, #1d4ed8 100%);
+            color: white !important;
+            border: none !important;
+            padding: 24px 20px;
+        }
+
+        .card-top h3 {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .card-top p {
+            font-size: 2rem !important;
+            letter-spacing: -0.5px;
+            font-weight: 700;
+        }
+
         .card-bottom-row {
             display: flex;
             justify-content: space-between;
             width: 100%;
-            max-width: 400px;
-            gap: 15px;
+            max-width: 440px;
+            gap: 16px;
         }
-        .card-bottom-row .card { flex: 1; text-align: center; }
+
+        .card-bottom-row .card {
+            flex: 1;
+        }
+
         .card {
             background: var(--card);
-            padding: 18px 12px;
-            border-radius: 24px;
+            padding: 18px 14px;
+            border-radius: var(--radius-lg);
             box-shadow: var(--shadow);
             text-align: center;
             border: 1px solid var(--border);
+            transition: var(--transition);
         }
-        .card h3 { font-size: 1rem; margin-bottom: 8px; opacity: 0.8; }
-        .card p { font-weight: bold; font-size: 1.4rem; }
+
+        .card:hover {
+            box-shadow: var(--shadow-hover);
+        }
+
+        .card h3 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 4px;
+            color: var(--txt-muted);
+        }
+
+        .card p {
+            font-weight: 700;
+            font-size: 1.3rem;
+        }
+
+        .info-box {
+            width: 100%;
+            max-width: 440px;
+            padding: 12px 16px;
+            background: var(--card);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+
+        .info-box p {
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--txt-muted);
+        }
+
+        /* -------------------- Seções de listas -------------------- */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 28px 0 12px;
+            padding: 0 4px;
+        }
+
+        .section-header h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }
+
+        .section-header button {
+            width: auto;
+            padding: 8px 16px;
+            margin: 0;
+            background: var(--p-light);
+            color: var(--p);
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid transparent;
+            transition: var(--transition);
+        }
+
+        .section-header button:active {
+            background: var(--p);
+            color: white;
+        }
+
         #listaContas, #listaMetas, #listaTransacoes {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            margin-top: 10px;
+            gap: 12px;
+            margin-top: 8px;
         }
+
+        .item-row {
+            background: var(--card);
+            padding: 14px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        /* -------------------- Botões flutuantes -------------------- */
         .fab {
             position: fixed;
-            bottom: max(20px, env(safe-area-inset-bottom));
-            right: 20px;
+            bottom: max(24px, env(safe-area-inset-bottom, 24px));
+            right: 24px;
             background: var(--p);
             color: white;
             width: 60px;
             height: 60px;
-            border-radius: 30px;
+            border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 32px;
-            box-shadow: var(--shadow);
+            font-size: 28px;
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
             border: none;
             z-index: 100;
             cursor: pointer;
-            transition: transform 0.1s ease;
+            transition: var(--transition);
         }
-        .fab:active { transform: scale(0.96); }
-        .modal {
-            display: none;
+
+        .fab:active {
+            transform: scale(0.92) rotate(45deg);
+        }
+
+        .fab-menu {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: max(16px, env(safe-area-inset-top, 16px));
+            right: 16px;
             background: var(--card);
-            padding: 24px 20px;
-            border-radius: 28px;
-            z-index: 1000;
-            width: 90%;
-            max-width: 450px;
-            max-height: 85vh;
-            overflow-y: auto;
+            color: var(--txt);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
             box-shadow: var(--shadow);
             border: 1px solid var(--border);
+            z-index: 101;
+            cursor: pointer;
+            transition: var(--transition);
         }
-        .modal.active { display: block; }
-        /* Estilo especial para o chat: display flex quando ativo */
-        #modalChat.active {
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            overflow: hidden;
+
+        .fab-menu:active {
+            transform: scale(0.92);
+            background: var(--border);
         }
+
+        /* -------------------- Modais -------------------- */
         .overlay {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 999;
+            animation: fadeIn 0.25s ease;
         }
-        .overlay.active { display: block; }
+
+        .overlay.active {
+            display: block;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            background: var(--card);
+            padding: 24px;
+            border-radius: var(--radius-lg);
+            z-index: 1000;
+            width: 90%;
+            max-width: 440px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border);
+            opacity: 0;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+        }
+
+        .modal.active {
+            display: block;
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 1;
+        }
+
         input, select, button {
             width: 100%;
-            padding: 12px;
-            margin-top: 12px;
-            border-radius: 14px;
+            padding: 14px 16px;
+            margin-top: 10px;
+            border-radius: var(--radius-sm);
             border: 1px solid var(--border);
             background: var(--bg);
             color: var(--txt);
-            font-size: 16px;
+            font-size: 15px;
+            outline: none;
+            transition: var(--transition);
+            -webkit-appearance: none;
         }
+
+        input:focus, select:focus {
+            border-color: var(--p);
+            box-shadow: 0 0 0 3px var(--p-light);
+            background: var(--card);
+        }
+
         button {
             cursor: pointer;
             background: var(--p);
             color: white;
             font-weight: 600;
             border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
-        button.btn-primary { background: var(--p); }
-        button.danger { background: var(--d); }
+
+        button:active {
+            transform: scale(0.98);
+            opacity: 0.95;
+        }
+
+        button.btn-primary {
+            background: var(--p);
+        }
+
+        button.danger {
+            background: var(--d-light);
+            color: var(--d);
+            border: 1px solid rgba(220, 38, 38, 0.15);
+        }
+
+        button.danger:active {
+            background: var(--d);
+            color: white;
+        }
+
         .modal-actions {
             display: flex;
             justify-content: space-between;
             gap: 12px;
-            margin-top: 20px;
+            margin-top: 24px;
         }
-        .modal-actions button { flex: 1; margin-top: 0; }
-        #imageViewer {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.92);
-            z-index: 10000;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(5px);
+
+        .modal-actions button {
+            flex: 1;
+            margin-top: 0;
         }
-        #imageViewer img {
-            max-width: 90%;
-            max-height: 85%;
-            transition: transform 0.2s ease;
-            cursor: zoom-in;
-            border-radius: 16px;
-        }
-        .fechar-zoom {
-            position: absolute;
-            top: max(20px, env(safe-area-inset-top));
-            right: 20px;
-            width: 48px;
-            height: 48px;
-            background: rgba(0,0,0,0.6);
-            border-radius: 30px;
+
+        /* -------------------- Filtros (menu) -------------------- */
+        .filters {
             display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .filter-row input, .filter-row select, .filter-row button {
+            flex: 1;
+            min-width: 120px;
+            padding: 12px;
+            margin-top: 0;
+        }
+
+        .btn-menu {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            color: var(--txt);
+            font-size: 15px;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            color: white;
-            font-size: 32px;
-            font-weight: bold;
+            min-width: 48px;
+            min-height: 48px;
+        }
+
+        .sync-status {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: var(--bg);
+            padding: 12px 16px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            border: 1px solid var(--border);
             cursor: pointer;
-            z-index: 10001;
-            backdrop-filter: blur(4px);
-        }
-        #alertasPendentes {
-            padding: 10px 20px;
-            margin: 8px 16px;
-            background: rgba(245,158,11,0.15);
-            border-radius: 40px;
-            color: var(--w);
-            font-weight: bold;
+            width: 100%;
             text-align: center;
+            transition: var(--transition);
         }
-        .section-header {
+
+        .sync-status:active {
+            transform: scale(0.97);
+        }
+
+        .status-pending { color: var(--w); background: var(--w-light); border-color: rgba(217, 119, 6, 0.2); }
+        .status-synced { color: var(--s); background: var(--s-light); border-color: rgba(22, 163, 74, 0.2); }
+
+        /* -------------------- Chat (assistente) -------------------- */
+        #modalChat.active {
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            overflow: hidden;
+            height: 560px;
+            max-height: 85vh;
+        }
+
+        .chat-header {
+            padding: 16px 20px;
+            background: var(--card);
+            color: var(--txt);
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
-            align-items: baseline;
-            margin: 20px 0 8px;
+            align-items: center;
+            flex-shrink: 0;
         }
-        .section-header h3 { font-size: 1.2rem; }
-        .section-header button {
-            width: auto;
-            padding: 6px 14px;
-            margin: 0;
-            background: var(--p);
-            border-radius: 30px;
-            font-size: 14px;
-        }
-        .label-small {
-            font-size: 13px;
-            margin-bottom: 4px;
-            display: block;
-            color: var(--txt);
-            opacity: 0.7;
-        }
-        .date-range {
+
+        .chat-header-title {
             display: flex;
-            flex-direction: row;
-            gap: 8px;
-            flex: 2;
-            align-items: flex-end;
+            align-items: center;
+            gap: 10px;
         }
-        .date-field {
+
+        .chat-status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--s);
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        #chatMessages {
             flex: 1;
-            min-width: 0;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: var(--bg);
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
         }
-        .date-field label {
-            font-size: 12px;
-            display: block;
-            margin-bottom: 4px;
-            opacity: 0.7;
-        }
-        .date-field input {
-            margin-top: 0;
-            width: 100%;
-        }
-        @media (max-width: 480px) {
-            .filter-row {
-                flex-wrap: wrap;
-            }
-            .date-range {
-                width: 100%;
-                flex-direction: row !important;
-                flex-wrap: nowrap;
-            }
-            .date-field {
-                flex: 1;
-            }
-            .card p {
-                font-size: 1.2rem;
-            }
-        }
-    
-        /* Estilos do Chat */
+
         .chat-bubble {
             max-width: 80%;
             padding: 12px 16px;
-            border-radius: 18px;
+            border-radius: var(--radius-md);
             font-size: 15px;
-            line-height: 1.4;
-            animation: fadeIn 0.3s ease;
+            line-height: 1.5;
+            animation: chatSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
             word-wrap: break-word;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
+
         .chat-bot {
             align-self: flex-start;
             background: var(--card);
@@ -379,104 +604,286 @@
             border: 1px solid var(--border);
             border-bottom-left-radius: 4px;
         }
+
         .chat-user {
             align-self: flex-end;
             background: var(--p);
             color: white;
             border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 10px var(--p-light);
         }
+
+        #chatQuickReplies {
+            padding: 10px 16px;
+            display: none;
+            gap: 8px;
+            overflow-x: auto;
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            flex-shrink: 0;
+        }
+
+        #chatQuickReplies::-webkit-scrollbar {
+            display: none;
+        }
+
         .chat-quick-btn {
-            background: var(--bg);
-            color: var(--txt);
-            border: 1px solid var(--p);
+            background: var(--p-light);
+            color: var(--p);
+            border: 1px solid rgba(37, 99, 235, 0.1);
             border-radius: 20px;
             padding: 8px 16px;
-            font-size: 14px;
+            font-size: 13px;
+            font-weight: 600;
             white-space: nowrap;
             cursor: pointer;
             width: auto;
             margin: 0;
-            transition: all 0.2s;
+            transition: var(--transition);
             display: inline-block;
         }
+
         .chat-quick-btn:active {
             background: var(--p);
             color: white;
         }
+
+        .chat-input-bar {
+            padding: 12px 16px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            background: var(--card);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .chat-input-bar input {
+            margin: 0;
+            flex: 1;
+            border-radius: 24px;
+            padding: 12px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--txt);
+            font-size: 15px;
+        }
+
+        .chat-input-bar input:focus {
+            border-color: var(--p);
+            background: var(--card);
+            box-shadow: none;
+        }
+
+        .btn-chat-action {
+            margin: 0;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            padding: 0;
+            background: var(--bg);
+            color: var(--txt-muted);
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            transition: var(--transition);
+        }
+
+        .btn-chat-action:active {
+            background: var(--border);
+            transform: scale(0.95);
+        }
+
+        .btn-chat-send {
+            background: var(--p);
+            color: white;
+            border: none;
+        }
+
+        /* -------------------- Alertas -------------------- */
+        #alertasPendentes {
+            padding: 12px 20px;
+            margin: 16px 20px 0 20px;
+            background: var(--w-light);
+            border: 1px solid rgba(217, 119, 6, 0.15);
+            border-radius: var(--radius-md);
+            color: var(--w);
+            font-size: 13px;
+            font-weight: 600;
+            text-align: center;
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        #alertasPendentes:not(:empty) {
+            display: block;
+        }
+
+        /* -------------------- Visualizador de imagens -------------------- */
+        #imageViewer {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.95);
+            z-index: 10000;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        #imageViewer img {
+            max-width: 92%;
+            max-height: 80%;
+            object-fit: contain;
+            transition: transform 0.25s ease;
+            cursor: zoom-in;
+            border-radius: var(--radius-sm);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .fechar-zoom {
+            position: absolute;
+            top: max(20px, env(safe-area-inset-top, 20px));
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 10001;
+            transition: var(--transition);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .fechar-zoom:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .label-small {
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 14px;
+            margin-bottom: 2px;
+            display: block;
+            color: var(--txt-muted);
+        }
+
+        .date-range {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            flex: 2;
+            width: 100%;
+        }
+
+        .date-field {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .date-field label {
+            font-size: 11px;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 4px;
+            color: var(--txt-muted);
+        }
+
+        .date-field input {
+            margin-top: 0;
+            width: 100%;
+        }
+
+        /* -------------------- Animações -------------------- */
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes chatSlideIn {
+            from { opacity: 0; transform: translateY(12px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+        }
+
+        /* -------------------- Responsivo -------------------- */
+        @media (max-width: 480px) {
+            .dashboard-pyramid {
+                padding: 16px 16px 0;
+            }
+            .card-top p {
+                font-size: 1.6rem !important;
+            }
+            .modal {
+                padding: 20px 16px;
+                border-radius: var(--radius-md);
+                width: 92%;
+            }
+            .chat-bubble {
+                max-width: 85%;
+            }
         }
     </style>
 </head>
 <body>
+
+    <!-- Tela de senha -->
     <div id="passwordScreen" class="fullscreen">
         <h2>🔐 Acesso Restrito</h2>
-        <input type="password" id="passwordInput" class="password-input" placeholder="Senha mestra" autocomplete="off">
+        <div class="password-wrapper">
+            <input type="password" id="passwordInput" placeholder="••••" autocomplete="off">
+            <button id="togglePasswordBtn" onclick="togglePasswordVisibility()">👁️</button>
+        </div>
         <button class="btn-password" onclick="submitPassword()">Entrar</button>
-        <div id="passwordError" class="error-msg"></div>
+        <div id="passwordError" class="error-msg" style="display: none;"></div>
     </div>
 
-    <div id="lockScreen" class="fullscreen hidden">
-        <h2>💰 Finanças Familiar</h2>
-        <button class="btn-bio" onclick="autenticarBiometria()">🔓 Desbloquear (Face ID / Touch)</button>
-    </div>
-
+    <!-- Conteúdo principal -->
     <div id="appContent" style="display: none;">
-        <header>
-            <div class="filters">
-                <div class="filter-row">
-                    <input type="month" id="monthPicker" value="">
-                    <div class="date-range">
-                        <div class="date-field">
-                            <label>📅 Início</label>
-                            <input type="date" id="dataInicioFiltro">
-                        </div>
-                        <div class="date-field">
-                            <label>📅 Fim</label>
-                            <input type="date" id="dataFimFiltro">
-                        </div>
-                    </div>
-                    <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
-                </div>
-                <div class="filter-row">
-                    <input type="text" id="globalSearch" placeholder="🔍 Buscar por descrição...">
-                    <select id="categoryFilter">
-                        <option value="">📂 Todas categorias</option>
-                    </select>
-                    <button class="btn-menu" onclick="alternarTema()" title="Tema">🌓</button>
-                    <button class="btn-menu" onclick="abrirModal('modalExportar')" title="Exportar">📊</button>
-                    <button class="btn-menu" onclick="logout()" title="Sair">🚪</button>
-                </div>
-                <div class="filter-row">
-                    <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()" title="Clique para sincronizar">🔄 Sincronizando...</div>
-                </div>
-            </div>
-        </header>
 
         <div id="alertasPendentes"></div>
 
         <div class="dashboard-pyramid">
             <div class="card card-top">
-                <h3>💰 Montante Total (todas as contas)</h3>
+                <h3>💰 Montante Total</h3>
                 <p id="saldoTotal">R$ 0,00</p>
             </div>
             <div class="card-bottom-row">
                 <div class="card">
-                    <h3>📉 Despesas (filtro)</h3>
+                    <h3>📉 Despesas</h3>
                     <p id="totalDes" style="color: var(--d);">R$ 0,00</p>
                 </div>
                 <div class="card">
-                    <h3>📈 Receitas (filtro)</h3>
+                    <h3>📈 Receitas</h3>
                     <p id="totalRec" style="color: var(--s);">R$ 0,00</p>
                 </div>
             </div>
-            <div class="card" style="width:100%; max-width:400px; padding:10px; background: var(--card);">
-                <p style="font-size:12px; opacity:0.7;">⬆️ Os valores acima são das transações <strong>pagas</strong> no período e que correspondem à busca e categoria selecionadas.<br>🔄 Transferências não entram nos totais.</p>
+            <div class="info-box">
+                <p>⬆️ Valores de transações <strong>pagas</strong> no período filtrado.<br>🔄 Transferências e pagamentos de fatura não alteram os totais.</p>
             </div>
         </div>
 
-        <div style="padding: 0 20px 20px 20px;">
+        <div style="padding: 0 20px 20px 20px; max-width: 480px; margin: 0 auto;">
             <div class="section-header">
                 <h3>💳 Contas e Cartões</h3>
                 <button onclick="abrirModal('modalConta')">+ Adicionar</button>
@@ -484,117 +891,186 @@
             <div id="listaContas"></div>
             
             <div class="section-header">
-                <h3>🎯 Cofrinhos / Metas</h3>
-                <button onclick="abrirModal('modalMeta')">+ Novo</button>
+                <h3>🎯 Cofrinhos e Metas</h3>
+                <button onclick="abrirModal('modalMeta')">+ Novo Cofrinho</button>
             </div>
             <div id="listaMetas"></div>
 
             <div class="section-header">
-                <h3>📋 Transações</h3>
+                <h3>📋 Últimas Transações</h3>
             </div>
             <div id="listaTransacoes"></div>
         </div>
 
-        <button class="fab" onclick="iniciarChat()">+</button>
+        <button class="fab-menu" onclick="abrirModal('modalMenu')" title="Menu e Filtros">⚙️</button>
+        <button class="fab" onclick="iniciarChat()" title="Assistente Inteligente">+</button>
     </div>
 
-    <!-- Modal Chat (Assistente de Lançamento) – SEM display inline -->
-    <div class="modal" id="modalChat" style="max-height: 85vh; height: 600px; max-width: 500px;">
-        <div style="padding: 16px; background: var(--p); color: white; border-radius: 28px 28px 0 0; display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0; font-size: 1.2rem;">💬 Assistente</h3>
-            <button onclick="fecharModais()" style="background: none; border: none; color: white; font-size: 1.5rem; width: auto; padding: 0; margin: 0; cursor: pointer;">&times;</button>
+    <!-- Modal Menu -->
+    <div class="modal" id="modalMenu">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="font-weight: 700; font-size: 1.2rem;">🔍 Filtros e Ajustes</h3>
+            <button onclick="fecharModais()" style="width: auto; padding: 6px 14px; margin: 0; background: var(--d-light); color: var(--d); border-radius: 20px;">Fechar</button>
+        </div>
+        <div class="filters">
+            <div class="filter-row">
+                <input type="month" id="monthPicker">
+                <div class="date-range">
+                    <div class="date-field">
+                        <label>📅 Início</label>
+                        <input type="date" id="dataInicioFiltro">
+                    </div>
+                    <div class="date-field">
+                        <label>📅 Fim</label>
+                        <input type="date" id="dataFimFiltro">
+                    </div>
+                </div>
+                <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
+            </div>
+            <div class="filter-row">
+                <input type="text" id="globalSearch" placeholder="🔍 Buscar transação...">
+                <select id="categoryFilter">
+                    <option value="">📂 Todas as categorias</option>
+                </select>
+            </div>
+            <div class="filter-row">
+                <button class="btn-menu" onclick="alternarTema()" title="Alternar visual">🌓 Tema</button>
+                <button class="btn-menu" onclick="abrirModal('modalExportar')" title="Exportar dados">📊 Exportar</button>
+                <button class="btn-menu" onclick="logout()" title="Encerrar sessão" style="color: var(--d);">🚪 Sair</button>
+            </div>
+            <div class="filter-row" style="margin-top: 4px;">
+                <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()">🔄 Verificando conexão...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Chat -->
+    <div class="modal" id="modalChat" style="max-height: 85vh; height: 560px; max-width: 460px;">
+        <div class="chat-header">
+            <div class="chat-header-title">
+                <div class="chat-status-dot"></div>
+                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">💬 Assistente Finan</h3>
+            </div>
+            <button onclick="fecharModais()" style="background: var(--bg); border: none; color: var(--txt-muted); font-size: 1.2rem; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; cursor: pointer;">&times;</button>
         </div>
         
-        <div id="chatMessages" style="flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; background: var(--bg);">
-            <!-- Mensagens vão aparecer aqui -->
-        </div>
+        <div id="chatMessages"></div>
 
-        <div id="chatQuickReplies" style="padding: 12px 16px; display: none; gap: 8px; overflow-x: auto; background: var(--card); border-top: 1px solid var(--border); white-space: nowrap;">
-            <!-- Botões rápidos vão aparecer aqui -->
-        </div>
+        <div id="chatQuickReplies"></div>
 
-        <div style="padding: 12px 16px; background: var(--card); border-radius: 0 0 28px 28px; border-top: 1px solid var(--border); display: flex; gap: 8px; align-items: center;">
-            <input type="text" id="chatInput" placeholder="Digite aqui..." style="margin: 0; flex: 1; border-radius: 20px; padding: 12px 16px; background: var(--bg); border: 1px solid var(--border); color: var(--txt);" autocomplete="off" onkeypress="if(event.key === 'Enter') enviarMensagemChatInput()">
-            <button onclick="enviarMensagemChatInput()" style="margin: 0; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; padding: 0; background: var(--p); color: white; border: none;">📤</button>
+        <div class="chat-input-bar">
+            <button class="btn-chat-action" onclick="document.getElementById('chatFotoInput').click()" title="Anexar comprovante">📷</button>
+            <input type="text" id="chatInput" placeholder="Ex: Mercado 45,90" autocomplete="off" autocapitalize="sentences" onkeypress="if(event.key === 'Enter') enviarMensagemChatInput()">
+            <button class="btn-chat-action btn-chat-send" onclick="enviarMensagemChatInput()">📤</button>
         </div>
     </div>
+
+    <input type="file" id="chatFotoInput" accept="image/*" style="display:none" onchange="handleChatPhoto()">
 
     <div class="overlay" id="overlay" onclick="fecharModais()"></div>
 
     <!-- Modal Transação -->
     <div class="modal" id="modalTransacao">
-        <h3 id="tTituloModal">Nova Transação</h3>
+        <h3 id="tTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Transação</h3>
         <input type="hidden" id="tId">
+        
         <select id="tTipo" onchange="toggleTransferencia()">
             <option value="despesa">💸 Despesa</option>
             <option value="receita">💰 Receita</option>
-            <option value="transferencia">🔄 Pagar Fatura / Transf.</option>
+            <option value="transferencia">🔄 Pagar Fatura / Transferência</option>
         </select>
-        <input type="text" id="tDescricao" placeholder="Descrição (opcional)">
-        <input type="number" id="tValor" step="0.01" placeholder="Valor R$">
-        <label class="label-small">📅 Data da transação:</label>
+        
+        <input type="text" id="tDescricao" placeholder="Descrição (ex: Supermercado)">
+        <input type="number" id="tValor" step="0.01" placeholder="Valor R$ 0,00" inputmode="decimal">
+        
+        <label class="label-small">📅 Data de Competência:</label>
         <input type="date" id="tData">
-        <select id="tConta"><option value="">Selecione a Conta/Cartão (Origem)</option></select>
-        <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão (Destino)</option></select>
+        
+        <select id="tConta"><option value="">Selecione a Origem (Conta/Cartão)</option></select>
+        <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão de Destino</option></select>
         <select id="tCategoria"></select>
-        <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº Parcelas (1 = à vista)">
+        
+        <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº de Parcelas (1 = à vista)">
+        
         <select id="tStatus">
-            <option value="true">✅ Pago / Recebido</option>
-            <option value="false">⏳ Pendente</option>
+            <option value="true">✅ Efetivado (Pago/Recebido)</option>
+            <option value="false">⏳ Realizado (Pendente)</option>
         </select>
-        <input type="file" id="tFoto" accept="image/*">
+        
+        <label class="label-small">📷 Comprovante Anexo (Opcional):</label>
+        <input type="file" id="tFoto" accept="image/*" style="border: none; padding: 6px 0; background: transparent;">
+        
         <div class="modal-actions">
             <button id="btnExcluirTransacao" class="danger" style="display: none;" onclick="excluirItem('transacoes', 'tId')">🗑 Excluir</button>
             <button class="btn-primary" onclick="salvarTransacao()">💾 Guardar</button>
         </div>
     </div>
 
+    <!-- Modal Conta -->
     <div class="modal" id="modalConta">
-        <h3 id="cTituloModal">Nova Conta / Cartão</h3>
+        <h3 id="cTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Conta / Cartão</h3>
         <input type="hidden" id="cId">
-        <input type="text" id="cNome" placeholder="Nome (ex: Nubank)">
+        
+        <input type="text" id="cNome" placeholder="Nome identificador (ex: NuConta)">
         <select id="cTipo">
-            <option value="corrente">🏦 Conta Corrente</option>
+            <option value="corrente">🏦 Conta Corrente / Carteira</option>
             <option value="cartao">💳 Cartão de Crédito</option>
         </select>
-        <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial / Limite do Cartão">
-        <input type="number" id="cVencimento" placeholder="Dia de Vencimento (1-31) - Opcional" min="1" max="31">
+        
+        <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial ou Limite Disponível" inputmode="decimal">
+        <input type="number" id="cVencimento" placeholder="Dia de vencimento (1 a 31) - Opcional" min="1" max="31" inputmode="numeric">
+        
         <div class="modal-actions">
             <button id="btnExcluirConta" class="danger" style="display: none;" onclick="excluirItem('contas', 'cId')">🗑 Excluir</button>
             <button class="btn-primary" onclick="salvarConta()">💾 Guardar</button>
         </div>
     </div>
 
+    <!-- Modal Meta -->
     <div class="modal" id="modalMeta">
-        <h3 id="mTituloModal">Novo Cofrinho</h3>
+        <h3 id="mTituloModal" style="font-weight: 700; margin-bottom: 8px;">Novo Objetivo</h3>
         <input type="hidden" id="mId">
-        <input type="text" id="mNome" placeholder="Objetivo (ex: Viagem)">
-        <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Objetivo R$">
-        <input type="number" id="mAtual" step="0.01" placeholder="Valor Já Guardado (opcional)">
-        <label class="label-small">📅 Data limite:</label>
+        
+        <input type="text" id="mNome" placeholder="Objetivo de reserva (ex: Troca de Carro)">
+        <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Alvo Total R$" inputmode="decimal">
+        <input type="number" id="mAtual" step="0.01" placeholder="Aporte Inicial Guardado" inputmode="decimal">
+        
+        <label class="label-small">📅 Data Limite Alvo:</label>
         <input type="date" id="mData">
-        <select id="mConta"><option value="">Conta associada (opcional)</option></select>
+        
+        <select id="mConta"><option value="">Vincular à conta específica (Opcional)</option></select>
+        
         <div class="modal-actions">
             <button id="btnExcluirMeta" class="danger" style="display: none;" onclick="excluirItem('metas', 'mId')">🗑 Excluir</button>
             <button class="btn-primary" onclick="salvarMeta()">💾 Guardar</button>
         </div>
     </div>
 
+    <!-- Modal Exportar -->
     <div class="modal" id="modalExportar">
-        <h3>📎 Exportar Relatório</h3>
-        <label class="label-small">Data inicial:</label>
-        <input type="date" id="eDataIni">
-        <label class="label-small">Data final:</label>
-        <input type="date" id="eDataFim">
+        <h3 style="font-weight: 700; margin-bottom: 8px;">📊 Extração de Relatórios</h3>
+        
+        <div class="date-range" style="margin-top: 10px;">
+            <div class="date-field">
+                <label>Data de Início</label>
+                <input type="date" id="eDataIni">
+            </div>
+            <div class="date-field">
+                <label>Data de Término</label>
+                <input type="date" id="eDataFim">
+            </div>
+        </div>
+        
         <div class="modal-actions">
-            <button class="btn-primary" onclick="baixarRelatorio()">📄 CSV</button>
-            <button class="btn-primary" onclick="baixarPDF()">📑 PDF</button>
+            <button class="btn-primary" onclick="baixarRelatorio()" style="background: #0284c7;">📄 Planilha CSV</button>
+            <button class="btn-primary" onclick="baixarPDF()" style="background: #4f46e5;">📑 Relatório PDF</button>
         </div>
     </div>
 
+    <!-- Visualizador de imagens -->
     <div id="imageViewer">
         <span class="fechar-zoom" onclick="fecharZoom()">✕</span>
-        <img id="zoomImg" src="" onclick="aplicarZoom(this)">
+        <img id="zoomImg" src="" onclick="aplicarZoom(this)" alt="Visualização expandida">
     </div>
 
     <script src="./app.js"></script>
