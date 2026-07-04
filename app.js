@@ -613,6 +613,7 @@ function atualizarDashboard() {
         else if (t.tipo === 'despesa') despesasFiltradas += t.valor;
     });
     
+    // Cálculo do montante total (sem filtro de período, considera todas as transações pagas)
     let montanteTotal = 0;
     contas.forEach(conta => {
         let saldoConta = conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite;
@@ -719,6 +720,12 @@ async function salvarTransacao() {
         const categoriaId = document.getElementById('tCategoria').value;
         const pago = document.getElementById('tStatus').value === "true";
         const fotoFile = document.getElementById('tFoto').files[0];
+        
+        // Validação da data
+        if (!dataInput) {
+            alert('Por favor, selecione uma data.');
+            return;
+        }
         
         let fotoBase64 = null;
         if (fotoFile) fotoBase64 = await resizeImage(fotoFile);
