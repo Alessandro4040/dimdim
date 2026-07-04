@@ -98,18 +98,6 @@ function alternarTema() {
 // ============================================================
 // AUTENTICAÇÃO
 // ============================================================
-function togglePasswordVisibility() {
-    const input = document.getElementById('passwordInput');
-    const btn = document.getElementById('togglePasswordBtn');
-    if (input.type === 'password') {
-        input.type = 'text';
-        btn.textContent = '🙈';
-    } else {
-        input.type = 'password';
-        btn.textContent = '👁️';
-    }
-}
-
 async function submitPassword() {
     const password = document.getElementById('passwordInput').value;
     const errorDiv = document.getElementById('passwordError');
@@ -120,6 +108,8 @@ async function submitPassword() {
         if (data.success) {
             authToken = password;
             localStorage.setItem('authToken', authToken);
+            
+            // Removido o LockScreen. Entra direto no app.
             document.getElementById('passwordScreen').classList.add('hidden');
             document.getElementById('appContent').style.display = 'block';
             iniciarApp();
@@ -147,6 +137,7 @@ async function checkStoredToken() {
             return false;
         }
     } catch (err) {
+        // Se estiver offline mas com token, permite entrar
         document.getElementById('passwordScreen').classList.add('hidden');
         document.getElementById('appContent').style.display = 'block';
         iniciarApp();
@@ -590,7 +581,7 @@ function getTransacoesPeriodoBase() {
         const [ano, mes] = mesAtual.split('-');
         dataInicio = `${ano}-${mes}-01`;
         const ultimoDia = new Date(parseInt(ano), parseInt(mes), 0).getDate();
-        dataFim = `${ano}-${mes}-${ultimoDia}`;
+        dataFim = `${ano}-${mes}-${String(ultimoDia).padStart(2,'0')}`;
     }
     return transacoes.filter(t => t.pago && t.data >= dataInicio && t.data <= dataFim);
 }
@@ -609,42 +600,40 @@ function atualizarDashboard() {
     let receitasFiltradas = 0, despesasFiltradas = 0;
     transacoesFiltradas.forEach(t => {
         if (t.categoria_id === 'cat_transferencia') return;
-        if (t.tipo === 'receita') receitasFiltradas += t.valor;
-        else if (t.tipo === 'despesa') despesasFiltradas += t.valor;
+        const val = Number(t.valor) || 0;
+        if (t.tipo === 'receita') receitasFiltradas += val;
+        else if (t.tipo === 'despesa') despesasFiltradas += val;
     });
     
-    // Cálculo do montante total (sem filtro de período, considera todas as transações pagas)
     let montanteTotal = 0;
+    let htmlContas = '';
+    
     contas.forEach(conta => {
-        let saldoConta = conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite;
+        let saldoConta = Number(conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite) || 0;
+        
         transacoes.forEach(t => {
             if (t.conta_id === conta.id && t.pago) {
-                if (t.tipo === 'receita') saldoConta += t.valor;
-                if (t.tipo === 'despesa') saldoConta -= t.valor;
+                let v = Number(t.valor) || 0;
+                if (t.tipo === 'receita') saldoConta += v;
+                if (t.tipo === 'despesa') saldoConta -= v;
             }
         });
-        montanteTotal += saldoConta;
-    });
-    
-    document.getElementById('saldoTotal').innerText = `R$ ${montanteTotal.toFixed(2)}`;
-    document.getElementById('totalRec').innerText = `R$ ${receitasFiltradas.toFixed(2)}`;
-    document.getElementById('totalDes').innerText = `R$ ${despesasFiltradas.toFixed(2)}`;
-    
-    let htmlContas = '';
-    contas.forEach(c => {
-        let saldoConta = c.tipo === 'corrente' ? c.saldo_inicial : c.limite;
-        transacoes.forEach(t => {
-            if (t.conta_id === c.id && t.pago) {
-                if (t.tipo === 'receita') saldoConta += t.valor;
-                if (t.tipo === 'despesa') saldoConta -= t.valor;
-            }
-        });
+        
         htmlContas += `<div class="card" style="margin-bottom:10px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
-            <div><strong>${c.nome}</strong> (${c.tipo})<br>
-            ${c.tipo === 'cartao' ? 'Limite Disp.' : 'Saldo'}: R$ ${saldoConta.toFixed(2)}</div>
-            <button onclick="editarConta('${c.id}')" style="width:auto; padding:5px; margin:0; background:none; border:none; font-size:18px; cursor:pointer;">✏️</button>
+            <div><strong>${conta.nome}</strong> (${conta.tipo})<br>
+            ${conta.tipo === 'cartao' ? 'Limite Disp.' : 'Saldo'}: R$ ${saldoConta.toFixed(2)}</div>
+            <button onclick="editarConta('${conta.id}')" style="width:auto; padding:5px; margin:0; background:none; border:none; font-size:18px; cursor:pointer;">✏️</button>
         </div>`;
+        
+        // Montante Total deve incluir apenas Contas Correntes (dinheiro real seu)
+        if (conta.tipo === 'corrente') {
+            montanteTotal += saldoConta;
+        }
     });
+    
+    document.getElementById('saldoTotal').innerText = `R$ ${(montanteTotal || 0).toFixed(2)}`;
+    document.getElementById('totalRec').innerText = `R$ ${(receitasFiltradas || 0).toFixed(2)}`;
+    document.getElementById('totalDes').innerText = `R$ ${(despesasFiltradas || 0).toFixed(2)}`;
     document.getElementById('listaContas').innerHTML = htmlContas;
     
     let htmlTransacoes = '';
@@ -654,6 +643,8 @@ function atualizarDashboard() {
         const dataFormatada = formatarDataBR(t.data);
         const isTransfer = t.categoria_id === 'cat_transferencia';
         const tipoIcon = isTransfer ? '🔄' : (t.tipo === 'receita' ? '💰' : '💸');
+        const valorFormatado = (Number(t.valor) || 0).toFixed(2);
+        
         htmlTransacoes += `<div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
             <div style="flex:1;">
                 <strong>${tipoIcon} ${t.descricao}</strong><br>
@@ -662,7 +653,7 @@ function atualizarDashboard() {
             </div>
             <div style="text-align:right; min-width: 90px;">
                 <div style="color: ${t.tipo === 'receita' ? 'var(--s)' : 'var(--d)'}; font-weight:bold;">
-                    R$ ${t.valor.toFixed(2)}
+                    R$ ${valorFormatado}
                 </div>
                 <button onclick="editarTransacao('${t.id}')" style="width:auto; padding:4px 8px; margin:4px 0 0; background:var(--p); font-size:12px;">✏️ Editar</button>
             </div>
@@ -672,12 +663,14 @@ function atualizarDashboard() {
     
     let htmlMetas = '';
     metas.forEach(m => {
-        let pct = Math.min((m.valor_atual / m.valor_objetivo) * 100, 100).toFixed(1);
+        let vAtual = Number(m.valor_atual) || 0;
+        let vObjetivo = Number(m.valor_objetivo) || 1;
+        let pct = Math.min((vAtual / vObjetivo) * 100, 100).toFixed(1);
         htmlMetas += `<div class="card" style="margin-bottom:10px; text-align:left; display:flex; justify-content:space-between; align-items:center;">
             <div style="width:80%;">
                 <strong>${m.nome}</strong> - ${pct}%<br>
-                <progress value="${m.valor_atual}" max="${m.valor_objetivo}" style="width:100%; height:8px; border-radius:10px;"></progress>
-                <small>R$ ${m.valor_atual.toFixed(2)} / R$ ${m.valor_objetivo.toFixed(2)}</small>
+                <progress value="${vAtual}" max="${vObjetivo}" style="width:100%; height:8px; border-radius:10px;"></progress>
+                <small>R$ ${vAtual.toFixed(2)} / R$ ${vObjetivo.toFixed(2)}</small>
             </div>
             <button onclick="editarMeta('${m.id}')" style="width:auto; padding:5px; margin:0; background:none; border:none; font-size:18px; cursor:pointer;">✏️</button>
         </div>`;
@@ -721,12 +714,6 @@ async function salvarTransacao() {
         const pago = document.getElementById('tStatus').value === "true";
         const fotoFile = document.getElementById('tFoto').files[0];
         
-        // Validação da data
-        if (!dataInput) {
-            alert('Por favor, selecione uma data.');
-            return;
-        }
-        
         let fotoBase64 = null;
         if (fotoFile) fotoBase64 = await resizeImage(fotoFile);
         else if (idEdit) {
@@ -740,8 +727,7 @@ async function salvarTransacao() {
                 alert("Selecione uma conta de destino válida e diferente da origem.");
                 return;
             }
-            const dataInicial = new Date(dataInput);
-            dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
+            const dataInicial = new Date(dataInput + 'T00:00:00'); 
             const dataStr = dataInicial.toISOString().split('T')[0];
             const idOriginal = uuidv4();
             
@@ -781,8 +767,7 @@ async function salvarTransacao() {
                     await salvarItemDB('transacoes', t);
                 }
             } else {
-                const dataInicial = new Date(dataInput);
-                dataInicial.setMinutes(dataInicial.getMinutes() + dataInicial.getTimezoneOffset());
+                const dataInicial = new Date(dataInput + 'T00:00:00');
                 const idOriginal = uuidv4();
                 const valorParcela = valorTotal / parcelas;
                 for (let i = 0; i < parcelas; i++) {
@@ -843,20 +828,15 @@ function salvarConta() {
             id: uuidv4(), nome, tipo, saldo_inicial: saldoLimite, limite: saldoLimite,
             vencimento, sinc: false, updated_at: new Date().toISOString()
         };
-        // Guarda o ID da nova conta para selecionar automaticamente se adicionada do modal de transação
         novaContaId = novaConta.id;
         salvarItemDB('contas', novaConta);
     }
     
-    // Se estivermos adicionando uma conta a partir do modal de transação
     if (adicionandoContaParaTransacao && !idEdit) {
-        // Atualiza o select e seleciona a nova conta
         setTimeout(() => {
             atualizarSelectContas();
             document.getElementById('tConta').value = novaContaId;
-            // Fecha apenas o modal de conta, mantendo o de transação aberto
             document.getElementById('modalConta').classList.remove('active');
-            // Verifica se há outros modais ativos; se não, esconde o overlay
             const modaisAtivos = document.querySelectorAll('.modal.active');
             if (modaisAtivos.length === 0) {
                 document.getElementById('overlay').classList.remove('active');
@@ -977,12 +957,11 @@ function abrirModal(id) {
     document.getElementById(id).classList.add('active');
     document.getElementById('overlay').classList.add('active');
     if (id === 'modalTransacao' && !document.getElementById('tId').value) {
-        // Nova transação: definir data atual como padrão
-        const hoje = new Date().toISOString().slice(0, 10);
-        document.getElementById('tData').value = hoje;
         document.getElementById('tFoto').value = '';
         document.getElementById('tTipo').value = 'despesa';
         toggleTransferencia();
+        const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+        document.getElementById('tData').value = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
     }
 }
 
@@ -1027,9 +1006,7 @@ function fecharModais() {
 }
 
 function adicionarContaDoModalTransacao() {
-    // Marca que estamos adicionando uma conta a partir do modal de transação
     adicionandoContaParaTransacao = true;
-    // Abre o modal de conta
     abrirModal('modalConta');
 }
 
@@ -1286,30 +1263,80 @@ function processarMensagemChat(valor, labelExibicao) {
     // Etapa 3.5: conta destino (transferência)
     else if (etapaAtual === 3.5) {
         chatFluxo.dadosTemp.conta_destino_id = valor;
-        chatFluxo.etapa = 5;
+        chatFluxo.etapa = 4.5;
         setTimeout(() => {
-            const origem = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
-            const destino = contas.find(c => c.id === valor)?.nome;
-            adicionarBalaoChat('bot', `Resumo:\n🔄 Transf. de R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDe: ${origem}\nPara: ${destino}\nDesc: ${chatFluxo.dadosTemp.descricao}\n\nPosso salvar?`);
-            mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
+            adicionarBalaoChat('bot', 'Quando ocorreu essa transferência?');
+            mostrarBotoesRapidos([
+                {label: '📅 Hoje', valor: 'hoje'},
+                {label: '📅 Ontem', valor: 'ontem'},
+                {label: '🗓️ Outra data', valor: 'outra'}
+            ]);
         }, 500);
     }
     // Etapa 4: categoria
     else if (etapaAtual === 4) {
         chatFluxo.dadosTemp.categoria_id = valor;
-        chatFluxo.etapa = 5;
+        chatFluxo.etapa = 4.5;
         setTimeout(() => {
-            const conta = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
-            const cat = categorias.find(c => c.id === valor)?.nome;
-            const icone = chatFluxo.dadosTemp.tipo === 'despesa' ? '💸' : '💰';
-            let resumo = `${icone} ${chatFluxo.dadosTemp.tipo.toUpperCase()} - R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDesc: ${chatFluxo.dadosTemp.descricao}\nConta: ${conta}\nCat: ${cat}`;
-            if (chatFluxo.dadosTemp.parcelas && chatFluxo.dadosTemp.parcelas > 1) {
-                resumo += `\n📆 Parcelas: ${chatFluxo.dadosTemp.parcelas}x`;
-            }
-            resumo += '\n\nPosso salvar?';
-            adicionarBalaoChat('bot', resumo);
-            mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
+            adicionarBalaoChat('bot', 'Quando ocorreu essa transação?');
+            mostrarBotoesRapidos([
+                {label: '📅 Hoje', valor: 'hoje'},
+                {label: '📅 Ontem', valor: 'ontem'},
+                {label: '🗓️ Outra data', valor: 'outra'}
+            ]);
         }, 500);
+    }
+    // Etapa 4.5: Escolha da Data
+    else if (etapaAtual === 4.5) {
+        const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+        let hoje = new Date(Date.now() - tzOffset);
+        
+        if (valor === 'hoje') {
+            chatFluxo.dadosTemp.data = hoje.toISOString().split('T')[0];
+            avancarParaConfirmacaoChat();
+        } else if (valor === 'ontem') {
+            let ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1);
+            chatFluxo.dadosTemp.data = ontem.toISOString().split('T')[0];
+            avancarParaConfirmacaoChat();
+        } else if (valor === 'outra') {
+            chatFluxo.etapa = 4.6;
+            setTimeout(() => {
+                adicionarBalaoChat('bot', 'Digite a data no formato DD/MM (ex: 25/12):');
+            }, 500);
+        } else {
+            // Caso o usuário tenha digitado a data diretamente
+            if (/^\d{2}\/\d{2}$/.test(valor) || /^\d{2}\/\d{2}\/\d{4}$/.test(valor)) {
+                let partes = valor.split('/');
+                let dia = partes[0].padStart(2, '0');
+                let mes = partes[1].padStart(2, '0');
+                let ano = partes.length === 3 ? partes[2] : hoje.getFullYear();
+                chatFluxo.dadosTemp.data = `${ano}-${mes}-${dia}`;
+                avancarParaConfirmacaoChat();
+            } else {
+                adicionarBalaoChat('bot', 'Data não reconhecida. Por favor, escolha um botão ou digite no formato DD/MM.');
+                mostrarBotoesRapidos([
+                    {label: '📅 Hoje', valor: 'hoje'},
+                    {label: '📅 Ontem', valor: 'ontem'},
+                    {label: '🗓️ Outra data', valor: 'outra'}
+                ]);
+            }
+        }
+    }
+    // Etapa 4.6: Digitar Outra Data
+    else if (etapaAtual === 4.6) {
+        if (/^\d{2}\/\d{2}$/.test(valor) || /^\d{2}\/\d{2}\/\d{4}$/.test(valor)) {
+            const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+            let hoje = new Date(Date.now() - tzOffset);
+            let partes = valor.split('/');
+            let dia = partes[0].padStart(2, '0');
+            let mes = partes[1].padStart(2, '0');
+            let ano = partes.length === 3 ? partes[2] : hoje.getFullYear();
+            chatFluxo.dadosTemp.data = `${ano}-${mes}-${dia}`;
+            avancarParaConfirmacaoChat();
+        } else {
+            adicionarBalaoChat('bot', 'Formato inválido. Digite no formato DD/MM (ex: 25/12):');
+        }
     }
     // Etapa 5: confirmação
     else if (etapaAtual === 5) {
@@ -1372,6 +1399,31 @@ function processarMensagemChat(valor, labelExibicao) {
     }
 }
 
+function avancarParaConfirmacaoChat() {
+    chatFluxo.etapa = 5;
+    setTimeout(() => {
+        const conta = contas.find(c => c.id === chatFluxo.dadosTemp.conta_id)?.nome;
+        const cat = categorias.find(c => c.id === chatFluxo.dadosTemp.categoria_id)?.nome;
+        const dataStr = formatarDataBR(chatFluxo.dadosTemp.data);
+        const icone = chatFluxo.dadosTemp.tipo === 'despesa' ? '💸' : '💰';
+        
+        let resumo = '';
+        if (chatFluxo.dadosTemp.tipo === 'transferencia') {
+            const destino = contas.find(c => c.id === chatFluxo.dadosTemp.conta_destino_id)?.nome;
+            resumo = `Resumo:\n🔄 Transf. de R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDe: ${conta}\nPara: ${destino}\nDesc: ${chatFluxo.dadosTemp.descricao}\nData: ${dataStr}\n\nPosso salvar?`;
+        } else {
+            resumo = `${icone} ${chatFluxo.dadosTemp.tipo.toUpperCase()} - R$ ${chatFluxo.dadosTemp.valor.toFixed(2)}\nDesc: ${chatFluxo.dadosTemp.descricao}\nConta: ${conta}\nCat: ${cat}\nData: ${dataStr}`;
+            if (chatFluxo.dadosTemp.parcelas && chatFluxo.dadosTemp.parcelas > 1) {
+                resumo += `\n📆 Parcelas: ${chatFluxo.dadosTemp.parcelas}x`;
+            }
+            resumo += '\n\nPosso salvar?';
+        }
+        
+        adicionarBalaoChat('bot', resumo);
+        mostrarBotoesRapidos([{label: '✅ Sim, salvar', valor: 'sim'}, {label: '❌ Cancelar', valor: 'nao'}]);
+    }, 500);
+}
+
 async function handleChatPhoto() {
     const fileInput = document.getElementById('chatFotoInput');
     const file = fileInput.files[0];
@@ -1403,8 +1455,7 @@ async function handleChatPhoto() {
 
 async function finalizarSalvamentoChat(fotoBase64) {
     adicionarBalaoChat('bot', '⏳ Salvando e sincronizando...');
-    const tzOffset = (new Date()).getTimezoneOffset() * 60000;
-    const dataStr = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
+    const dataStr = chatFluxo.dadosTemp.data;
     const parcelas = chatFluxo.dadosTemp.parcelas || 1;
     
     try {
@@ -1479,8 +1530,9 @@ function mostrarResumoMes() {
     let totalRec = 0, totalDes = 0;
     transacoes.forEach(t => {
         if (t.pago && t.data >= inicio && t.data <= fim && t.categoria_id !== 'cat_transferencia') {
-            if (t.tipo === 'receita') totalRec += t.valor;
-            else if (t.tipo === 'despesa') totalDes += t.valor;
+            let v = Number(t.valor) || 0;
+            if (t.tipo === 'receita') totalRec += v;
+            else if (t.tipo === 'despesa') totalDes += v;
         }
     });
     const saldo = totalRec - totalDes;
