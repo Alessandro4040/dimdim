@@ -109,7 +109,7 @@ async function submitPassword() {
             authToken = password;
             localStorage.setItem('authToken', authToken);
             
-            // Removido o LockScreen. Entra direto no app.
+            // Entra direto no app
             document.getElementById('passwordScreen').classList.add('hidden');
             document.getElementById('appContent').style.display = 'block';
             iniciarApp();
@@ -625,15 +625,21 @@ function atualizarDashboard() {
             <button onclick="editarConta('${conta.id}')" style="width:auto; padding:5px; margin:0; background:none; border:none; font-size:18px; cursor:pointer;">✏️</button>
         </div>`;
         
-        // Montante Total deve incluir apenas Contas Correntes (dinheiro real seu)
+        // Montante Total deve incluir apenas Contas Correntes
         if (conta.tipo === 'corrente') {
             montanteTotal += saldoConta;
         }
     });
     
-    document.getElementById('saldoTotal').innerText = `R$ ${(montanteTotal || 0).toFixed(2)}`;
-    document.getElementById('totalRec').innerText = `R$ ${(receitasFiltradas || 0).toFixed(2)}`;
-    document.getElementById('totalDes').innerText = `R$ ${(despesasFiltradas || 0).toFixed(2)}`;
+    // Injeção de valores na interface com fallback de segurança
+    const elSaldoTotal = document.getElementById('saldoTotal');
+    const elTotalRec = document.getElementById('totalRec');
+    const elTotalDes = document.getElementById('totalDes');
+
+    if(elSaldoTotal) elSaldoTotal.innerText = `R$ ${(montanteTotal || 0).toFixed(2)}`;
+    if(elTotalRec) elTotalRec.innerText = `R$ ${(receitasFiltradas || 0).toFixed(2)}`;
+    if(elTotalDes) elTotalDes.innerText = `R$ ${(despesasFiltradas || 0).toFixed(2)}`;
+    
     document.getElementById('listaContas').innerHTML = htmlContas;
     
     let htmlTransacoes = '';
