@@ -754,13 +754,38 @@ function ehTransferencia(transacao) {
     return grupo.length === 2 && grupo.some(t => t.tipo === 'despesa') && grupo.some(t => t.tipo === 'receita');
 }
 
-function saldosDasContas() {
+// Até onde o saldo deve ser calculado, conforme o mês (ou período) que está na tela.
+// Meses futuros mostram a previsão: somam também o que está pendente ou agendado.
+function corteDoSaldo() {
+    const hoje = hojeISO();
+    if (ui.inicio || ui.fim) {
+        const ate = ui.fim || '9999-12-31';
+        return {
+            ate,
+            incluirPendentes: Boolean(ui.fim) && ate > hoje,
+            rotulo: ui.fim ? `Saldo até ${formatarDataBR(ui.fim)}` : 'Saldo nas contas'
+        };
+    }
+    const { fim } = limitesDoPeriodo();
+    const nomeDoMes = rotuloMes(ui.mes).toLowerCase();
+    if (ui.mes > mesAtualISO()) return { ate: fim, incluirPendentes: true, rotulo: `Saldo previsto para o fim de ${nomeDoMes}` };
+    if (ui.mes < mesAtualISO()) return { ate: fim, incluirPendentes: false, rotulo: `Saldo no fim de ${nomeDoMes}` };
+    return { ate: fim, incluirPendentes: false, rotulo: 'Saldo nas contas' };
+}
+
+function periodoEhPrevisto() {
+    if (ui.inicio || ui.fim) return Boolean(ui.inicio) && ui.inicio > hojeISO();
+    return ui.mes > mesAtualISO();
+}
+
+function saldosDasContas(corte = { ate: '9999-12-31', incluirPendentes: false }) {
     const saldos = {};
     dados.contas.forEach(conta => {
         saldos[conta.id] = Number(conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite) || 0;
     });
     dados.transacoes.forEach(t => {
-        if (!t.pago || !(t.conta_id in saldos)) return;
+        if (!(t.conta_id in saldos) || t.data > corte.ate) return;
+        if (!t.pago && !corte.incluirPendentes) return;
         const valor = Number(t.valor) || 0;
         if (t.tipo === 'receita') saldos[t.conta_id] += valor;
         else if (t.tipo === 'despesa') saldos[t.conta_id] -= valor;
@@ -790,15 +815,16 @@ function lancamentosDoPeriodo() {
 }
 
 function totaisDoPeriodo() {
+    const previsto = periodoEhPrevisto();
     let entradas = 0;
     let saidas = 0;
     lancamentosDoPeriodo().forEach(t => {
-        if (!t.pago || t.categoria_id === CAT_TRANSFERENCIA) return;
+        if ((!t.pago && !previsto) || t.categoria_id === CAT_TRANSFERENCIA) return;
         const valor = Number(t.valor) || 0;
         if (t.tipo === 'receita') entradas += valor;
         else if (t.tipo === 'despesa') saidas += valor;
     });
-    return { entradas: arredondar(entradas), saidas: arredondar(saidas) };
+    return { entradas: arredondar(entradas), saidas: arredondar(saidas), previsto };
 }
 
 function resumoDoMes(mes) {
@@ -847,10 +873,12 @@ function validarLancamento(entrada, { edicao = false } = {}) {
         erros.categoria = 'Escolha uma categoria.';
     }
 
-    if (!edicao && entrada.tipo === 'despesa') {
-        const parcelas = entrada.parcelas;
-        if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > MAX_PARCELAS) {
-            erros.parcelas = `Informe de 1 a ${MAX_PARCELAS} parcelas.`;
+    if (!edicao && entrada.tipo !== 'transferencia' && entrada.modo !== 'unica') {
+        const quantidade = entrada.quantidade;
+        if (!['parcelado', 'mensal'].includes(entrada.modo) || (entrada.modo === 'parcelado' && entrada.tipo !== 'despesa')) {
+            erros.repeticao = 'Escolha como o lançamento se repete.';
+        } else if (!Number.isInteger(quantidade) || quantidade < 2 || quantidade > MAX_PARCELAS) {
+            erros.quantidade = `Informe um número de 2 a ${MAX_PARCELAS}.`;
         }
     }
     return erros;
@@ -880,20 +908,24 @@ function montarLancamentos(entrada) {
         ];
     }
 
-    const parcelas = entrada.tipo === 'despesa' ? entrada.parcelas : 1;
-    return dividirEmParcelas(entrada.valor, parcelas).map((valor, i) => ({
+    const quantidade = entrada.modo === 'unica' ? 1 : entrada.quantidade;
+    // Parcelado divide o valor total; mensal repete o mesmo valor todo mês.
+    const valores = entrada.modo === 'parcelado'
+        ? dividirEmParcelas(entrada.valor, quantidade)
+        : Array.from({ length: quantidade }, () => entrada.valor);
+    return valores.map((valor, i) => ({
         ...base,
         id: uuidv4(),
         tipo: entrada.tipo,
-        descricao: parcelas > 1 ? `${descricao} (${i + 1}/${parcelas})` : descricao,
+        descricao: quantidade > 1 ? `${descricao} (${i + 1}/${quantidade})` : descricao,
         valor,
         data: somarMeses(entrada.data, i),
         conta_id: entrada.contaId,
         categoria_id: entrada.categoriaId,
-        // Só a primeira parcela pode nascer paga; as próximas aguardam o mês delas.
+        // Só o primeiro lançamento pode nascer pago; os próximos aguardam o mês deles.
         pago: i === 0 ? entrada.pago : false,
         parcela_num: i + 1,
-        parcela_total: parcelas,
+        parcela_total: quantidade,
         foto: i === 0 ? (entrada.foto || null) : null
     }));
 }
@@ -973,11 +1005,11 @@ async function excluirTransacao(id) {
         ids = grupo.map(t => t.id);
     } else if (grupo.length > 1 && (transacao.parcela_total || 1) > 1) {
         const resposta = await perguntar({
-            titulo: 'Excluir parcela?',
-            mensagem: `Este lançamento tem ${grupo.length} parcelas. O que você quer excluir?`,
+            titulo: 'Excluir lançamento repetido?',
+            mensagem: `Este lançamento se repete ${grupo.length} vezes (parcelas ou meses). O que você quer excluir?`,
             botoes: [
-                { rotulo: 'Só esta parcela', valor: 'uma', estilo: 'perigo' },
-                { rotulo: 'Todas as parcelas', valor: 'todas', estilo: 'perigo' },
+                { rotulo: 'Só este', valor: 'uma', estilo: 'perigo' },
+                { rotulo: 'Todos da sequência', valor: 'todas', estilo: 'perigo' },
                 { rotulo: 'Cancelar', valor: null, estilo: 'sec' }
             ]
         });
@@ -1079,11 +1111,18 @@ function renderizar() {
 }
 
 function renderResumo() {
-    const saldos = saldosDasContas();
+    const corte = corteDoSaldo();
+    const saldos = saldosDasContas(corte);
     const montante = arredondar(
         dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldos[c.id], 0)
     );
-    const { entradas, saidas } = totaisDoPeriodo();
+    const { entradas, saidas, previsto } = totaisDoPeriodo();
+    byId('resumoRotulo').textContent = corte.rotulo;
+    byId('rotuloEntradas').textContent = previsto ? 'Entradas previstas' : 'Entradas';
+    byId('rotuloSaidas').textContent = previsto ? 'Saídas previstas' : 'Saídas';
+    byId('resumoNota').textContent = previsto
+        ? 'Previsão: soma o saldo de hoje com tudo o que está agendado ou pendente até essa data.'
+        : 'Entradas e saídas contam só o que já foi pago ou recebido. Transferências e faturas não entram.';
     const elementoSaldo = byId('saldoTotal');
     elementoSaldo.textContent = formatarMoeda(montante);
     elementoSaldo.classList.toggle('negativo', montante < 0);
@@ -1112,7 +1151,7 @@ function renderContas() {
             </li>`;
         return;
     }
-    const saldos = saldosDasContas();
+    const saldos = saldosDasContas(corteDoSaldo());
     lista.innerHTML = dados.contas.map(conta => {
         const cartao = conta.tipo === 'cartao';
         const saldo = saldos[conta.id];
@@ -1179,7 +1218,8 @@ function htmlLancamento(t) {
 
     const extras = [];
     if (!t.pago) {
-        extras.push(`<button type="button" class="mini mini-aviso" data-action="marcar-pago" data-id="${esc(t.id)}">Pendente · marcar como ${t.tipo === 'receita' ? 'recebido' : 'pago'}</button>`);
+        const situacao = t.data > hojeISO() ? 'Agendado' : 'Pendente';
+        extras.push(`<button type="button" class="mini mini-aviso" data-action="marcar-pago" data-id="${esc(t.id)}">${situacao} · marcar como ${t.tipo === 'receita' ? 'recebido' : 'pago'}</button>`);
     }
     if (fotoSegura(t.foto)) {
         extras.push(`<button type="button" class="mini mini-link" data-action="ver-comprovante" data-id="${esc(t.id)}">📎 Ver comprovante</button>`);
@@ -1220,7 +1260,9 @@ function renderTransacoes() {
             ? 'Nenhum lançamento pendente. Tudo em dia!'
             : (filtrosAtivos()
                 ? 'Nenhum lançamento encontrado com esses filtros.'
-                : 'Nenhum lançamento neste mês. Toque em "Novo lançamento" para registrar o primeiro.');
+                : (ui.mes > mesAtualISO()
+                    ? 'Nada agendado para este mês. Toque em "Novo lançamento" e escolha "Agendar" para planejar receitas e despesas futuras.'
+                    : 'Nenhum lançamento neste mês. Toque em "Novo lançamento" para registrar o primeiro.'));
         container.innerHTML = `<div class="vazio">${mensagem}</div>`;
         return;
     }
@@ -1443,6 +1485,34 @@ function definirRadio(nome, valor) {
 // ============================================================
 const formTransacao = { editando: false, foto: null, categoriaOriginal: '' };
 
+const OPCOES_REPETICAO = {
+    despesa: [['unica', 'Só uma vez'], ['parcelado', 'Parcelado (divide o valor)'], ['mensal', 'Todo mês (mesmo valor)']],
+    receita: [['unica', 'Só uma vez'], ['mensal', 'Todo mês (mesmo valor)']],
+    transferencia: []
+};
+
+function popularRepeticao(tipo) {
+    const seletor = byId('tRepeticao');
+    const atual = seletor.value;
+    const opcoes = OPCOES_REPETICAO[tipo] || [];
+    seletor.innerHTML = opcoes.map(([valor, rotulo]) => `<option value="${valor}">${rotulo}</option>`).join('');
+    if (opcoes.some(([valor]) => valor === atual)) seletor.value = atual;
+}
+
+function ajustarQuantidade() {
+    const tipo = valorDoRadio('tTipo') || 'despesa';
+    const modo = byId('tRepeticao').value || 'unica';
+    const visivel = !formTransacao.editando && tipo !== 'transferencia' && modo !== 'unica';
+    byId('campo-t-quantidade').hidden = !visivel;
+    byId('tQuantidadeRotulo').textContent = modo === 'parcelado' ? 'Número de parcelas' : 'Por quantos meses';
+}
+
+// Data futura = lançamento agendado: nasce como pendente. Hoje ou passado nasce como já realizado.
+function ajustarSituacaoPelaData() {
+    if (formTransacao.editando) return;
+    byId('tStatus').value = byId('tData').value > hojeISO() ? 'false' : 'true';
+}
+
 function popularSelectDeContas(seletor, placeholder, { permitirNova = true } = {}) {
     const opcoes = [`<option value="">${esc(placeholder)}</option>`];
     dados.contas.forEach(conta => {
@@ -1482,7 +1552,10 @@ function ajustarFormularioPorTipo() {
     const tipo = valorDoRadio('tTipo') || 'despesa';
     byId('campo-t-contaDestino').hidden = tipo !== 'transferencia';
     byId('campo-t-categoria').hidden = tipo === 'transferencia';
-    byId('campo-t-parcelas').hidden = formTransacao.editando || tipo !== 'despesa';
+    const podeRepetir = !formTransacao.editando && tipo !== 'transferencia';
+    byId('campo-t-repeticao').hidden = !podeRepetir;
+    if (podeRepetir) popularRepeticao(tipo);
+    ajustarQuantidade();
     byId('tContaRotulo').textContent = {
         despesa: 'Paga com (conta ou cartão)',
         receita: 'Entra em qual conta',
@@ -1542,12 +1615,13 @@ function abrirFormularioTransacao(id) {
         }
     } else {
         byId('tData').value = hojeISO();
+        ajustarSituacaoPelaData();
     }
 
     const info = byId('tInfo');
     const parcelado = transacao && (transacao.parcela_total || 1) > 1;
     info.hidden = !parcelado;
-    if (parcelado) info.textContent = `Esta é a parcela ${transacao.parcela_num} de ${transacao.parcela_total}. A alteração vale só para ela.`;
+    if (parcelado) info.textContent = `Este é o lançamento ${transacao.parcela_num} de ${transacao.parcela_total} de uma sequência. A alteração vale só para ele.`;
 
     byId('tTitulo').textContent = transacao ? (transferencia ? 'Editar transferência' : 'Editar lançamento') : 'Novo lançamento';
     byId('btnExcluirTransacao').hidden = !transacao;
@@ -1557,7 +1631,7 @@ function abrirFormularioTransacao(id) {
 
 function lerFormularioTransacao() {
     const tipo = valorDoRadio('tTipo') || 'despesa';
-    const parcelasTexto = byId('tParcelas').value.trim();
+    const modo = formTransacao.editando || tipo === 'transferencia' ? 'unica' : (byId('tRepeticao').value || 'unica');
     return {
         tipo,
         descricao: byId('tDescricao').value,
@@ -1566,7 +1640,8 @@ function lerFormularioTransacao() {
         contaId: byId('tConta').value,
         contaDestinoId: byId('tContaDestino').value,
         categoriaId: tipo === 'transferencia' ? CAT_TRANSFERENCIA : byId('tCategoria').value,
-        parcelas: parcelasTexto === '' ? 1 : Number(parcelasTexto),
+        modo,
+        quantidade: modo === 'unica' ? 1 : Number(byId('tQuantidade').value),
         pago: byId('tStatus').value === 'true',
         foto: formTransacao.foto
     };
@@ -2041,21 +2116,50 @@ const PASSOS = {
         opcoes: () => [
             { rotulo: '📅 Hoje', valor: 'hoje' },
             { rotulo: '📅 Ontem', valor: 'ontem' },
-            { rotulo: '🗓️ Outra data', valor: 'outra' }
+            { rotulo: '🗓️ Outra data', valor: 'outra' },
+            { rotulo: '📆 Agendar para o futuro', valor: 'futura' }
         ],
-        aceitar: valor => ['hoje', 'ontem', 'outra'].includes(valor) ? ok(valor) : recusar('Escolha uma das opções abaixo.'),
+        aceitar: valor => ['hoje', 'ontem', 'outra', 'futura'].includes(valor) ? ok(valor) : recusar('Escolha uma das opções abaixo.'),
         guardar: (d, valor) => {
             d.dataModo = valor;
             d.data = valor === 'hoje' ? hojeISO() : (valor === 'ontem' ? somarDias(hojeISO(), -1) : null);
         },
-        exibir: valor => ({ hoje: 'Hoje', ontem: 'Ontem', outra: 'Outra data' }[valor])
+        exibir: valor => ({ hoje: 'Hoje', ontem: 'Ontem', outra: 'Outra data', futura: 'Agendar para o futuro' }[valor])
     },
     dataCustom: {
-        pergunta: () => 'Escolha a data no calendário.',
+        pergunta: d => d.dataModo === 'futura'
+            ? 'Para qual dia no futuro? Escolha no calendário.'
+            : 'Escolha a data no calendário.',
         campo: 'data',
-        aceitar: iso => dataValida(iso) ? ok(iso) : recusar('Escolha uma data válida no calendário.'),
+        aceitar: (iso, d) => {
+            if (!dataValida(iso)) return recusar('Escolha uma data válida no calendário.');
+            if (d.dataModo === 'futura' && iso <= hojeISO()) return recusar('Para agendar, escolha uma data a partir de amanhã.');
+            return ok(iso);
+        },
         guardar: (d, iso) => { d.data = iso; },
         exibir: iso => formatarDataBR(iso)
+    },
+    repeticao: {
+        pergunta: () => 'Esse lançamento se repete todo mês, como aluguel ou salário? Escolha ou digite por quantos meses.',
+        campo: 'texto',
+        teclado: 'numeric',
+        placeholder: 'Ex.: 8',
+        opcoes: () => [
+            { rotulo: 'Só uma vez', valor: 1 },
+            { rotulo: '3 meses', valor: 3 },
+            { rotulo: '6 meses', valor: 6 },
+            { rotulo: '12 meses', valor: 12 }
+        ],
+        aceitar: texto => {
+            const encontrado = String(texto).trim().match(/^(\d{1,3})\s*(meses|mês|mes|x)?$/i);
+            const meses = encontrado ? Number(encontrado[1]) : NaN;
+            if (!Number.isInteger(meses) || meses < 1 || meses > MAX_PARCELAS) {
+                return recusar(`Digite um número de 1 a ${MAX_PARCELAS}. Se não se repete, escolha "Só uma vez".`);
+            }
+            return ok(meses);
+        },
+        guardar: (d, valor) => { d.repeticao = valor; },
+        exibir: valor => valor === 1 ? 'Só uma vez' : `Todo mês, por ${valor} meses`
     },
     confirmar: {
         pergunta: () => 'Confira os dados abaixo. Se estiver tudo certo, é só salvar.'
@@ -2071,8 +2175,16 @@ function sequenciaDePassos(d) {
         if (d.tipo === 'despesa' && contaEhCartao(d.contaId)) sequencia.push('parcelas');
         sequencia.push('categoria');
     }
-    sequencia.push('data', 'confirmar');
+    sequencia.push('data');
+    if (podeRepetir(d)) sequencia.push('repeticao');
+    sequencia.push('confirmar');
     return sequencia;
+}
+
+// Despesa parcelada no cartão já é uma sequência; os demais podem se repetir todo mês.
+function podeRepetir(d) {
+    if (d.tipo === 'transferencia') return false;
+    return !(d.tipo === 'despesa' && contaEhCartao(d.contaId) && (d.parcelas || 1) > 1);
 }
 
 function reiniciarAssistente() {
@@ -2098,13 +2210,15 @@ function abrirAssistente() {
 
 function irPara(id) {
     chat.passo = id;
+    // Data futura = agendado: o interruptor "já foi pago" começa desligado.
+    if (id === 'confirmar') chat.extras.pago = !(chat.dados.data > hojeISO());
     chat.mensagens.push({ de: 'bot', texto: PASSOS[id].pergunta(chat.dados) });
     chat.marca = chat.mensagens.length;
     renderChat(true);
 }
 
 function avancar() {
-    if (chat.passo === 'data' && chat.dados.dataModo === 'outra') {
+    if (chat.passo === 'data' && ['outra', 'futura'].includes(chat.dados.dataModo)) {
         irPara('dataCustom');
         return;
     }
@@ -2150,7 +2264,9 @@ function voltarPasso() {
 
 function entradaDoAssistente() {
     const d = chat.dados;
-    const cartao = d.tipo === 'despesa' && contaEhCartao(d.contaId);
+    const parcelado = d.tipo === 'despesa' && contaEhCartao(d.contaId) && (d.parcelas || 1) > 1;
+    const meses = podeRepetir(d) ? (d.repeticao || 1) : 1;
+    const modo = parcelado ? 'parcelado' : (meses > 1 ? 'mensal' : 'unica');
     return {
         tipo: d.tipo,
         descricao: d.descricao,
@@ -2159,7 +2275,8 @@ function entradaDoAssistente() {
         contaId: d.contaId,
         contaDestinoId: d.contaDestinoId,
         categoriaId: d.tipo === 'transferencia' ? CAT_TRANSFERENCIA : d.categoriaId,
-        parcelas: cartao ? (d.parcelas || 1) : 1,
+        modo,
+        quantidade: parcelado ? d.parcelas : (modo === 'mensal' ? meses : 1),
         pago: chat.extras.pago,
         foto: chat.extras.foto
     };
@@ -2221,14 +2338,18 @@ function htmlConfirmacao() {
         linhas.push(['Categoria', `${iconeCategoria(categoria)} ${nomeCategoria(categoria)}`]);
     }
     linhas.push(['Data', formatarDataBR(e.data)]);
-    if (e.parcelas > 1) {
-        linhas.push(['Parcelas', `${e.parcelas}x de ${formatarMoeda(dividirEmParcelas(e.valor, e.parcelas)[0])}`]);
+    if (e.modo === 'parcelado') {
+        linhas.push(['Parcelas', `${e.quantidade}x de ${formatarMoeda(dividirEmParcelas(e.valor, e.quantidade)[0])}`]);
     }
+    if (e.modo === 'mensal') linhas.push(['Repete', `Todo mês, por ${e.quantidade} meses`]);
 
     const foto = fotoSegura(e.foto);
-    const notaParcelas = e.parcelas > 1
-        ? '<p class="cartao-nota">Só a 1ª parcela entra como paga. As próximas ficam pendentes até o mês de cada uma.</p>'
-        : '';
+    let notaParcelas = '';
+    if (e.modo !== 'unica') {
+        notaParcelas = '<p class="cartao-nota">Só o 1º lançamento entra como pago. Os próximos ficam agendados, um por mês.</p>';
+    } else if (e.data > hojeISO()) {
+        notaParcelas = '<p class="cartao-nota">Data futura: o lançamento fica agendado e aparece na previsão do mês. Quando acontecer, é só marcar como pago.</p>';
+    }
     return `
         <div class="cartao-resumo">
             <p class="cartao-tipo">${esc(ROTULOS_TIPO[e.tipo])}</p>
@@ -2252,9 +2373,14 @@ function htmlConfirmacao() {
 function htmlSucesso() {
     const { entrada, quantidade } = chat.resultado;
     const titulos = { despesa: 'Despesa salva!', receita: 'Receita salva!', transferencia: 'Transferência salva!' };
-    const detalhe = entrada.parcelas > 1
-        ? `${entrada.descricao.trim()}: ${entrada.parcelas}x de ${formatarMoeda(dividirEmParcelas(entrada.valor, entrada.parcelas)[0])}`
-        : `${entrada.descricao.trim()} · ${formatarMoeda(entrada.valor)}`;
+    const titulo = entrada.data > hojeISO() ? 'Lançamento agendado!' : titulos[entrada.tipo];
+    const nome = entrada.descricao.trim();
+    let detalhe = `${nome} · ${formatarMoeda(entrada.valor)}`;
+    if (entrada.modo === 'parcelado') {
+        detalhe = `${nome}: ${entrada.quantidade}x de ${formatarMoeda(dividirEmParcelas(entrada.valor, entrada.quantidade)[0])}`;
+    } else if (entrada.modo === 'mensal') {
+        detalhe = `${nome}: ${formatarMoeda(entrada.valor)} por mês`;
+    }
     const mesDoLancamento = entrada.data.slice(0, 7);
     const foraDoMes = !(ui.inicio || ui.fim) && mesDoLancamento !== ui.mes;
     const envio = navigator.onLine
@@ -2267,10 +2393,10 @@ function htmlSucesso() {
                 <circle cx="36" cy="36" r="34"></circle>
                 <path d="M21 37 L32 48 L52 26"></path>
             </svg>
-            <h3>${esc(titulos[entrada.tipo])}</h3>
+            <h3>${esc(titulo)}</h3>
             <p>${esc(detalhe)}</p>
             <p>${esc(envio)}</p>
-            ${quantidade > 1 && entrada.tipo !== 'transferencia' ? `<p>${quantidade} parcelas criadas, uma por mês.</p>` : ''}
+            ${quantidade > 1 && entrada.tipo !== 'transferencia' ? `<p>${quantidade} lançamentos criados, um por mês.</p>` : ''}
             ${foraDoMes ? `<p>Este lançamento é de ${esc(rotuloMes(mesDoLancamento))}, por isso não aparece no mês que está na tela.</p>` : ''}
         </div>`;
 
@@ -2358,7 +2484,10 @@ function renderChat(animarUltima) {
         campo.type = ehData ? 'date' : 'text';
         campo.setAttribute('inputmode', passo.teclado || 'text');
         campo.placeholder = passo.placeholder || '';
-        campo.value = ehData ? hojeISO() : '';
+        const primeiroDiaFuturo = somarDias(hojeISO(), 1);
+        const agendando = ehData && chat.dados.dataModo === 'futura';
+        campo.min = agendando ? primeiroDiaFuturo : '';
+        campo.value = ehData ? (agendando ? primeiroDiaFuturo : hojeISO()) : '';
         byId('chatEnviar').textContent = ehData ? 'Confirmar' : 'Enviar';
         if (passo.foco) setTimeout(() => campo.focus(), 80);
     }
@@ -2499,6 +2628,8 @@ function registrarEventos() {
         });
     });
 
+    byId('tRepeticao').addEventListener('change', ajustarQuantidade);
+    byId('tData').addEventListener('change', ajustarSituacaoPelaData);
     byId('tFoto').addEventListener('change', aoEscolherFotoDoFormulario);
     byId('chatFoto').addEventListener('change', aoEscolherFotoDoAssistente);
 
