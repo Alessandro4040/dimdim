@@ -1,1072 +1,1682 @@
 <!DOCTYPE html>
-<html lang="pt-PT">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Finanças Familiar</title>
+    <meta name="theme-color" content="#0b5566">
+    <meta name="color-scheme" content="light dark">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Finanças">
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./money-icon.png">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
-        /* -------------------- Variáveis -------------------- */
+        /* ==================== Tokens ==================== */
         :root {
-            --bg: #f1f5f9;
-            --card: #ffffff;
-            --txt: #0f172a;
-            --txt-muted: #64748b;
-            --p: #2563eb;
-            --p-light: #eff6ff;
-            --s: #16a34a;
-            --s-light: #f0fdf4;
-            --d: #dc2626;
-            --d-light: #fef2f2;
-            --w: #d97706;
-            --w-light: #fffbeb;
-            --border: #e2e8f0;
-            --shadow: 0 4px 24px rgba(15, 23, 42, 0.06);
-            --shadow-hover: 0 8px 32px rgba(15, 23, 42, 0.10);
-            --radius-sm: 12px;
-            --radius-md: 18px;
-            --radius-lg: 28px;
-            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            color-scheme: light;
+            --bg: #f3f5f2;
+            --surface: #ffffff;
+            --surface-2: #e9eeea;
+            --ink: #16211e;
+            --ink-soft: #52625c;
+            --line: #dce3de;
+            --brand: #0b5566;
+            --brand-ink: #ffffff;
+            --brand-soft: #dceef1;
+            --pos: #157a4d;
+            --pos-soft: #e1f3e9;
+            --neg: #bf3a27;
+            --neg-soft: #fbe7e3;
+            --warn: #8f5509;
+            --warn-soft: #fbefd8;
+            --hero-bg: #0b5566;
+            --hero-ink: #ffffff;
+            --hero-soft: rgba(255, 255, 255, 0.78);
+            --hero-pos: #8fe3b8;
+            --hero-neg: #ffb4a6;
+            --raio-p: 10px;
+            --raio-m: 14px;
+            --raio-g: 24px;
+            --sombra-flutuante: 0 12px 28px rgba(11, 40, 36, 0.22);
+            --fonte: ui-rounded, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+            --area-topo: env(safe-area-inset-top, 0px);
+            --area-base: env(safe-area-inset-bottom, 0px);
         }
 
-        [data-theme='escuro'] {
-            --bg: #0f172a;
-            --card: #1e293b;
-            --txt: #f8fafc;
-            --txt-muted: #94a3b8;
-            --p: #60a5fa;
-            --p-light: rgba(96, 165, 250, 0.12);
-            --s: #4ade80;
-            --s-light: rgba(74, 222, 128, 0.12);
-            --d: #f87171;
-            --d-light: rgba(248, 113, 113, 0.12);
-            --w: #fbbf24;
-            --w-light: rgba(251, 191, 36, 0.12);
-            --border: #334155;
-            --shadow: 0 4px 28px rgba(0, 0, 0, 0.30);
-            --shadow-hover: 0 8px 36px rgba(0, 0, 0, 0.40);
+        :root[data-theme="escuro"] {
+            color-scheme: dark;
+            --bg: #0e1513;
+            --surface: #16201d;
+            --surface-2: #1f2c28;
+            --ink: #e7efeb;
+            --ink-soft: #9fb2ab;
+            --line: #2b3b36;
+            --brand: #55bbd0;
+            --brand-ink: #06242c;
+            --brand-soft: rgba(85, 187, 208, 0.16);
+            --pos: #5fd39a;
+            --pos-soft: rgba(95, 211, 154, 0.16);
+            --neg: #ff8e79;
+            --neg-soft: rgba(255, 142, 121, 0.16);
+            --warn: #f0b656;
+            --warn-soft: rgba(240, 182, 86, 0.16);
+            --hero-bg: #12414c;
+            --hero-ink: #eaf7fa;
+            --hero-soft: rgba(234, 247, 250, 0.74);
+            --sombra-flutuante: 0 12px 28px rgba(0, 0, 0, 0.5);
         }
 
-        /* -------------------- Reset -------------------- */
-        * {
+        /* ==================== Base ==================== */
+        *, *::before, *::after {
             box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
         }
 
         body {
-            background-color: var(--bg);
-            color: var(--txt);
-            transition: var(--transition);
-            padding-bottom: calc(100px + env(safe-area-inset-bottom, 20px));
-            padding-top: env(safe-area-inset-top, 20px);
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        /* -------------------- Telas de bloqueio -------------------- */
-        .fullscreen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: var(--bg);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-            padding: 30px;
-            transition: var(--transition);
-        }
-
-        .fullscreen.hidden {
-            opacity: 0;
-            pointer-events: none;
-            display: none;
-        }
-
-        .fullscreen h2 {
-            font-size: 26px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-
-        .btn-password {
-            padding: 16px 32px;
-            font-size: 16px !important;
-            font-weight: 600;
-            background: var(--p);
-            color: white;
-            border: none;
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            width: 100%;
-            max-width: 280px;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
-            transition: var(--transition);
-        }
-
-        .btn-password:active {
-            transform: scale(0.97);
-        }
-
-        .password-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 280px;
-        }
-
-        .password-input {
-            width: 100%;
-            padding: 16px;
-            padding-right: 48px;
-            border-radius: var(--radius-md);
-            border: 2px solid var(--border);
-            background: var(--card);
-            color: var(--txt);
-            font-size: 16px !important; 
-            text-align: center;
-            letter-spacing: 2px;
-            outline: none;
-            transition: var(--transition);
-        }
-
-        .password-input:focus {
-            border-color: var(--p);
-            box-shadow: 0 0 0 4px var(--p-light);
-        }
-
-        .toggle-password-btn {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            font-size: 20px;
-            padding: 4px;
-            cursor: pointer;
-            color: var(--txt-muted);
-        }
-
-        .error-msg {
-            color: var(--d);
-            font-size: 14px;
-            font-weight: 500;
-            background: var(--d-light);
-            padding: 8px 16px;
-            border-radius: var(--radius-sm);
-            margin-top: 4px;
-            animation: fadeIn 0.3s ease;
-        }
-
-        /* -------------------- Layout principal -------------------- */
-        #appContent {
-            display: none;
-        }
-
-        .dashboard-pyramid {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 16px;
-            padding: 20px 20px 8px;
-            padding-top: calc(8px + env(safe-area-inset-top, 20px));
-        }
-
-        .card-top {
-            width: 100%;
-            max-width: 440px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            padding: 24px 20px;
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow);
-            text-align: center;
-        }
-
-        .card-top h3 {
-            color: var(--txt-muted);
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-        }
-
-        .card-top p {
-            font-size: 2.2rem !important;
-            letter-spacing: -0.5px;
-            font-weight: 700;
-            color: var(--txt);
-            margin-top: 8px;
-        }
-
-        .card-bottom-row {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            max-width: 440px;
-            gap: 16px;
-        }
-
-        .card-bottom-row .card {
-            flex: 1;
-        }
-
-        .card {
-            background: var(--card);
-            padding: 18px 14px;
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow);
-            text-align: center;
-            border: 1px solid var(--border);
-            transition: var(--transition);
-        }
-
-        .card:hover {
-            box-shadow: var(--shadow-hover);
-        }
-
-        .card h3 {
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            margin-bottom: 4px;
-            color: var(--txt-muted);
-        }
-
-        .card p {
-            font-weight: 700;
-            font-size: 1.3rem;
-        }
-
-        .info-box {
-            width: 100%;
-            max-width: 440px;
-            padding: 12px 16px;
-            background: var(--card);
-            border-radius: var(--radius-md);
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-        }
-
-        .info-box p {
-            font-size: 12px;
-            line-height: 1.5;
-            color: var(--txt-muted);
-        }
-
-        /* -------------------- Seções de listas -------------------- */
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin: 28px 0 12px;
-            padding: 0 4px;
-        }
-
-        .section-header h3 {
-            font-size: 1.1rem;
-            font-weight: 700;
-            letter-spacing: -0.3px;
-        }
-
-        .section-header button {
-            width: auto;
-            padding: 8px 16px;
             margin: 0;
-            background: var(--p-light);
-            color: var(--p);
-            border-radius: 30px;
-            font-size: 13px;
-            font-weight: 600;
-            border: 1px solid transparent;
-            transition: var(--transition);
-        }
-
-        .section-header button:active {
-            background: var(--p);
-            color: white;
-        }
-
-        #listaContas, #listaMetas, #listaTransacoes {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-top: 8px;
-        }
-
-        .item-row {
-            background: var(--card);
-            padding: 14px 16px;
-            border-radius: var(--radius-md);
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            transition: var(--transition);
-        }
-
-        /* -------------------- Botões flutuantes -------------------- */
-        .fab {
-            position: fixed;
-            bottom: max(24px, env(safe-area-inset-bottom, 24px));
-            right: 24px;
-            background: var(--p);
-            color: white;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
-            border: none;
-            z-index: 100;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .fab:active {
-            transform: scale(0.92) rotate(45deg);
-        }
-
-        .fab-menu {
-            position: fixed;
-            top: max(16px, env(safe-area-inset-top, 16px));
-            right: 16px;
-            background: var(--card);
-            color: var(--txt);
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-            z-index: 101;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .fab-menu:active {
-            transform: scale(0.92);
-            background: var(--border);
-        }
-
-        /* -------------------- Modais -------------------- */
-        .overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(15, 23, 42, 0.4);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            z-index: 999;
-            animation: fadeIn 0.25s ease;
-        }
-
-        .overlay.active {
-            display: block;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.95);
-            background: var(--card);
-            padding: 24px;
-            border-radius: var(--radius-lg);
-            z-index: 1000;
-            width: 90%;
-            max-width: 440px;
-            max-height: 85vh;
-            overflow-y: auto;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--border);
-            opacity: 0;
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
-        }
-
-        .modal.active {
-            display: block;
-            transform: translate(-50%, -50%) scale(1);
-            opacity: 1;
-        }
-
-        input, select, button {
-            width: 100%;
-            padding: 14px 16px;
-            margin-top: 10px;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border);
+            min-height: 100vh;
             background: var(--bg);
-            color: var(--txt);
-            font-size: 16px !important;
-            outline: none;
-            transition: var(--transition);
-            -webkit-appearance: none;
+            color: var(--ink);
+            font-family: var(--fonte);
+            font-size: 16px;
+            line-height: 1.45;
+            -webkit-font-smoothing: antialiased;
         }
 
-        input:focus, select:focus {
-            border-color: var(--p);
-            box-shadow: 0 0 0 3px var(--p-light);
-            background: var(--card);
+        body.travado {
+            overflow: hidden;
+        }
+
+        h1, h2, h3, p, ul, dl, dd {
+            margin: 0;
+            padding: 0;
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        button, input, select {
+            font: inherit;
+            color: inherit;
         }
 
         button {
             cursor: pointer;
-            background: var(--p);
-            color: white;
-            font-weight: 600;
-            border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            -webkit-tap-highlight-color: transparent;
         }
 
-        button:active {
+        :focus-visible {
+            outline: 3px solid var(--brand);
+            outline-offset: 2px;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        .pos { color: var(--pos); }
+        .neg { color: var(--neg); }
+
+        /* ==================== Botões ==================== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 48px;
+            padding: 0 20px;
+            border: 0;
+            border-radius: var(--raio-m);
+            background: var(--brand);
+            color: var(--brand-ink);
+            font-weight: 700;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+
+        .btn:active {
             transform: scale(0.98);
-            opacity: 0.95;
         }
 
-        button.btn-primary {
-            background: var(--p);
+        .btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
         }
 
-        button.danger {
-            background: var(--d-light);
-            color: var(--d);
-            border: 1px solid rgba(220, 38, 38, 0.15);
+        .btn-sec {
+            background: var(--surface-2);
+            color: var(--ink);
         }
 
-        button.danger:active {
-            background: var(--d);
-            color: white;
+        .btn-perigo {
+            background: var(--neg-soft);
+            color: var(--neg);
         }
 
-        .modal-actions {
+        .btn-bloco {
+            width: 100%;
+        }
+
+        .btn-texto {
+            min-height: 40px;
+            padding: 8px 10px;
+            border: 0;
+            border-radius: var(--raio-p);
+            background: none;
+            color: var(--brand);
+            font-weight: 700;
+        }
+
+        .icone-btn {
+            position: relative;
+            display: grid;
+            place-items: center;
+            flex: none;
+            width: 44px;
+            height: 44px;
+            border: 1px solid var(--line);
+            border-radius: 50%;
+            background: var(--surface);
+            font-size: 20px;
+        }
+
+        .icone-btn:active {
+            background: var(--surface-2);
+        }
+
+        .ponto-sync {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--warn);
+            border: 2px solid var(--surface);
+        }
+
+        /* ==================== Login ==================== */
+        .login {
+            display: grid;
+            place-items: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .login-caixa {
+            width: 100%;
+            max-width: 380px;
+        }
+
+        .login-marca {
+            display: grid;
+            place-items: center;
+            width: 64px;
+            height: 64px;
+            margin-bottom: 18px;
+            border-radius: 20px;
+            background: var(--brand);
+            font-size: 32px;
+        }
+
+        .login-caixa h1 {
+            font-size: 1.7rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .login-texto {
+            margin-top: 6px;
+            color: var(--ink-soft);
+        }
+
+        .login-caixa .btn {
+            margin-top: 20px;
+        }
+
+        .entrada-senha {
+            position: relative;
+        }
+
+        .entrada-senha input {
+            padding-right: 96px;
+        }
+
+        .entrada-senha .btn-texto {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+        }
+
+        /* ==================== Topo ==================== */
+        .topo {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            padding: calc(10px + var(--area-topo)) 16px 10px;
+            background: var(--bg);
+        }
+
+        .topo-linha {
             display: flex;
+            align-items: center;
             justify-content: space-between;
             gap: 12px;
-            margin-top: 24px;
+            max-width: 520px;
+            margin: 0 auto;
         }
 
-        .modal-actions button {
+        .mes-nav {
+            display: flex;
             flex: 1;
-            margin-top: 0;
-        }
-
-        /* -------------------- Filtros (menu) -------------------- */
-        .filters {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        .filter-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
             align-items: center;
-        }
-
-        .filter-row input, .filter-row select, .filter-row button {
-            flex: 1;
-            min-width: 120px;
-            padding: 12px;
-            margin-top: 0;
-        }
-
-        .btn-menu {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            padding: 12px;
-            color: var(--txt);
-            font-size: 15px !important;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 48px;
-            min-height: 48px;
-        }
-
-        .sync-status {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            background: var(--bg);
-            padding: 12px 16px;
-            border-radius: 30px;
-            font-size: 13px;
-            font-weight: 600;
-            border: 1px solid var(--border);
-            cursor: pointer;
-            width: 100%;
-            text-align: center;
-            transition: var(--transition);
-        }
-
-        .sync-status:active {
-            transform: scale(0.97);
-        }
-
-        .status-pending { color: var(--w); background: var(--w-light); border-color: rgba(217, 119, 6, 0.2); }
-        .status-synced { color: var(--s); background: var(--s-light); border-color: rgba(22, 163, 74, 0.2); }
-
-        /* -------------------- Chat (assistente) -------------------- */
-        #modalChat.active {
-            display: flex;
-            flex-direction: column;
-            padding: 0;
-            overflow: hidden;
-            height: 560px;
-            max-height: 85vh;
-        }
-
-        .chat-header {
-            padding: 16px 20px;
-            background: var(--card);
-            color: var(--txt);
-            border-bottom: 1px solid var(--border);
-            display: flex;
             justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
+            padding: 4px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--surface);
         }
 
-        .chat-header-title {
+        .mes-nav .icone-btn {
+            width: 40px;
+            height: 40px;
+            border: 0;
+            background: transparent;
+            font-size: 22px;
+        }
+
+        .mes-rotulo {
+            font-weight: 800;
+            text-align: center;
+        }
+
+        /* ==================== Conteúdo ==================== */
+        .conteudo {
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 4px 16px calc(120px + var(--area-base));
+        }
+
+        .resumo {
+            padding: 22px 20px 18px;
+            border-radius: var(--raio-g);
+            background: var(--hero-bg);
+            color: var(--hero-ink);
+        }
+
+        .resumo-rotulo {
+            color: var(--hero-soft);
+        }
+
+        .resumo-valor {
+            margin: 2px 0 18px;
+            font-size: 2.6rem;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .resumo-valor.negativo {
+            color: var(--hero-neg);
+        }
+
+        .resumo-par {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.22);
+        }
+
+        .resumo-par span {
+            display: block;
+            color: var(--hero-soft);
+            font-size: 0.88rem;
+        }
+
+        .resumo-par strong {
+            font-size: 1.2rem;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #totalRec { color: var(--hero-pos); }
+        #totalDes { color: var(--hero-neg); }
+
+        .resumo-nota {
+            margin-top: 12px;
+            color: var(--hero-soft);
+            font-size: 0.8rem;
+        }
+
+        .aviso {
+            display: block;
+            width: 100%;
+            margin-top: 14px;
+            padding: 12px 14px;
+            border: 0;
+            border-radius: var(--raio-m);
+            background: var(--warn-soft);
+            color: var(--warn);
+            font-weight: 700;
+            text-align: left;
+        }
+
+        .faixa-filtros {
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: space-between;
+            margin-top: 12px;
+            padding: 4px 4px 4px 14px;
+            border-radius: var(--raio-m);
+            background: var(--brand-soft);
+            color: var(--brand);
+            font-size: 0.92rem;
+            font-weight: 700;
         }
 
-        .chat-status-dot {
-            width: 8px;
-            height: 8px;
-            background: var(--s);
-            border-radius: 50%;
-            display: inline-block;
-            animation: pulse 2s infinite;
+        .secao {
+            margin-top: 28px;
         }
 
-        #chatMessages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px 20px;
+        .secao-topo {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+
+        .secao-topo h2 {
+            font-size: 1.1rem;
+            font-weight: 800;
+        }
+
+        .lista {
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            background: var(--bg);
-            scroll-behavior: smooth;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .chat-bubble {
-            max-width: 80%;
-            padding: 12px 16px;
-            border-radius: var(--radius-md);
-            font-size: 15px;
-            line-height: 1.5;
-            animation: chatSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-            word-wrap: break-word;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }
-
-        .chat-bot {
-            align-self: flex-start;
-            background: var(--card);
-            color: var(--txt);
-            border: 1px solid var(--border);
-            border-bottom-left-radius: 4px;
-        }
-
-        .chat-user {
-            align-self: flex-end;
-            background: var(--p);
-            color: white;
-            border-bottom-right-radius: 4px;
-            box-shadow: 0 4px 10px var(--p-light);
-        }
-
-        #chatQuickReplies {
-            padding: 10px 16px;
-            display: none;
             gap: 8px;
-            overflow-x: auto;
-            background: var(--card);
-            border-top: 1px solid var(--border);
-            white-space: nowrap;
-            -webkit-overflow-scrolling: touch;
-            flex-shrink: 0;
         }
 
-        #chatQuickReplies::-webkit-scrollbar {
-            display: none;
-        }
-
-        .chat-quick-btn {
-            background: var(--p-light);
-            color: var(--p);
-            border: 1px solid rgba(37, 99, 235, 0.1);
-            border-radius: 20px;
-            padding: 8px 16px;
-            font-size: 14px !important;
-            font-weight: 600;
-            white-space: nowrap;
-            cursor: pointer;
-            width: auto;
-            margin: 0;
-            transition: var(--transition);
-            display: inline-block;
-        }
-
-        .chat-quick-btn:active {
-            background: var(--p);
-            color: white;
-        }
-
-        .chat-input-bar {
-            padding: 12px 16px;
-            padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-            background: var(--card);
-            border-top: 1px solid var(--border);
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-shrink: 0;
-        }
-
-        .chat-input-bar input {
-            margin: 0;
-            flex: 1;
-            border-radius: 24px;
-            padding: 12px 16px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            color: var(--txt);
-            font-size: 16px !important;
-        }
-
-        .chat-input-bar input:focus {
-            border-color: var(--p);
-            background: var(--card);
-            box-shadow: none;
-        }
-
-        .btn-chat-action {
-            margin: 0;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            padding: 0;
-            background: var(--bg);
-            color: var(--txt-muted);
-            border: 1px solid var(--border);
-            flex-shrink: 0;
-            transition: var(--transition);
-        }
-
-        .btn-chat-action:active {
-            background: var(--border);
-            transform: scale(0.95);
-        }
-
-        .btn-chat-send {
-            background: var(--p);
-            color: white;
-            border: none;
-        }
-
-        /* -------------------- Alertas -------------------- */
-        #alertasPendentes {
-            padding: 12px 20px;
-            margin: 16px 20px 0 20px;
-            background: var(--w-light);
-            border: 1px solid rgba(217, 119, 6, 0.15);
-            border-radius: var(--radius-md);
-            color: var(--w);
-            font-size: 13px;
-            font-weight: 600;
+        .vazio {
+            padding: 20px;
+            border: 1px dashed var(--line);
+            border-radius: var(--raio-m);
+            color: var(--ink-soft);
             text-align: center;
-            display: none;
-            animation: fadeIn 0.3s ease;
         }
 
-        #alertasPendentes:not(:empty) {
-            display: block;
+        .vazio .btn {
+            margin-top: 12px;
         }
 
-        /* -------------------- Visualizador de imagens -------------------- */
-        #imageViewer {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(15, 23, 42, 0.95);
-            z-index: 10000;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-        }
-
-        #imageViewer img {
-            max-width: 92%;
-            max-height: 80%;
-            object-fit: contain;
-            transition: transform 0.25s ease;
-            cursor: zoom-in;
-            border-radius: var(--radius-sm);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-
-        .fechar-zoom {
-            position: absolute;
-            top: max(20px, env(safe-area-inset-top, 20px));
-            right: 20px;
-            width: 44px;
-            height: 44px;
-            background: rgba(255, 255, 255, 0.15);
+        .icone-circulo {
+            display: grid;
+            place-items: center;
+            flex: none;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
+            background: var(--surface-2);
             font-size: 20px;
-            cursor: pointer;
-            z-index: 10001;
-            transition: var(--transition);
-            border: 1px solid rgba(255,255,255,0.1);
         }
 
-        .fechar-zoom:active {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .label-small {
-            font-size: 12px;
-            font-weight: 600;
-            margin-top: 14px;
-            margin-bottom: 2px;
-            display: block;
-            color: var(--txt-muted);
-        }
-
-        .date-range {
+        .texto-bloco {
             display: flex;
-            flex-direction: row;
-            gap: 10px;
-            flex: 2;
-            width: 100%;
-        }
-
-        .date-field {
             flex: 1;
+            flex-direction: column;
             min-width: 0;
         }
 
-        .date-field label {
-            font-size: 11px;
-            font-weight: 600;
-            display: block;
-            margin-bottom: 4px;
-            color: var(--txt-muted);
+        .texto-bloco strong,
+        .texto-bloco small {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .date-field input {
-            margin-top: 0;
+        .texto-bloco small,
+        .sub {
+            color: var(--ink-soft);
+            font-size: 0.84rem;
+        }
+
+        .valor {
+            font-weight: 800;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Contas */
+        .conta-corpo,
+        .meta-corpo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             width: 100%;
+            padding: 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--raio-m);
+            background: var(--surface);
+            text-align: left;
         }
 
-        /* -------------------- Animações -------------------- */
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+        .conta-saldo {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }
 
-        @keyframes chatSlideIn {
-            from { opacity: 0; transform: translateY(12px) scale(0.98); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+        /* Metas */
+        .meta-corpo {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 10px;
         }
 
-        @keyframes pulse {
-            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
-            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
-            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+        .meta-linha {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 12px;
         }
 
-        /* -------------------- Responsivo -------------------- */
-        @media (max-width: 480px) {
-            .dashboard-pyramid {
-                padding: 16px 16px 0;
-            }
+        .barra {
+            display: block;
+            height: 8px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: var(--surface-2);
+        }
+
+        .barra > span {
+            display: block;
+            height: 100%;
+            border-radius: inherit;
+            background: var(--pos);
+            transition: width 0.4s ease;
+        }
+
+        /* Lançamentos */
+        .chips {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chip {
+            min-height: 36px;
+            padding: 0 14px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: var(--surface);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .chip[aria-pressed="true"] {
+            border-color: var(--brand);
+            background: var(--brand);
+            color: var(--brand-ink);
+        }
+
+        .dia {
+            margin-top: 14px;
+        }
+
+        .dia-titulo {
+            margin: 0 4px 6px;
+            color: var(--ink-soft);
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
+
+        .lanc-lista {
+            overflow: hidden;
+            border: 1px solid var(--line);
+            border-radius: var(--raio-m);
+            background: var(--surface);
+        }
+
+        .lanc + .lanc {
+            border-top: 1px solid var(--line);
+        }
+
+        .lanc-corpo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 14px;
+            border: 0;
+            background: transparent;
+            text-align: left;
+        }
+
+        .lanc-corpo:active {
+            background: var(--surface-2);
+        }
+
+        .lanc-extras {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 0 14px 12px 66px;
+        }
+
+        .mini {
+            min-height: 36px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            font-weight: 700;
+        }
+
+        .mini-aviso {
+            background: var(--warn-soft);
+            color: var(--warn);
+        }
+
+        .mini-link {
+            background: var(--brand-soft);
+            color: var(--brand);
+        }
+
+        /* ==================== Botão principal flutuante ==================== */
+        .fab-area {
+            position: fixed;
+            right: 0;
+            bottom: calc(16px + var(--area-base));
+            left: 0;
+            z-index: 30;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .fab {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 56px;
+            padding: 0 26px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--brand);
+            box-shadow: var(--sombra-flutuante);
+            color: var(--brand-ink);
+            font-size: 1.05rem;
+            font-weight: 800;
+            pointer-events: auto;
+            transition: transform 0.15s ease;
+        }
+
+        .fab:active {
+            transform: scale(0.96);
+        }
+
+        .fab-mais {
+            margin-top: -2px;
+            font-size: 1.6rem;
+            line-height: 1;
+        }
+
+        /* ==================== Janelas (modais) ==================== */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            background: rgba(10, 22, 20, 0.5);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease, visibility 0s linear 0.25s;
+        }
+
+        .overlay.aberto {
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 520px;
+            max-height: 92vh;
+            max-height: 92dvh;
+            padding-bottom: var(--area-base);
+            border-radius: var(--raio-g) var(--raio-g) 0 0;
+            background: var(--surface);
+            visibility: hidden;
+            transform: translate(-50%, 100%);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s linear 0.3s;
+        }
+
+        .modal.aberto {
+            visibility: visible;
+            transform: translate(-50%, 0);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .modal form {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .modal-cab {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 18px 20px 8px;
+        }
+
+        .modal-cab h2 {
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+
+        .modal-corpo {
+            flex: 1;
+            padding: 4px 20px 20px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .modal-corpo > p {
+            margin-top: 4px;
+            color: var(--ink-soft);
+        }
+
+        .modal-acoes {
+            display: flex;
+            gap: 10px;
+            padding: 12px 20px 16px;
+            border-top: 1px solid var(--line);
+        }
+
+        .modal-acoes .btn {
+            flex: 1;
+        }
+
+        .modal-acoes.coluna {
+            flex-direction: column;
+        }
+
+        .grupo-titulo {
+            margin-top: 20px;
+            font-size: 0.95rem;
+            font-weight: 800;
+        }
+
+        .menu-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            width: 100%;
+            min-height: 52px;
+            margin-top: 8px;
+            padding: 8px 14px;
+            border: 1px solid var(--line);
+            border-radius: var(--raio-m);
+            background: var(--surface);
+            font-weight: 700;
+            text-align: left;
+        }
+
+        .menu-item small {
+            font-size: 0.84rem;
+            font-weight: 600;
+        }
+
+        .estado-ok { color: var(--pos); }
+        .estado-pend { color: var(--warn); }
+
+        /* ==================== Campos ==================== */
+        .campo {
+            margin-top: 14px;
+        }
+
+        .campo > label,
+        .campo-rotulo {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 0.92rem;
+            font-weight: 700;
+        }
+
+        .campo-dica {
+            margin-top: 6px;
+            color: var(--ink-soft);
+            font-size: 0.84rem;
+        }
+
+        .campo input[type="text"],
+        .campo input[type="search"],
+        .campo input[type="password"],
+        .campo input[type="number"],
+        .campo input[type="date"],
+        .campo select,
+        .chat-entrada input {
+            display: block;
+            width: 100%;
+            min-height: 48px;
+            padding: 10px 14px;
+            border: 1.5px solid var(--line);
+            border-radius: var(--raio-m);
+            background: var(--bg);
+            font-size: 16px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .campo select {
+            padding-right: 40px;
+            background-image:
+                linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%),
+                linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
+            background-position: calc(100% - 20px) 21px, calc(100% - 15px) 21px;
+            background-size: 5px 5px;
+            background-repeat: no-repeat;
+        }
+
+        .campo input:focus,
+        .campo select:focus,
+        .chat-entrada input:focus {
+            border-color: var(--brand);
+            background-color: var(--surface);
+        }
+
+        .campo.erro input,
+        .campo.erro select {
+            border-color: var(--neg);
+        }
+
+        .campo-erro {
+            margin-top: 6px;
+            color: var(--neg);
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+
+        .entrada-moeda {
+            position: relative;
+        }
+
+        .entrada-moeda > span {
+            position: absolute;
+            top: 50%;
+            left: 14px;
+            color: var(--ink-soft);
+            font-weight: 700;
+            transform: translateY(-50%);
+        }
+
+        .entrada-moeda input {
+            padding-left: 44px;
+        }
+
+        .par-campos {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .segmentos {
+            display: grid;
+            grid-auto-columns: 1fr;
+            grid-auto-flow: column;
+            gap: 4px;
+            padding: 4px;
+            border-radius: var(--raio-m);
+            background: var(--surface-2);
+        }
+
+        .segmento {
+            position: relative;
+        }
+
+        .segmento input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .segmento span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: 0 6px;
+            border-radius: var(--raio-p);
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .segmento input:checked + span {
+            background: var(--surface);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+            color: var(--brand);
+        }
+
+        .segmento input:focus-visible + span {
+            outline: 3px solid var(--brand);
+        }
+
+        .segmento input:disabled + span {
+            opacity: 0.4;
+        }
+
+        .foto-linha {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .foto-linha img {
+            width: 56px;
+            height: 56px;
+            border-radius: var(--raio-p);
+            object-fit: cover;
+        }
+
+        /* ==================== Assistente de lançamento ==================== */
+        .modal-chat {
+            height: 88vh;
+            height: 88dvh;
+            max-height: 720px;
+        }
+
+        .chat-topo {
+            padding: 14px 16px 10px;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .chat-linha {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chat-linha h2 {
+            flex: 1;
+            font-size: 1.15rem;
+            font-weight: 800;
+        }
+
+        .progresso {
+            height: 6px;
+            margin-top: 10px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: var(--surface-2);
+        }
+
+        .progresso span {
+            display: block;
+            width: 0;
+            height: 100%;
+            border-radius: inherit;
+            background: var(--brand);
+            transition: width 0.3s ease;
+        }
+
+        .chat-passo {
+            margin-top: 6px;
+            color: var(--ink-soft);
+            font-size: 0.82rem;
+        }
+
+        .chat-msgs {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 0;
+            padding: 16px;
+            overflow-y: auto;
+            background: var(--bg);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .bolha {
+            max-width: 86%;
+            padding: 11px 14px;
+            border-radius: 18px;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+            white-space: pre-line;
+        }
+
+        .bolha-bot {
+            align-self: flex-start;
+            border: 1px solid var(--line);
+            border-bottom-left-radius: 6px;
+            background: var(--surface);
+        }
+
+        .bolha-user {
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+            background: var(--brand);
+            color: var(--brand-ink);
+        }
+
+        .bolha-erro {
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+            background: var(--neg-soft);
+            color: var(--neg);
+            font-weight: 600;
+        }
+
+        .bolha.nova {
+            animation: entrar 0.25s ease-out both;
+        }
+
+        .chat-rodape {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 12px 16px 14px;
+            border-top: 1px solid var(--line);
+            background: var(--surface);
+        }
+
+        .opcoes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            max-height: 38vh;
+            overflow-y: auto;
+        }
+
+        .opcao {
+            min-height: 46px;
+            padding: 0 16px;
+            border: 1.5px solid var(--brand);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--brand);
+            font-weight: 700;
+        }
+
+        .opcao:active {
+            background: var(--brand);
+            color: var(--brand-ink);
+        }
+
+        .opcao-acao {
+            border-style: dashed;
+        }
+
+        .acoes-chat {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-entrada {
+            display: flex;
+            gap: 8px;
+        }
+
+        .chat-entrada input {
+            flex: 1;
+            min-width: 0;
+            border-radius: 999px;
+            padding: 0 16px;
+        }
+
+        .cartao-resumo {
+            align-self: stretch;
+            padding: 16px;
+            border: 1px solid var(--line);
+            border-radius: var(--raio-m);
+            background: var(--surface);
+        }
+
+        .cartao-tipo {
+            color: var(--ink-soft);
+            font-weight: 700;
+        }
+
+        .cartao-valor {
+            font-size: 1.9rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .cartao-linhas {
+            margin-top: 10px;
+        }
+
+        .cartao-linha {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 9px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .cartao-linha dt {
+            color: var(--ink-soft);
+        }
+
+        .cartao-linha dd {
+            font-weight: 700;
+            text-align: right;
+            overflow-wrap: anywhere;
+        }
+
+        .interruptor {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--line);
+            font-weight: 700;
+        }
+
+        .interruptor input {
+            position: relative;
+            flex: none;
+            width: 52px;
+            height: 30px;
+            margin: 0;
+            border-radius: 999px;
+            background: var(--line);
+            cursor: pointer;
+            transition: background 0.2s ease;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .interruptor input::after {
+            content: "";
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease;
+        }
+
+        .interruptor input:checked {
+            background: var(--pos);
+        }
+
+        .interruptor input:checked::after {
+            transform: translateX(22px);
+        }
+
+        .cartao-nota {
+            margin-top: 8px;
+            color: var(--ink-soft);
+            font-size: 0.84rem;
+        }
+
+        .sucesso {
+            align-self: stretch;
+            padding: 12px 4px;
+            text-align: center;
+        }
+
+        .sucesso h3 {
+            margin-top: 10px;
+            font-size: 1.25rem;
+            font-weight: 800;
+        }
+
+        .sucesso p {
+            margin-top: 4px;
+            color: var(--ink-soft);
+        }
+
+        .sucesso-check {
+            width: 72px;
+            height: 72px;
+        }
+
+        .sucesso-check circle {
+            fill: var(--pos-soft);
+        }
+
+        .sucesso-check path {
+            fill: none;
+            stroke: var(--pos);
+            stroke-width: 5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 40;
+            stroke-dashoffset: 40;
+            animation: tracar 0.5s 0.15s ease-out forwards;
+        }
+
+        /* ==================== Avisos e visualizador ==================== */
+        .toast {
+            position: fixed;
+            bottom: calc(92px + var(--area-base));
+            left: 50%;
+            z-index: 2000;
+            max-width: min(92vw, 460px);
+            padding: 12px 18px;
+            border-radius: var(--raio-m);
+            background: var(--ink);
+            color: var(--bg);
+            font-weight: 700;
+            text-align: center;
+            opacity: 0;
+            visibility: hidden;
+            transform: translate(-50%, 16px);
+            transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+        }
+
+        .toast.visivel {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, 0);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+
+        .toast.erro {
+            background: #a52d1c;
+            color: #ffffff;
+        }
+
+        .visualizador {
+            position: fixed;
+            inset: 0;
+            z-index: 3000;
+            display: grid;
+            place-items: center;
+            padding: 16px;
+            background: rgba(8, 16, 14, 0.94);
+        }
+
+        .visualizador img {
+            max-width: 100%;
+            max-height: 82vh;
+            border-radius: var(--raio-p);
+            object-fit: contain;
+        }
+
+        .visualizador .icone-btn {
+            position: absolute;
+            top: calc(16px + var(--area-topo));
+            right: 16px;
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+        }
+
+        /* ==================== Animações ==================== */
+        @keyframes entrar {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @keyframes tracar {
+            to { stroke-dashoffset: 0; }
+        }
+
+        @media (min-width: 700px) {
             .modal {
-                padding: 20px 16px;
-                border-radius: var(--radius-md);
-                width: 92%;
+                top: 50%;
+                bottom: auto;
+                border-radius: var(--raio-g);
+                opacity: 0;
+                transform: translate(-50%, -46%) scale(0.98);
+                transition: transform 0.25s ease, opacity 0.25s ease, visibility 0s linear 0.25s;
             }
-            .chat-bubble {
-                max-width: 85%;
+
+            .modal.aberto {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+                transition: transform 0.25s ease, opacity 0.25s ease;
+            }
+
+            .modal-chat {
+                height: 680px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.001ms !important;
+                transition-duration: 0.001ms !important;
             }
         }
     </style>
 </head>
 <body>
 
-    <div id="passwordScreen" class="fullscreen">
-        <h2>🔐 Acesso Restrito</h2>
-        <div class="password-wrapper">
-            <input type="password" id="passwordInput" class="password-input" placeholder="Digite sua senha" autocomplete="off">
-            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility()">👁️</button>
-        </div>
-        <button class="btn-password" onclick="submitPassword()">Entrar</button>
-        <div id="passwordError" class="error-msg" style="display: none;"></div>
-    </div>
-
-    <div id="appContent" style="display: none;">
-
-        <div id="alertasPendentes"></div>
-
-        <div class="dashboard-pyramid">
-            <div class="card card-top">
-                <h3>💰 Montante Total</h3>
-                <p id="saldoTotal">R$ 0,00</p>
-            </div>
-            <div class="card-bottom-row">
-                <div class="card">
-                    <h3>📉 Despesas</h3>
-                    <p id="totalDes" style="color: var(--d);">R$ 0,00</p>
+    <!-- ==================== Login ==================== -->
+    <section id="telaLogin" class="login" aria-labelledby="loginTitulo">
+        <form id="formLogin" class="login-caixa" novalidate>
+            <div class="login-marca" aria-hidden="true">💰</div>
+            <h1 id="loginTitulo">Finanças da família</h1>
+            <p class="login-texto">Digite a senha para acessar as contas.</p>
+            <div class="campo">
+                <label for="senhaEntrada">Senha</label>
+                <div class="entrada-senha">
+                    <input id="senhaEntrada" type="password" autocomplete="current-password">
+                    <button type="button" class="btn-texto" id="btnVerSenha" data-action="alternar-senha" aria-pressed="false">Mostrar</button>
                 </div>
-                <div class="card">
-                    <h3>📈 Receitas</h3>
-                    <p id="totalRec" style="color: var(--s);">R$ 0,00</p>
+                <p class="campo-erro" id="erroSenha" role="alert" hidden></p>
+            </div>
+            <button type="submit" class="btn btn-bloco" id="btnEntrar">Entrar</button>
+        </form>
+    </section>
+
+    <!-- ==================== App ==================== -->
+    <div id="app" hidden>
+        <header class="topo">
+            <div class="topo-linha">
+                <div class="mes-nav">
+                    <button type="button" class="icone-btn" data-action="mes-anterior" aria-label="Mês anterior">‹</button>
+                    <span class="mes-rotulo" id="mesRotulo" aria-live="polite"></span>
+                    <button type="button" class="icone-btn" data-action="mes-seguinte" aria-label="Próximo mês">›</button>
                 </div>
+                <button type="button" class="icone-btn" data-action="abrir-menu" aria-label="Filtros e ajustes">
+                    ⚙️<span class="ponto-sync" id="pontoSync" hidden></span>
+                </button>
             </div>
-            <div class="info-box">
-                <p>⬆️ Valores de transações <strong>pagas</strong> no período filtrado.<br>🔄 Transferências e pagamentos de fatura não alteram os totais.</p>
-            </div>
-        </div>
+        </header>
 
-        <div style="padding: 0 20px 20px 20px; max-width: 480px; margin: 0 auto;">
-            <div class="section-header">
-                <h3>💳 Contas e Cartões</h3>
-                <button onclick="abrirModal('modalConta')">+ Adicionar</button>
-            </div>
-            <div id="listaContas"></div>
-            
-            <div class="section-header">
-                <h3>🎯 Cofrinhos e Metas</h3>
-                <button onclick="abrirModal('modalMeta')">+ Novo Cofrinho</button>
-            </div>
-            <div id="listaMetas"></div>
-
-            <div class="section-header">
-                <h3>📋 Últimas Transações</h3>
-            </div>
-            <div id="listaTransacoes"></div>
-        </div>
-
-        <button class="fab-menu" onclick="abrirModal('modalMenu')" title="Menu e Filtros">⚙️</button>
-        <button class="fab" onclick="iniciarChat()" title="Assistente Inteligente">+</button>
-    </div>
-
-    <div class="modal" id="modalMenu">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="font-weight: 700; font-size: 1.2rem;">🔍 Filtros e Ajustes</h3>
-            <button onclick="fecharModais()" style="width: auto; padding: 6px 14px; margin: 0; background: var(--d-light); color: var(--d); border-radius: 20px;">Fechar</button>
-        </div>
-        <div class="filters">
-            <div class="filter-row">
-                <input type="month" id="monthPicker">
-                <div class="date-range">
-                    <div class="date-field">
-                        <label>📅 Início</label>
-                        <input type="date" id="dataInicioFiltro">
+        <main class="conteudo">
+            <section class="resumo" aria-label="Resumo do período">
+                <p class="resumo-rotulo">Saldo nas contas</p>
+                <p class="resumo-valor" id="saldoTotal">R$ 0,00</p>
+                <div class="resumo-par">
+                    <div>
+                        <span>Entradas</span>
+                        <strong id="totalRec">R$ 0,00</strong>
                     </div>
-                    <div class="date-field">
-                        <label>📅 Fim</label>
-                        <input type="date" id="dataFimFiltro">
+                    <div>
+                        <span>Saídas</span>
+                        <strong id="totalDes">R$ 0,00</strong>
                     </div>
                 </div>
-                <button class="btn-menu" onclick="limparFiltroData()" title="Limpar período">🗑️</button>
+                <p class="resumo-nota">Entradas e saídas contam só o que já foi pago ou recebido. Transferências e faturas não entram.</p>
+            </section>
+
+            <button type="button" class="aviso" id="avisoPendentes" data-action="ver-pendentes" hidden></button>
+
+            <div class="faixa-filtros" id="faixaFiltros" hidden>
+                <span>Filtros ativos</span>
+                <button type="button" class="btn-texto" data-action="limpar-filtros">Limpar</button>
             </div>
-            <div class="filter-row">
-                <input type="text" id="globalSearch" placeholder="🔍 Buscar transação...">
-                <select id="categoryFilter">
-                    <option value="">📂 Todas as categorias</option>
-                </select>
-            </div>
-            <div class="filter-row">
-                <button class="btn-menu" onclick="alternarTema()" title="Alternar visual">🌓 Tema</button>
-                <button class="btn-menu" onclick="abrirModal('modalExportar')" title="Exportar dados">📊 Exportar</button>
-                <button class="btn-menu" onclick="logout()" title="Encerrar sessão" style="color: var(--d);">🚪 Sair</button>
-            </div>
-            <div class="filter-row" style="margin-top: 4px;">
-                <div id="syncStatus" class="sync-status" onclick="forcarSincronizacao()">🔄 Verificando conexão...</div>
-            </div>
+
+            <section class="secao" aria-labelledby="tituloContas">
+                <div class="secao-topo">
+                    <h2 id="tituloContas">Contas e cartões</h2>
+                    <button type="button" class="btn-texto" data-action="nova-conta">Adicionar</button>
+                </div>
+                <ul class="lista" id="listaContas"></ul>
+            </section>
+
+            <section class="secao" aria-labelledby="tituloMetas">
+                <div class="secao-topo">
+                    <h2 id="tituloMetas">Cofrinhos e metas</h2>
+                    <button type="button" class="btn-texto" data-action="nova-meta">Novo cofrinho</button>
+                </div>
+                <ul class="lista" id="listaMetas"></ul>
+            </section>
+
+            <section class="secao" aria-labelledby="tituloLancamentos">
+                <div class="secao-topo">
+                    <h2 id="tituloLancamentos">Lançamentos</h2>
+                    <div class="chips" role="group" aria-label="Mostrar">
+                        <button type="button" class="chip" data-action="filtro-status" data-status="todas" aria-pressed="true">Todos</button>
+                        <button type="button" class="chip" data-action="filtro-status" data-status="pendentes" aria-pressed="false">Pendentes</button>
+                    </div>
+                </div>
+                <div id="listaTransacoes"></div>
+            </section>
+        </main>
+
+        <div class="fab-area">
+            <button type="button" class="fab" data-action="novo-lancamento">
+                <span class="fab-mais" aria-hidden="true">+</span>
+                Novo lançamento
+            </button>
         </div>
     </div>
 
-    <div class="modal" id="modalChat" style="max-height: 85vh; height: 560px; max-width: 460px;">
-        <div class="chat-header">
-            <div class="chat-header-title">
-                <div class="chat-status-dot"></div>
-                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">💬 Assistente Finan</h3>
+    <div class="overlay" id="overlay" data-action="clicar-fora"></div>
+
+    <!-- ==================== Filtros e ajustes ==================== -->
+    <div class="modal" id="modalMenu" role="dialog" aria-modal="true" aria-labelledby="menuTitulo">
+        <div class="modal-cab">
+            <h2 id="menuTitulo">Filtros e ajustes</h2>
+            <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
+        </div>
+        <div class="modal-corpo">
+            <h3 class="grupo-titulo">Período</h3>
+            <div class="par-campos">
+                <div class="campo">
+                    <label for="filtroInicio">De</label>
+                    <input type="date" id="filtroInicio">
+                </div>
+                <div class="campo">
+                    <label for="filtroFim">Até</label>
+                    <input type="date" id="filtroFim">
+                </div>
             </div>
-            <button onclick="fecharModais()" style="background: var(--bg); border: none; color: var(--txt-muted); font-size: 1.2rem; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; cursor: pointer;">&times;</button>
-        </div>
-        
-        <div id="chatMessages"></div>
+            <p class="campo-dica">Deixe em branco para ver um mês de cada vez.</p>
 
-        <div id="chatQuickReplies"></div>
-
-        <div class="chat-input-bar">
-            <button class="btn-chat-action" onclick="document.getElementById('chatFotoInput').click()" title="Anexar comprovante">📷</button>
-            <input type="text" id="chatInput" placeholder="Ex: Mercado 45,90" autocomplete="off" autocapitalize="sentences" onkeypress="if(event.key === 'Enter') enviarMensagemChatInput()">
-            <button class="btn-chat-action btn-chat-send" onclick="enviarMensagemChatInput()">📤</button>
-        </div>
-    </div>
-
-    <input type="file" id="chatFotoInput" accept="image/*" style="display:none" onchange="handleChatPhoto()">
-
-    <div class="overlay" id="overlay" onclick="fecharModais()"></div>
-
-    <div class="modal" id="modalTransacao">
-        <h3 id="tTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Transação</h3>
-        <input type="hidden" id="tId">
-        
-        <select id="tTipo" onchange="toggleTransferencia()">
-            <option value="despesa">💸 Despesa</option>
-            <option value="receita">💰 Receita</option>
-            <option value="transferencia">🔄 Pagar Fatura / Transferência</option>
-        </select>
-        
-        <input type="text" id="tDescricao" placeholder="Descrição (ex: Supermercado)">
-        <input type="number" id="tValor" step="0.01" placeholder="Valor R$ 0,00" inputmode="decimal">
-        
-        <label class="label-small">📅 Data de Competência:</label>
-        <input type="date" id="tData">
-        
-        <select id="tConta"><option value="">Selecione a Origem (Conta/Cartão)</option></select>
-        <select id="tContaDestino" style="display: none;"><option value="">Selecione o Cartão de Destino</option></select>
-        <select id="tCategoria"></select>
-        
-        <input type="number" id="tParcelas" min="1" value="1" placeholder="Nº de Parcelas (1 = à vista)">
-        
-        <select id="tStatus">
-            <option value="true">✅ Efetivado (Pago/Recebido)</option>
-            <option value="false">⏳ Realizado (Pendente)</option>
-        </select>
-        
-        <label class="label-small">📷 Comprovante Anexo (Opcional):</label>
-        <input type="file" id="tFoto" accept="image/*" style="border: none; padding: 6px 0; background: transparent;">
-        
-        <div class="modal-actions">
-            <button id="btnExcluirTransacao" class="danger" style="display: none;" onclick="excluirItem('transacoes', 'tId')">🗑 Excluir</button>
-            <button class="btn-primary" onclick="salvarTransacao()">💾 Guardar</button>
-        </div>
-    </div>
-
-    <div class="modal" id="modalConta">
-        <h3 id="cTituloModal" style="font-weight: 700; margin-bottom: 8px;">Nova Conta / Cartão</h3>
-        <input type="hidden" id="cId">
-        
-        <input type="text" id="cNome" placeholder="Nome identificador (ex: NuConta)">
-        <select id="cTipo">
-            <option value="corrente">🏦 Conta Corrente / Carteira</option>
-            <option value="cartao">💳 Cartão de Crédito</option>
-        </select>
-        
-        <input type="number" id="cSaldoLimite" step="0.01" placeholder="Saldo Inicial ou Limite Disponível" inputmode="decimal">
-        <input type="number" id="cVencimento" placeholder="Dia de vencimento (1 a 31) - Opcional" min="1" max="31" inputmode="numeric">
-        
-        <div class="modal-actions">
-            <button id="btnExcluirConta" class="danger" style="display: none;" onclick="excluirItem('contas', 'cId')">🗑 Excluir</button>
-            <button class="btn-primary" onclick="salvarConta()">💾 Guardar</button>
-        </div>
-    </div>
-
-    <div class="modal" id="modalMeta">
-        <h3 id="mTituloModal" style="font-weight: 700; margin-bottom: 8px;">Novo Objetivo</h3>
-        <input type="hidden" id="mId">
-        
-        <input type="text" id="mNome" placeholder="Objetivo de reserva (ex: Troca de Carro)">
-        <input type="number" id="mObjetivo" step="0.01" placeholder="Valor Alvo Total R$" inputmode="decimal">
-        <input type="number" id="mAtual" step="0.01" placeholder="Aporte Inicial Guardado" inputmode="decimal">
-        
-        <label class="label-small">📅 Data Limite Alvo:</label>
-        <input type="date" id="mData">
-        
-        <select id="mConta"><option value="">Vincular à conta específica (Opcional)</option></select>
-        
-        <div class="modal-actions">
-            <button id="btnExcluirMeta" class="danger" style="display: none;" onclick="excluirItem('metas', 'mId')">🗑 Excluir</button>
-            <button class="btn-primary" onclick="salvarMeta()">💾 Guardar</button>
-        </div>
-    </div>
-
-    <div class="modal" id="modalExportar">
-        <h3 style="font-weight: 700; margin-bottom: 8px;">📊 Extração de Relatórios</h3>
-        
-        <div class="date-range" style="margin-top: 10px;">
-            <div class="date-field">
-                <label>Data de Início</label>
-                <input type="date" id="eDataIni">
+            <h3 class="grupo-titulo">Buscar</h3>
+            <div class="campo">
+                <label for="filtroBusca">Descrição</label>
+                <input type="search" id="filtroBusca" placeholder="Ex.: mercado" autocomplete="off">
             </div>
-            <div class="date-field">
-                <label>Data de Término</label>
-                <input type="date" id="eDataFim">
+            <div class="campo">
+                <label for="filtroCategoria">Categoria</label>
+                <select id="filtroCategoria"></select>
             </div>
+            <button type="button" class="menu-item" data-action="limpar-filtros">Limpar todos os filtros</button>
+
+            <h3 class="grupo-titulo">Ajustes</h3>
+            <button type="button" class="menu-item" data-action="alternar-tema">
+                Aparência
+                <small id="temaRotulo"></small>
+            </button>
+            <button type="button" class="menu-item" data-action="abrir-exportar">Exportar relatório</button>
+            <button type="button" class="menu-item" id="syncStatus" data-action="sincronizar-agora"></button>
+            <button type="button" class="menu-item" data-action="sair">
+                Sair do app
+                <small class="neg">Pedirá a senha de novo</small>
+            </button>
         </div>
-        
-        <div class="modal-actions">
-            <button class="btn-primary" onclick="baixarRelatorio()" style="background: #0284c7;">📄 Planilha CSV</button>
-            <button class="btn-primary" onclick="baixarPDF()" style="background: #4f46e5;">📑 Relatório PDF</button>
+        <div class="modal-acoes">
+            <button type="button" class="btn" data-action="fechar-modal">Concluir</button>
         </div>
     </div>
 
-    <div id="imageViewer">
-        <span class="fechar-zoom" onclick="fecharZoom()">✕</span>
-        <img id="zoomImg" src="" onclick="aplicarZoom(this)" alt="Visualização expandida">
+    <!-- ==================== Assistente de novo lançamento ==================== -->
+    <div class="modal modal-chat" id="modalChat" role="dialog" aria-modal="true" aria-labelledby="chatTitulo">
+        <div class="chat-topo">
+            <div class="chat-linha">
+                <button type="button" class="icone-btn" id="chatVoltar" data-action="chat-voltar" aria-label="Voltar um passo" hidden>‹</button>
+                <h2 id="chatTitulo">Novo lançamento</h2>
+                <button type="button" class="btn-texto" data-action="chat-formulario">Usar formulário</button>
+                <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
+            </div>
+            <div class="progresso" aria-hidden="true"><span id="chatProgressoBarra"></span></div>
+            <p class="chat-passo" id="chatPassoTexto"></p>
+        </div>
+        <div class="chat-msgs" id="chatMensagens" aria-live="polite"></div>
+        <div class="chat-rodape">
+            <div class="opcoes" id="chatOpcoes"></div>
+            <form class="chat-entrada" id="chatForm" novalidate hidden>
+                <input id="chatCampo" type="text" autocomplete="off" aria-label="Sua resposta">
+                <button type="submit" class="btn" id="chatEnviar">Enviar</button>
+            </form>
+        </div>
+        <input type="file" id="chatFoto" accept="image/*" hidden>
+    </div>
+
+    <!-- ==================== Formulário de lançamento ==================== -->
+    <div class="modal" id="modalTransacao" role="dialog" aria-modal="true" aria-labelledby="tTitulo">
+        <div class="modal-cab">
+            <h2 id="tTitulo">Novo lançamento</h2>
+            <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
+        </div>
+        <form id="formTransacao" novalidate>
+            <div class="modal-corpo">
+                <input type="hidden" id="tId">
+                <p id="tInfo" hidden></p>
+
+                <div class="campo" id="campo-t-tipo">
+                    <span class="campo-rotulo" id="tTipoRotulo">Tipo</span>
+                    <div class="segmentos" role="radiogroup" aria-labelledby="tTipoRotulo">
+                        <label class="segmento"><input type="radio" name="tTipo" value="despesa" checked><span>💸 Despesa</span></label>
+                        <label class="segmento"><input type="radio" name="tTipo" value="receita"><span>💰 Receita</span></label>
+                        <label class="segmento"><input type="radio" name="tTipo" value="transferencia"><span>🔄 Transf.</span></label>
+                    </div>
+                    <p class="campo-erro" id="erro-t-tipo" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-descricao">
+                    <label for="tDescricao">Descrição</label>
+                    <input type="text" id="tDescricao" maxlength="60" placeholder="Ex.: Supermercado" autocomplete="off">
+                    <p class="campo-erro" id="erro-t-descricao" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-valor">
+                    <label for="tValor">Valor</label>
+                    <div class="entrada-moeda">
+                        <span aria-hidden="true">R$</span>
+                        <input type="text" id="tValor" inputmode="decimal" placeholder="0,00" autocomplete="off">
+                    </div>
+                    <p class="campo-erro" id="erro-t-valor" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-data">
+                    <label for="tData">Data</label>
+                    <input type="date" id="tData">
+                    <p class="campo-erro" id="erro-t-data" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-conta">
+                    <label for="tConta" id="tContaRotulo">Conta ou cartão</label>
+                    <select id="tConta"></select>
+                    <p class="campo-erro" id="erro-t-conta" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-contaDestino" hidden>
+                    <label for="tContaDestino">Conta de destino</label>
+                    <select id="tContaDestino"></select>
+                    <p class="campo-dica">Para pagar a fatura, escolha o cartão.</p>
+                    <p class="campo-erro" id="erro-t-contaDestino" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-categoria">
+                    <label for="tCategoria">Categoria</label>
+                    <select id="tCategoria"></select>
+                    <p class="campo-erro" id="erro-t-categoria" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-parcelas">
+                    <label for="tParcelas">Parcelas</label>
+                    <input type="number" id="tParcelas" min="1" max="60" value="1" inputmode="numeric">
+                    <p class="campo-dica">Use 1 para pagamento à vista.</p>
+                    <p class="campo-erro" id="erro-t-parcelas" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-t-status">
+                    <label for="tStatus">Situação</label>
+                    <select id="tStatus">
+                        <option value="true">Já foi pago</option>
+                        <option value="false">Ainda não foi pago</option>
+                    </select>
+                </div>
+
+                <div class="campo">
+                    <span class="campo-rotulo">Comprovante (opcional)</span>
+                    <input type="file" id="tFoto" accept="image/*" hidden>
+                    <div class="foto-linha">
+                        <button type="button" class="btn btn-sec" data-action="form-foto-escolher">📷 Anexar foto</button>
+                        <span id="tFotoPrevia"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-acoes">
+                <button type="button" class="btn btn-perigo" id="btnExcluirTransacao" data-action="excluir-transacao" hidden>Excluir</button>
+                <button type="submit" class="btn" id="btnSalvarTransacao">Salvar</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ==================== Conta / cartão ==================== -->
+    <div class="modal" id="modalConta" role="dialog" aria-modal="true" aria-labelledby="cTitulo">
+        <div class="modal-cab">
+            <h2 id="cTitulo">Nova conta ou cartão</h2>
+            <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
+        </div>
+        <form id="formConta" novalidate>
+            <div class="modal-corpo">
+                <input type="hidden" id="cId">
+
+                <div class="campo">
+                    <span class="campo-rotulo" id="cTipoRotulo">Tipo</span>
+                    <div class="segmentos" role="radiogroup" aria-labelledby="cTipoRotulo">
+                        <label class="segmento"><input type="radio" name="cTipo" value="corrente" checked><span>🏦 Conta ou carteira</span></label>
+                        <label class="segmento"><input type="radio" name="cTipo" value="cartao"><span>💳 Cartão de crédito</span></label>
+                    </div>
+                </div>
+
+                <div class="campo" id="campo-c-nome">
+                    <label for="cNome">Nome</label>
+                    <input type="text" id="cNome" maxlength="30" placeholder="Ex.: Nubank, Carteira" autocomplete="off">
+                    <p class="campo-erro" id="erro-c-nome" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-c-saldo">
+                    <label for="cSaldo" id="cSaldoRotulo">Saldo inicial</label>
+                    <div class="entrada-moeda">
+                        <span aria-hidden="true">R$</span>
+                        <input type="text" id="cSaldo" inputmode="decimal" placeholder="0,00" autocomplete="off">
+                    </div>
+                    <p class="campo-dica" id="cSaldoDica"></p>
+                    <p class="campo-erro" id="erro-c-saldo" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-c-vencimento" hidden>
+                    <label for="cVencimento">Dia do vencimento da fatura (opcional)</label>
+                    <input type="number" id="cVencimento" min="1" max="31" inputmode="numeric" placeholder="Ex.: 10">
+                    <p class="campo-erro" id="erro-c-vencimento" hidden></p>
+                </div>
+            </div>
+            <div class="modal-acoes">
+                <button type="button" class="btn btn-perigo" id="btnExcluirConta" data-action="excluir-conta" hidden>Excluir</button>
+                <button type="submit" class="btn">Salvar</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ==================== Cofrinho / meta ==================== -->
+    <div class="modal" id="modalMeta" role="dialog" aria-modal="true" aria-labelledby="mTitulo">
+        <div class="modal-cab">
+            <h2 id="mTitulo">Novo cofrinho</h2>
+            <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
+        </div>
+        <form id="formMeta" novalidate>
+            <div class="modal-corpo">
+                <input type="hidden" id="mId">
+
+                <div class="campo" id="campo-m-nome">
+                    <label for="mNome">Para que você quer juntar?</label>
+                    <input type="text" id="mNome" maxlength="40" placeholder="Ex.: Viagem de férias" autocomplete="off">
+                    <p class="campo-erro" id="erro-m-nome" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-m-objetivo">
+                    <label for="mObjetivo">Quanto precisa juntar</label>
+                    <div class="entrada-moeda">
+                        <span aria-hidden="true">R$</span>
+                        <input type="text" id="mObjetivo" inputmode="decimal" placeholder="0,00" autocomplete="off">
+                    </div>
+                    <p class="campo-erro" id="erro-m-objetivo" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-m-atual">
+                    <label for="mAtual">Quanto já guardou</label>
+                    <div class="entrada-moeda">
+                        <span aria-hidden="true">R$</span>
+                        <input type="text" id="mAtual" inputmode="decimal" placeholder="0,00" autocomplete="off">
+                    </div>
+                    <p class="campo-erro" id="erro-m-atual" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-m-data">
+                    <label for="mData">Prazo (opcional)</label>
+                    <input type="date" id="mData">
+                    <p class="campo-erro" id="erro-m-data" hidden></p>
+                </div>
+
+                <div class="campo">
+                    <label for="mConta">Conta onde o dinheiro está (opcional)</label>
+                    <select id="mConta"></select>
+                </div>
+            </div>
+            <div class="modal-acoes">
+                <button type="button" class="btn btn-perigo" id="btnExcluirMeta" data-action="excluir-meta" hidden>Excluir</button>
+                <button type="submit" class="btn">Salvar</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- ==================== Exportar ==================== -->
+    <div class="modal" id="modalExportar" role="dialog" aria-modal="true" aria-labelledby="eTitulo">
+        <div class="modal-cab">
+            <h2 id="eTitulo">Exportar relatório</h2>
+            <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
+        </div>
+        <div class="modal-corpo">
+            <p>Escolha o período dos lançamentos.</p>
+            <div class="par-campos">
+                <div class="campo">
+                    <label for="eDataIni">De</label>
+                    <input type="date" id="eDataIni">
+                </div>
+                <div class="campo">
+                    <label for="eDataFim">Até</label>
+                    <input type="date" id="eDataFim">
+                </div>
+            </div>
+            <p class="campo-erro" id="erro-e" role="alert" hidden></p>
+        </div>
+        <div class="modal-acoes">
+            <button type="button" class="btn btn-sec" data-action="exportar-csv">Planilha (CSV)</button>
+            <button type="button" class="btn" data-action="exportar-pdf">Relatório (PDF)</button>
+        </div>
+    </div>
+
+    <!-- ==================== Confirmação ==================== -->
+    <div class="modal" id="modalConfirmar" role="alertdialog" aria-modal="true" aria-labelledby="confTitulo" aria-describedby="confMensagem">
+        <div class="modal-cab">
+            <h2 id="confTitulo"></h2>
+        </div>
+        <div class="modal-corpo">
+            <p id="confMensagem"></p>
+        </div>
+        <div class="modal-acoes coluna" id="confBotoes"></div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <div class="visualizador" id="visualizador" data-action="fechar-zoom" hidden>
+        <button type="button" class="icone-btn" data-action="fechar-zoom" aria-label="Fechar imagem">✕</button>
+        <img id="zoomImg" src="" alt="Comprovante ampliado">
     </div>
 
     <script src="./app.js"></script>
-    <script>
-        function togglePasswordVisibility() {
-            const pwd = document.getElementById('passwordInput');
-            if (pwd.type === 'password') {
-                pwd.type = 'text';
-            } else {
-                pwd.type = 'password';
-            }
-        }
-    </script>
 </body>
 </html>
