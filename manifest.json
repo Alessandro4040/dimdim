@@ -1,19 +1,28 @@
 {
-    "name": "FinanÃ§as Familiar",
-    "short_name": "FinanÃ§as",
-    "description": "Controle financeiro completo offline-first com sincronizaÃ§Ã£o.",
+    "id": "./",
+    "name": "Finanças Familiar",
+    "short_name": "Finanças",
+    "description": "Controle financeiro da família: funciona offline e sincroniza quando houver internet.",
+    "lang": "pt-BR",
     "start_url": "./index.html",
     "scope": "./",
     "display": "standalone",
     "orientation": "portrait",
-    "background_color": "#f1f5f9",
-    "theme_color": "#2563eb",
+    "background_color": "#f3f5f2",
+    "theme_color": "#0b5566",
+    "categories": ["finance", "productivity"],
     "icons": [
         {
             "src": "./money-icon.png",
             "sizes": "512x512",
             "type": "image/png",
-            "purpose": "any maskable"
+            "purpose": "any"
+        },
+        {
+            "src": "./money-icon.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
         }
     ]
 }
