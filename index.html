@@ -894,6 +894,12 @@
             margin-top: 10px;
         }
 
+        .foto-linha > span {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
         .foto-linha img {
             width: 56px;
             height: 56px;
@@ -1311,19 +1317,19 @@
 
         <main class="conteudo">
             <section class="resumo" aria-label="Resumo do período">
-                <p class="resumo-rotulo">Saldo nas contas</p>
+                <p class="resumo-rotulo" id="resumoRotulo">Saldo nas contas</p>
                 <p class="resumo-valor" id="saldoTotal">R$ 0,00</p>
                 <div class="resumo-par">
                     <div>
-                        <span>Entradas</span>
+                        <span id="rotuloEntradas">Entradas</span>
                         <strong id="totalRec">R$ 0,00</strong>
                     </div>
                     <div>
-                        <span>Saídas</span>
+                        <span id="rotuloSaidas">Saídas</span>
                         <strong id="totalDes">R$ 0,00</strong>
                     </div>
                 </div>
-                <p class="resumo-nota">Entradas e saídas contam só o que já foi pago ou recebido. Transferências e faturas não entram.</p>
+                <p class="resumo-nota" id="resumoNota"></p>
             </section>
 
             <button type="button" class="aviso" id="avisoPendentes" data-action="ver-pendentes" hidden></button>
@@ -1503,11 +1509,16 @@
                     <p class="campo-erro" id="erro-t-categoria" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-parcelas">
-                    <label for="tParcelas">Parcelas</label>
-                    <input type="number" id="tParcelas" min="1" max="60" value="1" inputmode="numeric">
-                    <p class="campo-dica">Use 1 para pagamento à vista.</p>
-                    <p class="campo-erro" id="erro-t-parcelas" hidden></p>
+                <div class="campo" id="campo-t-repeticao">
+                    <label for="tRepeticao">Repetição</label>
+                    <select id="tRepeticao"></select>
+                    <p class="campo-dica">Use para contas fixas, parcelas e valores que vão se repetir nos próximos meses.</p>
+                </div>
+
+                <div class="campo" id="campo-t-quantidade" hidden>
+                    <label for="tQuantidade" id="tQuantidadeRotulo">Quantidade</label>
+                    <input type="number" id="tQuantidade" min="2" max="60" value="2" inputmode="numeric">
+                    <p class="campo-erro" id="erro-t-quantidade" hidden></p>
                 </div>
 
                 <div class="campo" id="campo-t-status">
