@@ -764,7 +764,7 @@ function periodoDoResumo() {
     return { inicio, fim, previsto: periodoEhPrevisto() };
 }
 
-// Mês em que a conta começou a ser usada: é nele que o saldo inicial entra.
+// Mês em que a conta começou a ser usada: antes dele o saldo da conta é zero.
 // Usa o lançamento mais antigo da conta ou, se não houver, o mês em que ela foi criada ou editada.
 function mesDeInicioDaConta(conta) {
     const meses = dados.transacoes
@@ -775,22 +775,35 @@ function mesDeInicioDaConta(conta) {
     return meses.sort()[0] || mesAtualISO();
 }
 
-// Saldo de uma conta corrente só com o que pertence ao período na tela:
-// saldo inicial (se a conta começou nele) + entradas - saídas do período.
-function saldoDaContaNoPeriodo(conta, periodo) {
-    let total = 0;
-    const mesInicio = mesDeInicioDaConta(conta);
-    if (mesInicio >= periodo.inicio.slice(0, 7) && mesInicio <= periodo.fim.slice(0, 7)) {
-        total += Number(conta.saldo_inicial) || 0;
-    }
+// Saldo acumulado da conta até uma data: saldo inicial + tudo o que entrou e saiu até lá.
+// Antes do mês em que a conta começou, o saldo é zero. Em meses futuros (previsão)
+// também entram os lançamentos pendentes e agendados.
+function saldoDaContaAte(conta, ate, incluirPendentes) {
+    if (mesDeInicioDaConta(conta) > ate.slice(0, 7)) return 0;
+    let total = Number(conta.saldo_inicial) || 0;
     dados.transacoes.forEach(t => {
-        if (t.conta_id !== conta.id || t.data < periodo.inicio || t.data > periodo.fim) return;
-        if (!t.pago && !periodo.previsto) return;
+        if (t.conta_id !== conta.id || t.data > ate) return;
+        if (!t.pago && !incluirPendentes) return;
         const valor = Number(t.valor) || 0;
         if (t.tipo === 'receita') total += valor;
         else if (t.tipo === 'despesa') total -= valor;
     });
     return arredondar(total);
+}
+
+// Saldo no fim do período: já inclui o que sobrou dos meses anteriores.
+function saldoDaContaNoPeriodo(conta, periodo) {
+    return saldoDaContaAte(conta, periodo.fim, periodo.previsto);
+}
+
+// O que veio do mês anterior para este.
+function saldoQueVeioDoMesAnterior(periodo) {
+    const ultimoDiaAnterior = somarDias(periodo.inicio, -1);
+    return arredondar(
+        dados.contas
+            .filter(c => c.tipo === 'corrente')
+            .reduce((soma, c) => soma + saldoDaContaAte(c, ultimoDiaAnterior, periodo.previsto), 0)
+    );
 }
 
 // Quanto foi gasto no cartão dentro do período (compras e parcelas que caem nele).
@@ -1145,28 +1158,26 @@ function renderResumo() {
         dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldoDaContaNoPeriodo(c, periodo), 0)
     );
     const { entradas, saidas, previsto } = totaisDoPeriodo();
+    const emMes = !(ui.inicio || ui.fim);
 
-    let rotulo = 'Saldo do período';
-    if (!(ui.inicio || ui.fim)) {
+    let rotulo = 'Saldo até o fim do período';
+    if (emMes) {
         const nomeDoMes = rotuloMes(ui.mes).toLowerCase();
-        rotulo = previsto ? `Saldo previsto de ${nomeDoMes}` : `Saldo de ${nomeDoMes}`;
+        if (ui.mes > mesAtualISO()) rotulo = `Saldo previsto para o fim de ${nomeDoMes}`;
+        else if (ui.mes < mesAtualISO()) rotulo = `Saldo no fim de ${nomeDoMes}`;
+        else rotulo = `Saldo de ${nomeDoMes}`;
     }
     byId('resumoRotulo').textContent = rotulo;
     byId('rotuloEntradas').textContent = previsto ? 'Entradas previstas' : 'Entradas';
     byId('rotuloSaidas').textContent = previsto ? 'Saídas previstas' : 'Saídas';
     byId('resumoNota').textContent = previsto
-        ? 'Previsão: inclui também o que está agendado ou pendente neste período.'
-        : 'Conta só o que já foi pago ou recebido neste período. Transferências e faturas mudam o saldo, mas não entram em entradas e saídas.';
+        ? 'Previsão: soma o que sobrou do mês anterior com o que está agendado ou pendente até o fim do mês.'
+        : 'O saldo já inclui o que sobrou dos meses anteriores. Entradas e saídas contam só o que foi pago ou recebido no período; transferências e faturas mudam o saldo, mas não entram nelas.';
 
-    // No mês atual, mostra também o dinheiro total de hoje quando ele difere do saldo do mês.
-    const saldosHoje = saldosDasContas();
-    const totalHoje = arredondar(
-        dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldosHoje[c.id], 0)
-    );
-    const linhaHoje = byId('resumoHoje');
-    const mostrarHoje = estamosNoMesAtual() && Math.abs(totalHoje - montante) > 0.005;
-    linhaHoje.hidden = !mostrarHoje;
-    linhaHoje.textContent = mostrarHoje ? `Total nas contas hoje: ${formatarMoeda(totalHoje)}` : '';
+    const anterior = emMes ? saldoQueVeioDoMesAnterior(periodo) : 0;
+    const linhaAnterior = byId('resumoAnterior');
+    linhaAnterior.hidden = !(emMes && Math.abs(anterior) > 0.005);
+    linhaAnterior.textContent = linhaAnterior.hidden ? '' : `Restante do mês anterior: ${formatarMoeda(anterior)}`;
 
     const elementoSaldo = byId('saldoTotal');
     elementoSaldo.textContent = formatarMoeda(montante);
@@ -1212,7 +1223,7 @@ function renderContas() {
                         <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${venc}${limite}</small>
                     </span>
                     <span class="conta-saldo">
-                        <small class="sub">${cartao ? 'Gastos no mês' : 'Saldo do mês'}</small>
+                        <small class="sub">${cartao ? 'Gastos no mês' : 'Saldo'}</small>
                         <strong class="valor ${!cartao && valorDoPeriodo < 0 ? 'neg' : ''}">${formatarMoeda(valorDoPeriodo)}</strong>
                     </span>
                 </button>
