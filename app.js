@@ -754,38 +754,63 @@ function ehTransferencia(transacao) {
     return grupo.length === 2 && grupo.some(t => t.tipo === 'despesa') && grupo.some(t => t.tipo === 'receita');
 }
 
-// Até onde o saldo deve ser calculado, conforme o mês (ou período) que está na tela.
-// Meses futuros mostram a previsão: somam também o que está pendente ou agendado.
-function corteDoSaldo() {
-    const hoje = hojeISO();
-    if (ui.inicio || ui.fim) {
-        const ate = ui.fim || '9999-12-31';
-        return {
-            ate,
-            incluirPendentes: Boolean(ui.fim) && ate > hoje,
-            rotulo: ui.fim ? `Saldo até ${formatarDataBR(ui.fim)}` : 'Saldo nas contas'
-        };
-    }
-    const { fim } = limitesDoPeriodo();
-    const nomeDoMes = rotuloMes(ui.mes).toLowerCase();
-    if (ui.mes > mesAtualISO()) return { ate: fim, incluirPendentes: true, rotulo: `Saldo previsto para o fim de ${nomeDoMes}` };
-    if (ui.mes < mesAtualISO()) return { ate: fim, incluirPendentes: false, rotulo: `Saldo no fim de ${nomeDoMes}` };
-    return { ate: fim, incluirPendentes: false, rotulo: 'Saldo nas contas' };
-}
-
 function periodoEhPrevisto() {
     if (ui.inicio || ui.fim) return Boolean(ui.inicio) && ui.inicio > hojeISO();
     return ui.mes > mesAtualISO();
 }
 
-function saldosDasContas(corte = { ate: '9999-12-31', incluirPendentes: false }) {
+function periodoDoResumo() {
+    const { inicio, fim } = limitesDoPeriodo();
+    return { inicio, fim, previsto: periodoEhPrevisto() };
+}
+
+// Mês em que a conta começou a ser usada: é nele que o saldo inicial entra.
+// Usa o lançamento mais antigo da conta ou, se não houver, o mês em que ela foi criada ou editada.
+function mesDeInicioDaConta(conta) {
+    const meses = dados.transacoes
+        .filter(t => t.conta_id === conta.id && dataValida(t.data))
+        .map(t => t.data.slice(0, 7));
+    const criacao = String(conta.updated_at || '').slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(criacao)) meses.push(criacao);
+    return meses.sort()[0] || mesAtualISO();
+}
+
+// Saldo de uma conta corrente só com o que pertence ao período na tela:
+// saldo inicial (se a conta começou nele) + entradas - saídas do período.
+function saldoDaContaNoPeriodo(conta, periodo) {
+    let total = 0;
+    const mesInicio = mesDeInicioDaConta(conta);
+    if (mesInicio >= periodo.inicio.slice(0, 7) && mesInicio <= periodo.fim.slice(0, 7)) {
+        total += Number(conta.saldo_inicial) || 0;
+    }
+    dados.transacoes.forEach(t => {
+        if (t.conta_id !== conta.id || t.data < periodo.inicio || t.data > periodo.fim) return;
+        if (!t.pago && !periodo.previsto) return;
+        const valor = Number(t.valor) || 0;
+        if (t.tipo === 'receita') total += valor;
+        else if (t.tipo === 'despesa') total -= valor;
+    });
+    return arredondar(total);
+}
+
+// Quanto foi gasto no cartão dentro do período (compras e parcelas que caem nele).
+function gastosDoCartaoNoPeriodo(conta, periodo) {
+    let total = 0;
+    dados.transacoes.forEach(t => {
+        if (t.conta_id !== conta.id || t.tipo !== 'despesa' || t.data < periodo.inicio || t.data > periodo.fim) return;
+        total += Number(t.valor) || 0;
+    });
+    return arredondar(total);
+}
+
+// Saldo acumulado de hoje (tudo o que já foi pago). Serve para o limite disponível do cartão.
+function saldosDasContas() {
     const saldos = {};
     dados.contas.forEach(conta => {
         saldos[conta.id] = Number(conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite) || 0;
     });
     dados.transacoes.forEach(t => {
-        if (!(t.conta_id in saldos) || t.data > corte.ate) return;
-        if (!t.pago && !corte.incluirPendentes) return;
+        if (!t.pago || !(t.conta_id in saldos)) return;
         const valor = Number(t.valor) || 0;
         if (t.tipo === 'receita') saldos[t.conta_id] += valor;
         else if (t.tipo === 'despesa') saldos[t.conta_id] -= valor;
@@ -1110,19 +1135,39 @@ function renderizar() {
     atualizarStatusSync();
 }
 
+function estamosNoMesAtual() {
+    return !(ui.inicio || ui.fim) && ui.mes === mesAtualISO();
+}
+
 function renderResumo() {
-    const corte = corteDoSaldo();
-    const saldos = saldosDasContas(corte);
+    const periodo = periodoDoResumo();
     const montante = arredondar(
-        dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldos[c.id], 0)
+        dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldoDaContaNoPeriodo(c, periodo), 0)
     );
     const { entradas, saidas, previsto } = totaisDoPeriodo();
-    byId('resumoRotulo').textContent = corte.rotulo;
+
+    let rotulo = 'Saldo do período';
+    if (!(ui.inicio || ui.fim)) {
+        const nomeDoMes = rotuloMes(ui.mes).toLowerCase();
+        rotulo = previsto ? `Saldo previsto de ${nomeDoMes}` : `Saldo de ${nomeDoMes}`;
+    }
+    byId('resumoRotulo').textContent = rotulo;
     byId('rotuloEntradas').textContent = previsto ? 'Entradas previstas' : 'Entradas';
     byId('rotuloSaidas').textContent = previsto ? 'Saídas previstas' : 'Saídas';
     byId('resumoNota').textContent = previsto
-        ? 'Previsão: soma o saldo de hoje com tudo o que está agendado ou pendente até essa data.'
-        : 'Entradas e saídas contam só o que já foi pago ou recebido. Transferências e faturas não entram.';
+        ? 'Previsão: inclui também o que está agendado ou pendente neste período.'
+        : 'Conta só o que já foi pago ou recebido neste período. Transferências e faturas mudam o saldo, mas não entram em entradas e saídas.';
+
+    // No mês atual, mostra também o dinheiro total de hoje quando ele difere do saldo do mês.
+    const saldosHoje = saldosDasContas();
+    const totalHoje = arredondar(
+        dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldosHoje[c.id], 0)
+    );
+    const linhaHoje = byId('resumoHoje');
+    const mostrarHoje = estamosNoMesAtual() && Math.abs(totalHoje - montante) > 0.005;
+    linhaHoje.hidden = !mostrarHoje;
+    linhaHoje.textContent = mostrarHoje ? `Total nas contas hoje: ${formatarMoeda(totalHoje)}` : '';
+
     const elementoSaldo = byId('saldoTotal');
     elementoSaldo.textContent = formatarMoeda(montante);
     elementoSaldo.classList.toggle('negativo', montante < 0);
@@ -1151,22 +1196,24 @@ function renderContas() {
             </li>`;
         return;
     }
-    const saldos = saldosDasContas(corteDoSaldo());
+    const periodo = periodoDoResumo();
+    const saldosHoje = saldosDasContas();
     lista.innerHTML = dados.contas.map(conta => {
         const cartao = conta.tipo === 'cartao';
-        const saldo = saldos[conta.id];
+        const valorDoPeriodo = cartao ? gastosDoCartaoNoPeriodo(conta, periodo) : saldoDaContaNoPeriodo(conta, periodo);
         const venc = cartao && Number(conta.vencimento) ? ` · vence dia ${esc(conta.vencimento)}` : '';
+        const limite = cartao && estamosNoMesAtual() ? ` · limite disponível ${formatarMoeda(saldosHoje[conta.id])}` : '';
         return `
             <li>
                 <button type="button" class="conta-corpo" data-action="editar-conta" data-id="${esc(conta.id)}">
                     <span class="icone-circulo" aria-hidden="true">${cartao ? '💳' : '🏦'}</span>
                     <span class="texto-bloco">
                         <strong>${esc(conta.nome)}</strong>
-                        <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${venc}</small>
+                        <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${venc}${limite}</small>
                     </span>
                     <span class="conta-saldo">
-                        <small class="sub">${cartao ? 'Limite disponível' : 'Saldo'}</small>
-                        <strong class="valor ${saldo < 0 ? 'neg' : ''}">${formatarMoeda(saldo)}</strong>
+                        <small class="sub">${cartao ? 'Gastos no mês' : 'Saldo do mês'}</small>
+                        <strong class="valor ${!cartao && valorDoPeriodo < 0 ? 'neg' : ''}">${formatarMoeda(valorDoPeriodo)}</strong>
                     </span>
                 </button>
             </li>`;
