@@ -28,7 +28,7 @@ const ROTULOS_SITUACAO = {
 // ESTADO
 // ============================================================
 const dados = { transacoes: [], contas: [], metas: [], categorias: [] };
-const ui = { mes: mesAtualISO(), inicio: '', fim: '', busca: '', categoria: '', status: 'todas' };
+const ui = { mes: mesAtualISO(), inicio: '', fim: '', busca: '', categoria: '', visao: 'todas' };
 
 let db = null;
 let appIniciado = false;
@@ -754,14 +754,9 @@ function ehTransferencia(transacao) {
     return grupo.length === 2 && grupo.some(t => t.tipo === 'despesa') && grupo.some(t => t.tipo === 'receita');
 }
 
-function periodoEhPrevisto() {
-    if (ui.inicio || ui.fim) return Boolean(ui.inicio) && ui.inicio > hojeISO();
-    return ui.mes > mesAtualISO();
-}
-
 function periodoDoResumo() {
     const { inicio, fim } = limitesDoPeriodo();
-    return { inicio, fim, previsto: periodoEhPrevisto() };
+    return { inicio, fim };
 }
 
 // Mês em que a conta começou a ser usada: antes dele o saldo da conta é zero.
@@ -789,21 +784,6 @@ function saldoDaContaAte(conta, ate, incluirPendentes) {
         else if (t.tipo === 'despesa') total -= valor;
     });
     return arredondar(total);
-}
-
-// Saldo no fim do período: já inclui o que sobrou dos meses anteriores.
-function saldoDaContaNoPeriodo(conta, periodo) {
-    return saldoDaContaAte(conta, periodo.fim, periodo.previsto);
-}
-
-// O que veio do mês anterior para este.
-function saldoQueVeioDoMesAnterior(periodo) {
-    const ultimoDiaAnterior = somarDias(periodo.inicio, -1);
-    return arredondar(
-        dados.contas
-            .filter(c => c.tipo === 'corrente')
-            .reduce((soma, c) => soma + saldoDaContaAte(c, ultimoDiaAnterior, periodo.previsto), 0)
-    );
 }
 
 // Quanto foi gasto no cartão dentro do período (compras e parcelas que caem nele).
@@ -852,33 +832,64 @@ function lancamentosDoPeriodo() {
     return dados.transacoes.filter(t => t.data >= inicio && t.data <= fim && passaNosFiltros(t));
 }
 
-function totaisDoPeriodo() {
-    const previsto = periodoEhPrevisto();
-    let entradas = 0;
-    let saidas = 0;
-    lancamentosDoPeriodo().forEach(t => {
-        if ((!t.pago && !previsto) || t.categoria_id === CAT_TRANSFERENCIA) return;
-        const valor = Number(t.valor) || 0;
-        if (t.tipo === 'receita') entradas += valor;
-        else if (t.tipo === 'despesa') saidas += valor;
-    });
-    return { entradas: arredondar(entradas), saidas: arredondar(saidas), previsto };
-}
-
-function resumoDoMes(mes) {
-    let entradas = 0;
-    let saidas = 0;
-    dados.transacoes.forEach(t => {
-        if (!t.pago || t.categoria_id === CAT_TRANSFERENCIA || t.data < `${mes}-01` || t.data > `${mes}-31`) return;
-        const valor = Number(t.valor) || 0;
-        if (t.tipo === 'receita') entradas += valor;
-        else if (t.tipo === 'despesa') saidas += valor;
-    });
-    return { entradas: arredondar(entradas), saidas: arredondar(saidas), saldo: arredondar(entradas - saidas) };
-}
-
 function filtrosAtivos() {
     return Boolean(ui.inicio || ui.fim || ui.busca || ui.categoria);
+}
+
+// Balanço do período em forma de conta, só com as contas correntes:
+// começou com + receitas - despesas +/- transferências = fica no fim.
+// Tudo o que está agendado ou pendente já entra (é a previsão); o que já aconteceu vem separado.
+function balancoDoPeriodo() {
+    const periodo = periodoDoResumo();
+    const mesInicial = periodo.inicio.slice(0, 7);
+    const mesFinal = periodo.fim.slice(0, 7);
+    const correntes = dados.contas.filter(conta => conta.tipo === 'corrente');
+    const idsCorrentes = new Set(correntes.map(conta => conta.id));
+    const idsCartoes = new Set(dados.contas.filter(conta => conta.tipo === 'cartao').map(conta => conta.id));
+    const novoGrupo = () => ({ total: 0, feito: 0, aberto: 0 });
+    const balanco = { inicio: 0, receitas: novoGrupo(), despesas: novoGrupo(), transferencias: 0, cartao: 0, fim: 0 };
+
+    correntes.forEach(conta => {
+        const comeco = mesDeInicioDaConta(conta);
+        if (comeco > mesFinal) return;
+        balanco.inicio += comeco >= mesInicial
+            ? Number(conta.saldo_inicial) || 0
+            : saldoDaContaAte(conta, somarDias(periodo.inicio, -1), true);
+    });
+
+    dados.transacoes.forEach(t => {
+        if (t.data < periodo.inicio || t.data > periodo.fim) return;
+        const valor = Number(t.valor) || 0;
+        const transferencia = t.categoria_id === CAT_TRANSFERENCIA;
+        if (idsCorrentes.has(t.conta_id)) {
+            if (transferencia) {
+                balanco.transferencias += t.tipo === 'receita' ? valor : -valor;
+                return;
+            }
+            const grupo = t.tipo === 'receita' ? balanco.receitas : balanco.despesas;
+            grupo.total += valor;
+            grupo[t.pago ? 'feito' : 'aberto'] += valor;
+        } else if (idsCartoes.has(t.conta_id) && !transferencia) {
+            balanco.cartao += t.tipo === 'despesa' ? valor : -valor;
+        }
+    });
+
+    [balanco.receitas, balanco.despesas].forEach(grupo => {
+        grupo.total = arredondar(grupo.total);
+        grupo.feito = arredondar(grupo.feito);
+        grupo.aberto = arredondar(grupo.aberto);
+    });
+    balanco.inicio = arredondar(balanco.inicio);
+    balanco.transferencias = arredondar(balanco.transferencias);
+    balanco.cartao = arredondar(balanco.cartao);
+    balanco.fim = arredondar(balanco.inicio + balanco.receitas.total - balanco.despesas.total + balanco.transferencias);
+    return balanco;
+}
+
+// Dinheiro que realmente está nas contas hoje (só o que já foi pago ou recebido).
+function totalNasContasHoje() {
+    const saldos = saldosDasContas();
+    return arredondar(dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldos[c.id], 0));
 }
 
 // ---------- Validação e criação de lançamentos ----------
@@ -1024,6 +1035,26 @@ async function marcarComoPago(id) {
     }
 }
 
+function retirarDosExcluidos(store, ids) {
+    const excluidos = lerExcluidos();
+    excluidos[store] = (excluidos[store] || []).filter(id => !ids.includes(id));
+    gravarExcluidos(excluidos);
+}
+
+async function restaurarLancamentos(itens) {
+    try {
+        retirarDosExcluidos('transacoes', itens.map(item => item.id));
+        await confirmarMudancas({
+            gravar: { transacoes: itens.map(item => ({ ...item, sinc: false, updated_at: agora() })) }
+        });
+        mostrarToast('Lançamento restaurado.');
+    } catch (erro) {
+        console.error(erro);
+        mostrarToast('Não foi possível restaurar. Tente de novo.', 'erro');
+    }
+}
+
+// Exclui na hora e oferece "Desfazer". Só pergunta quando há uma escolha a fazer (sequências).
 async function excluirTransacao(id) {
     const transacao = achar('transacoes', id);
     if (!transacao) return;
@@ -1031,15 +1062,6 @@ async function excluirTransacao(id) {
     let ids = [transacao.id];
 
     if (ehTransferencia(transacao)) {
-        const resposta = await perguntar({
-            titulo: 'Excluir transferência?',
-            mensagem: 'A saída e a entrada serão removidas juntas, para os saldos continuarem certos.',
-            botoes: [
-                { rotulo: 'Excluir', valor: 'sim', estilo: 'perigo' },
-                { rotulo: 'Cancelar', valor: null, estilo: 'sec' }
-            ]
-        });
-        if (resposta !== 'sim') return;
         ids = grupo.map(t => t.id);
     } else if (grupo.length > 1 && (transacao.parcela_total || 1) > 1) {
         const resposta = await perguntar({
@@ -1053,22 +1075,16 @@ async function excluirTransacao(id) {
         });
         if (!resposta) return;
         if (resposta === 'todas') ids = grupo.map(t => t.id);
-    } else {
-        const resposta = await perguntar({
-            titulo: 'Excluir lançamento?',
-            mensagem: `"${transacao.descricao}" será removido e os saldos serão recalculados.`,
-            botoes: [
-                { rotulo: 'Excluir', valor: 'sim', estilo: 'perigo' },
-                { rotulo: 'Cancelar', valor: null, estilo: 'sec' }
-            ]
-        });
-        if (resposta !== 'sim') return;
     }
 
+    const removidos = dados.transacoes.filter(t => ids.includes(t.id));
     try {
         await confirmarMudancas({ remover: { transacoes: ids } });
-        fecharModal('modalTransacao');
-        mostrarToast(ids.length > 1 ? 'Lançamentos excluídos.' : 'Lançamento excluído.');
+        fecharModal('modalLancamento');
+        mostrarToast(ids.length > 1 ? 'Lançamentos excluídos.' : 'Lançamento excluído.', 'ok', {
+            rotulo: 'Desfazer',
+            fn: () => restaurarLancamentos(removidos)
+        });
     } catch (erro) {
         console.error(erro);
         mostrarToast('Não foi possível excluir. Tente de novo.', 'erro');
@@ -1134,56 +1150,75 @@ async function excluirMeta(id) {
     }
 }
 
-// ============================================================
-// TELA PRINCIPAL
-// ============================================================
 function renderizar() {
-    byId('mesRotulo').textContent = (ui.inicio || ui.fim) ? 'Período escolhido' : rotuloMes(ui.mes);
-    renderResumo();
+    renderCabecalho();
+    renderBalanco();
     renderAvisos();
     renderContas();
+    renderCategorias();
     renderMetas();
     renderTransacoes();
     renderFiltroCategorias();
     atualizarStatusSync();
 }
 
-function estamosNoMesAtual() {
-    return !(ui.inicio || ui.fim) && ui.mes === mesAtualISO();
+function periodoPersonalizado() {
+    return Boolean(ui.inicio || ui.fim);
 }
 
-function renderResumo() {
-    const periodo = periodoDoResumo();
-    const montante = arredondar(
-        dados.contas.filter(c => c.tipo === 'corrente').reduce((soma, c) => soma + saldoDaContaNoPeriodo(c, periodo), 0)
-    );
-    const { entradas, saidas, previsto } = totaisDoPeriodo();
-    const emMes = !(ui.inicio || ui.fim);
-
-    let rotulo = 'Saldo até o fim do período';
-    if (emMes) {
-        const nomeDoMes = rotuloMes(ui.mes).toLowerCase();
-        if (ui.mes > mesAtualISO()) rotulo = `Saldo previsto para o fim de ${nomeDoMes}`;
-        else if (ui.mes < mesAtualISO()) rotulo = `Saldo no fim de ${nomeDoMes}`;
-        else rotulo = `Saldo de ${nomeDoMes}`;
+function renderCabecalho() {
+    const personalizado = periodoPersonalizado();
+    byId('mesRotulo').textContent = personalizado ? 'Período escolhido' : rotuloMes(ui.mes);
+    let estado = 'Período personalizado';
+    if (!personalizado) {
+        if (ui.mes < mesAtualISO()) estado = 'Mês encerrado';
+        else if (ui.mes > mesAtualISO()) estado = 'Mês futuro · previsão';
+        else estado = 'Mês atual';
     }
-    byId('resumoRotulo').textContent = rotulo;
-    byId('rotuloEntradas').textContent = previsto ? 'Entradas previstas' : 'Entradas';
-    byId('rotuloSaidas').textContent = previsto ? 'Saídas previstas' : 'Saídas';
-    byId('resumoNota').textContent = previsto
-        ? 'Previsão: soma o que sobrou do mês anterior com o que está agendado ou pendente até o fim do mês.'
-        : 'O saldo já inclui o que sobrou dos meses anteriores. Entradas e saídas contam só o que foi pago ou recebido no período; transferências e faturas mudam o saldo, mas não entram nelas.';
+    byId('mesEstado').textContent = estado;
+    byId('btnHoje').hidden = !personalizado && ui.mes === mesAtualISO();
+}
 
-    const anterior = emMes ? saldoQueVeioDoMesAnterior(periodo) : 0;
-    const linhaAnterior = byId('resumoAnterior');
-    linhaAnterior.hidden = !(emMes && Math.abs(anterior) > 0.005);
-    linhaAnterior.textContent = linhaAnterior.hidden ? '' : `Restante do mês anterior: ${formatarMoeda(anterior)}`;
+function detalheDoGrupo(grupo, feito, aberto) {
+    if (grupo.total === 0) return 'Nada neste período';
+    const partes = [];
+    if (grupo.feito > 0) partes.push(`${formatarMoeda(grupo.feito)} ${feito}`);
+    if (grupo.aberto > 0) partes.push(`${formatarMoeda(grupo.aberto)} ${aberto}`);
+    return partes.join(' · ');
+}
 
-    const elementoSaldo = byId('saldoTotal');
-    elementoSaldo.textContent = formatarMoeda(montante);
-    elementoSaldo.classList.toggle('negativo', montante < 0);
-    byId('totalRec').textContent = formatarMoeda(entradas);
-    byId('totalDes').textContent = formatarMoeda(saidas);
+function renderBalanco() {
+    const balanco = balancoDoPeriodo();
+    const emMes = !periodoPersonalizado();
+    const nomeDoMes = emMes ? rotuloMes(ui.mes).toLowerCase() : '';
+
+    let rotulo = 'Saldo no fim do período';
+    if (emMes) rotulo = ui.mes < mesAtualISO() ? `Saldo no fim de ${nomeDoMes}` : `Previsão para o fim de ${nomeDoMes}`;
+    byId('balancoRotulo').textContent = rotulo;
+
+    const valor = byId('saldoTotal');
+    valor.textContent = formatarMoeda(balanco.fim);
+    valor.classList.toggle('negativo', balanco.fim < 0);
+
+    const hoje = byId('balancoHoje');
+    hoje.hidden = !(emMes && ui.mes === mesAtualISO());
+    hoje.textContent = hoje.hidden ? '' : `Hoje você tem ${formatarMoeda(totalNasContasHoje())} nas contas`;
+
+    byId('eqInicio').textContent = formatarMoeda(balanco.inicio);
+    byId('eqRec').textContent = `+ ${formatarMoeda(balanco.receitas.total)}`;
+    byId('eqRecDetalhe').textContent = detalheDoGrupo(balanco.receitas, 'recebido', 'a receber');
+    byId('eqDes').textContent = `- ${formatarMoeda(balanco.despesas.total)}`;
+    byId('eqDesDetalhe').textContent = detalheDoGrupo(balanco.despesas, 'pago', 'a pagar');
+
+    const temTransferencias = Math.abs(balanco.transferencias) > 0.005;
+    byId('eqTransLinha').hidden = !temTransferencias;
+    byId('eqTrans').textContent = `${balanco.transferencias < 0 ? '-' : '+'} ${formatarMoeda(Math.abs(balanco.transferencias))}`;
+
+    const cartao = byId('balancoCartao');
+    cartao.hidden = Math.abs(balanco.cartao) <= 0.005;
+    cartao.textContent = cartao.hidden
+        ? ''
+        : `No cartão: ${formatarMoeda(balanco.cartao)} em compras. Elas só saem das contas quando você paga a fatura.`;
 }
 
 function renderAvisos() {
@@ -1195,6 +1230,11 @@ function renderAvisos() {
         aviso.textContent = `${vencidos} ${vencidos > 1 ? 'lançamentos pendentes ou vencidos' : 'lançamento pendente ou vencido'}. Toque para ver.`;
     }
     byId('faixaFiltros').hidden = !filtrosAtivos();
+}
+
+function rotuloDoSaldoDaConta() {
+    if (periodoPersonalizado()) return 'Saldo no fim do período';
+    return ui.mes < mesAtualISO() ? 'Saldo no fim do mês' : 'Saldo previsto';
 }
 
 function renderContas() {
@@ -1209,26 +1249,130 @@ function renderContas() {
     }
     const periodo = periodoDoResumo();
     const saldosHoje = saldosDasContas();
+    const noMesAtual = !periodoPersonalizado() && ui.mes === mesAtualISO();
     lista.innerHTML = dados.contas.map(conta => {
         const cartao = conta.tipo === 'cartao';
-        const valorDoPeriodo = cartao ? gastosDoCartaoNoPeriodo(conta, periodo) : saldoDaContaNoPeriodo(conta, periodo);
-        const venc = cartao && Number(conta.vencimento) ? ` · vence dia ${esc(conta.vencimento)}` : '';
-        const limite = cartao && estamosNoMesAtual() ? ` · limite disponível ${formatarMoeda(saldosHoje[conta.id])}` : '';
+        const valor = cartao ? gastosDoCartaoNoPeriodo(conta, periodo) : saldoDaContaAte(conta, periodo.fim, true);
+        const vencimento = cartao && Number(conta.vencimento) ? ` · vence dia ${esc(conta.vencimento)}` : '';
+        const limite = cartao && noMesAtual ? `<small class="sub">Limite livre hoje: ${formatarMoeda(saldosHoje[conta.id])}</small>` : '';
+        return `
+            <li class="conta-card">
+                <button type="button" class="conta-card-corpo" data-action="editar-conta" data-id="${esc(conta.id)}">
+                    <span class="conta-topo">
+                        <span class="icone-circulo" aria-hidden="true">${cartao ? '💳' : '🏦'}</span>
+                        <span class="texto-bloco">
+                            <strong>${esc(conta.nome)}</strong>
+                            <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${vencimento}</small>
+                        </span>
+                    </span>
+                    <small class="sub">${cartao ? 'Compras neste período' : rotuloDoSaldoDaConta()}</small>
+                    <strong class="valor-grande ${!cartao && valor < 0 ? 'neg' : ''}">${formatarMoeda(valor)}</strong>
+                    ${limite}
+                </button>
+                ${cartao ? `<button type="button" class="mini mini-link" data-action="pagar-fatura" data-id="${esc(conta.id)}">Pagar fatura</button>` : ''}
+            </li>`;
+    }).join('');
+}
+
+function renderCategorias() {
+    const secao = byId('secaoCategorias');
+    const porCategoria = new Map();
+    let total = 0;
+    lancamentosDoPeriodo().forEach(t => {
+        if (t.tipo !== 'despesa' || t.categoria_id === CAT_TRANSFERENCIA) return;
+        const valor = Number(t.valor) || 0;
+        porCategoria.set(t.categoria_id, (porCategoria.get(t.categoria_id) || 0) + valor);
+        total += valor;
+    });
+    secao.hidden = total <= 0;
+    if (total <= 0) return;
+
+    const linhas = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    byId('listaCategorias').innerHTML = linhas.map(([id, valor]) => {
+        const categoria = categoriaPorId(id);
+        const percentual = Math.round((valor / total) * 100);
         return `
             <li>
-                <button type="button" class="conta-corpo" data-action="editar-conta" data-id="${esc(conta.id)}">
-                    <span class="icone-circulo" aria-hidden="true">${cartao ? '💳' : '🏦'}</span>
-                    <span class="texto-bloco">
-                        <strong>${esc(conta.nome)}</strong>
-                        <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${venc}${limite}</small>
-                    </span>
-                    <span class="conta-saldo">
-                        <small class="sub">${cartao ? 'Gastos no mês' : 'Saldo'}</small>
-                        <strong class="valor ${!cartao && valorDoPeriodo < 0 ? 'neg' : ''}">${formatarMoeda(valorDoPeriodo)}</strong>
+                <button type="button" class="cat-linha" data-action="filtrar-categoria" data-id="${esc(id)}" aria-pressed="${ui.categoria === id}">
+                    <span class="icone-circulo" aria-hidden="true">${esc(iconeCategoria(categoria))}</span>
+                    <span class="cat-corpo">
+                        <span class="cat-topo">
+                            <strong>${esc(nomeCategoria(categoria))} <small class="sub">${percentual}%</small></strong>
+                            <span class="valor">${formatarMoeda(valor)}</span>
+                        </span>
+                        <span class="barra" aria-hidden="true"><span style="width: ${Math.max(percentual, 3)}%"></span></span>
                     </span>
                 </button>
             </li>`;
     }).join('');
+}
+
+function renderTransacoes() {
+    const somentePendentes = ui.visao === 'pendentes';
+    let titulo = periodoPersonalizado() ? 'Lançamentos do período' : 'Lançamentos do mês';
+    if (somentePendentes) titulo = 'Pendentes de todos os meses';
+    byId('tituloLancamentos').textContent = titulo;
+    document.querySelectorAll('[data-action="filtro-visao"]').forEach(chip => {
+        chip.setAttribute('aria-pressed', String(chip.dataset.visao === ui.visao));
+    });
+
+    let base = somentePendentes
+        ? dados.transacoes.filter(t => !t.pago && passaNosFiltros(t))
+        : lancamentosDoPeriodo();
+    if (ui.visao === 'receitas') base = base.filter(t => t.tipo === 'receita' && t.categoria_id !== CAT_TRANSFERENCIA);
+    if (ui.visao === 'despesas') base = base.filter(t => t.tipo === 'despesa' && t.categoria_id !== CAT_TRANSFERENCIA);
+
+    const ordenadas = [...base].sort((a, b) => {
+        const porData = somentePendentes ? comparar(a.data, b.data) : comparar(b.data, a.data);
+        return porData || comparar(String(b.updated_at || ''), String(a.updated_at || ''));
+    });
+
+    const container = byId('listaTransacoes');
+    if (ordenadas.length === 0) {
+        let mensagem = 'Nenhum lançamento neste mês. Toque em "Despesa" ou "Receita" para registrar o primeiro.';
+        if (somentePendentes) mensagem = 'Nenhum lançamento pendente. Tudo em dia!';
+        else if (filtrosAtivos() || ui.visao !== 'todas') mensagem = 'Nenhum lançamento encontrado com esses filtros.';
+        else if (!periodoPersonalizado() && ui.mes > mesAtualISO()) mensagem = 'Nada agendado para este mês. Toque em "Despesa" ou "Receita" e escolha "Amanhã" ou "Outra data" para planejar.';
+        container.innerHTML = `<div class="vazio">${mensagem}</div>`;
+        return;
+    }
+
+    const porDia = new Map();
+    ordenadas.forEach(t => {
+        if (!porDia.has(t.data)) porDia.set(t.data, []);
+        porDia.get(t.data).push(t);
+    });
+    container.innerHTML = [...porDia.entries()].map(([data, itens]) => `
+        <div class="dia">
+            <h3 class="dia-titulo">${esc(dataValida(data) ? rotuloDia(data) : data)}</h3>
+            <ul class="lanc-lista">${itens.map(htmlLancamento).join('')}</ul>
+        </div>`).join('');
+}
+
+function mudarMes(delta) {
+    const [ano, mes] = ui.mes.split('-').map(Number);
+    const data = new Date(ano, mes - 1 + delta, 1);
+    irParaMes(`${data.getFullYear()}-${pad(data.getMonth() + 1)}`);
+}
+
+function irParaMes(mes) {
+    ui.mes = mes;
+    ui.inicio = '';
+    ui.fim = '';
+    ui.visao = 'todas';
+    sincronizarCamposDeFiltro();
+    renderizar();
+}
+
+function aoMudarPeriodo() {
+    let inicio = byId('filtroInicio').value;
+    let fim = byId('filtroFim').value;
+    if (inicio && fim && inicio > fim) [inicio, fim] = [fim, inicio];
+    ui.inicio = inicio;
+    ui.fim = fim;
+    ui.visao = 'todas';
+    sincronizarCamposDeFiltro();
+    renderizar();
 }
 
 function renderMetas() {
@@ -1297,46 +1441,6 @@ function htmlLancamento(t) {
         </li>`;
 }
 
-function renderTransacoes() {
-    const somentePendentes = ui.status === 'pendentes';
-    byId('tituloLancamentos').textContent = somentePendentes ? 'Pendentes' : 'Lançamentos';
-    document.querySelectorAll('[data-action="filtro-status"]').forEach(chip => {
-        chip.setAttribute('aria-pressed', String(chip.dataset.status === ui.status));
-    });
-
-    const base = somentePendentes
-        ? dados.transacoes.filter(t => !t.pago && passaNosFiltros(t))
-        : lancamentosDoPeriodo();
-    const ordenadas = [...base].sort((a, b) => {
-        const porData = somentePendentes ? comparar(a.data, b.data) : comparar(b.data, a.data);
-        return porData || comparar(String(b.updated_at || ''), String(a.updated_at || ''));
-    });
-
-    const container = byId('listaTransacoes');
-    if (ordenadas.length === 0) {
-        const mensagem = somentePendentes
-            ? 'Nenhum lançamento pendente. Tudo em dia!'
-            : (filtrosAtivos()
-                ? 'Nenhum lançamento encontrado com esses filtros.'
-                : (ui.mes > mesAtualISO()
-                    ? 'Nada agendado para este mês. Toque em "Novo lançamento" e escolha "Agendar" para planejar receitas e despesas futuras.'
-                    : 'Nenhum lançamento neste mês. Toque em "Novo lançamento" para registrar o primeiro.'));
-        container.innerHTML = `<div class="vazio">${mensagem}</div>`;
-        return;
-    }
-
-    const porDia = new Map();
-    ordenadas.forEach(t => {
-        if (!porDia.has(t.data)) porDia.set(t.data, []);
-        porDia.get(t.data).push(t);
-    });
-    container.innerHTML = [...porDia.entries()].map(([data, itens]) => `
-        <div class="dia">
-            <h3 class="dia-titulo">${esc(dataValida(data) ? rotuloDia(data) : data)}</h3>
-            <ul class="lanc-lista">${itens.map(htmlLancamento).join('')}</ul>
-        </div>`).join('');
-}
-
 function renderFiltroCategorias() {
     const seletor = byId('filtroCategoria');
     const opcoes = ['<option value="">Todas as categorias</option>'];
@@ -1354,42 +1458,11 @@ function sincronizarCamposDeFiltro() {
     byId('filtroCategoria').value = ui.categoria;
 }
 
-function mudarMes(delta) {
-    const [ano, mes] = ui.mes.split('-').map(Number);
-    const data = new Date(ano, mes - 1 + delta, 1);
-    ui.mes = `${data.getFullYear()}-${pad(data.getMonth() + 1)}`;
-    ui.inicio = '';
-    ui.fim = '';
-    ui.status = 'todas';
-    sincronizarCamposDeFiltro();
-    renderizar();
-}
-
-function irParaMes(mes) {
-    ui.mes = mes;
-    ui.inicio = '';
-    ui.fim = '';
-    ui.status = 'todas';
-    sincronizarCamposDeFiltro();
-    renderizar();
-}
-
 function limparFiltros() {
     ui.inicio = '';
     ui.fim = '';
     ui.busca = '';
     ui.categoria = '';
-    sincronizarCamposDeFiltro();
-    renderizar();
-}
-
-function aoMudarPeriodo() {
-    let inicio = byId('filtroInicio').value;
-    let fim = byId('filtroFim').value;
-    if (inicio && fim && inicio > fim) [inicio, fim] = [fim, inicio];
-    ui.inicio = inicio;
-    ui.fim = fim;
-    ui.status = 'todas';
     sincronizarCamposDeFiltro();
     renderizar();
 }
@@ -1402,6 +1475,7 @@ let confirmacaoPendente = null;
 let respostasDaConfirmacao = [];
 let contextoConta = null;
 let timerToast = null;
+let acaoDoToast = null;
 
 function abrirModal(id, focoId) {
     if (pilhaModais.some(item => item.id === id)) return;
@@ -1438,21 +1512,6 @@ function fecharModal(id) {
     if (foco && typeof foco.focus === 'function') foco.focus();
 }
 
-function fecharModalDoTopo() {
-    const topo = pilhaModais[pilhaModais.length - 1];
-    if (!topo) return;
-    if (topo.id === 'modalChat' && chat.salvando) return;
-    fecharModal(topo.id);
-}
-
-// Tocar fora não fecha o assistente no meio do preenchimento, para ninguém perder o que digitou.
-function aoClicarFora() {
-    const topo = pilhaModais[pilhaModais.length - 1];
-    if (!topo) return;
-    if (topo.id === 'modalChat' && chat.passo && chat.passo !== 'tipo' && chat.passo !== 'concluido') return;
-    fecharModalDoTopo();
-}
-
 function perguntar({ titulo, mensagem, botoes }) {
     return new Promise(resolver => {
         if (confirmacaoPendente) confirmacaoPendente(null);
@@ -1468,20 +1527,63 @@ function perguntar({ titulo, mensagem, botoes }) {
     });
 }
 
+function fecharModalDoTopo() {
+    const topo = pilhaModais[pilhaModais.length - 1];
+    if (!topo) return;
+    if (topo.id === 'modalLancamento' && lanc.salvando) return;
+    fecharModal(topo.id);
+}
+
+// Tocar fora não fecha a tela de lançamento com dados digitados, para ninguém perder o que escreveu.
+function aoClicarFora() {
+    const topo = pilhaModais[pilhaModais.length - 1];
+    if (!topo) return;
+    if (topo.id === 'modalLancamento' && lancamentoTemDados()) return;
+    fecharModalDoTopo();
+}
+
+function mostrarToast(texto, tipo = 'ok', acao = null) {
+    const elemento = byId('toast');
+    const botao = byId('toastAcao');
+    byId('toastTexto').textContent = texto;
+    acaoDoToast = acao;
+    botao.hidden = !acao;
+    botao.textContent = acao ? acao.rotulo : '';
+    elemento.className = `toast visivel${tipo === 'erro' ? ' erro' : ''}`;
+    clearTimeout(timerToast);
+    const duracao = tipo === 'erro' ? 5000 : (acao ? 6500 : 3000);
+    timerToast = setTimeout(() => elemento.classList.remove('visivel'), duracao);
+}
+
+function usarAcaoDoToast() {
+    const acao = acaoDoToast;
+    acaoDoToast = null;
+    byId('toast').classList.remove('visivel');
+    if (acao) acao.fn();
+}
+
+// Depois de criar uma conta "no meio" da tela de lançamento, ela já volta selecionada.
+function aplicarContaCriada(contexto, conta) {
+    if (contexto.origem !== 'lancamento') return;
+    lanc[contexto.campo] = conta.id;
+    if (lanc.tipo === 'transferencia' && lanc.contaId === lanc.destinoId) lanc.destinoId = '';
+    renderLancamento();
+}
+
+function popularSelectDeContas(seletor, placeholder) {
+    const opcoes = [`<option value="">${esc(placeholder)}</option>`];
+    dados.contas.forEach(conta => {
+        opcoes.push(`<option value="${esc(conta.id)}">${esc(rotuloConta(conta))}</option>`);
+    });
+    seletor.innerHTML = opcoes.join('');
+}
+
 function responderConfirmacao(indice) {
     const valor = respostasDaConfirmacao[indice];
     const resolver = confirmacaoPendente;
     confirmacaoPendente = null;
     fecharModal('modalConfirmar');
     if (resolver) resolver(valor === undefined ? null : valor);
-}
-
-function mostrarToast(texto, tipo = 'ok') {
-    const elemento = byId('toast');
-    elemento.textContent = texto;
-    elemento.className = `toast visivel${tipo === 'erro' ? ' erro' : ''}`;
-    clearTimeout(timerToast);
-    timerToast = setTimeout(() => elemento.classList.remove('visivel'), tipo === 'erro' ? 5000 : 3000);
 }
 
 function abrirZoom(origem) {
@@ -1511,6 +1613,7 @@ function mostrarErros(prefixo, erros) {
     if (primeiroCampo) {
         const controle = primeiroCampo.querySelector('input:not([type="hidden"]), select');
         if (controle) controle.focus();
+        else if (primeiroCampo.scrollIntoView) primeiroCampo.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
     const semCampo = Object.keys(erros).filter(chave => !byId(`erro-${prefixo}-${chave}`));
     if (semCampo.length) mostrarToast(erros[semCampo[0]], 'erro');
@@ -1539,102 +1642,113 @@ function definirRadio(nome, valor) {
 }
 
 // ============================================================
-// FORMULÁRIO DE LANÇAMENTO (usado para editar e como alternativa ao assistente)
+// LANÇAMENTO (criar e editar na mesma tela)
 // ============================================================
-const formTransacao = { editando: false, foto: null, categoriaOriginal: '' };
-
-const OPCOES_REPETICAO = {
-    despesa: [['unica', 'Só uma vez'], ['parcelado', 'Parcelado (divide o valor)'], ['mensal', 'Todo mês (mesmo valor)']],
-    receita: [['unica', 'Só uma vez'], ['mensal', 'Todo mês (mesmo valor)']],
-    transferencia: []
+const lanc = {
+    editando: false,
+    id: '',
+    tipo: 'despesa',
+    categoriaId: '',
+    contaId: '',
+    destinoId: '',
+    dataModo: 'hoje',
+    data: '',
+    repeticao: 'unica',
+    quantidade: 3,
+    pago: true,
+    pagoManual: false,
+    foto: null,
+    categoriaOriginal: '',
+    sugestoes: [],
+    salvando: false
 };
 
-function popularRepeticao(tipo) {
-    const seletor = byId('tRepeticao');
-    const atual = seletor.value;
-    const opcoes = OPCOES_REPETICAO[tipo] || [];
-    seletor.innerHTML = opcoes.map(([valor, rotulo]) => `<option value="${valor}">${rotulo}</option>`).join('');
-    if (opcoes.some(([valor]) => valor === atual)) seletor.value = atual;
+const OPCOES_DATA = [['hoje', 'Hoje'], ['ontem', 'Ontem'], ['amanha', 'Amanhã'], ['outra', 'Outra data']];
+const OPCOES_REPETICAO = {
+    despesa: [['unica', 'Só uma vez'], ['parcelado', 'Parcelado'], ['mensal', 'Todo mês']],
+    receita: [['unica', 'Só uma vez'], ['mensal', 'Todo mês']],
+    transferencia: []
+};
+const TITULOS_LANCAMENTO = { despesa: 'Nova despesa', receita: 'Nova receita', transferencia: 'Transferência ou fatura' };
+const ROTULOS_CONTA = { despesa: 'Pago com', receita: 'Entrou em', transferencia: 'Sai de' };
+
+function dataDoModo(modo) {
+    if (modo === 'ontem') return somarDias(hojeISO(), -1);
+    if (modo === 'amanha') return somarDias(hojeISO(), 1);
+    return hojeISO();
 }
 
-function ajustarQuantidade() {
-    const tipo = valorDoRadio('tTipo') || 'despesa';
-    const modo = byId('tRepeticao').value || 'unica';
-    const visivel = !formTransacao.editando && tipo !== 'transferencia' && modo !== 'unica';
-    byId('campo-t-quantidade').hidden = !visivel;
-    byId('tQuantidadeRotulo').textContent = modo === 'parcelado' ? 'Número de parcelas' : 'Por quantos meses';
+function modoDaData(iso) {
+    return ['hoje', 'ontem', 'amanha'].find(modo => dataDoModo(modo) === iso) || 'outra';
 }
 
-// Data futura = lançamento agendado: nasce como pendente. Hoje ou passado nasce como já realizado.
-function ajustarSituacaoPelaData() {
-    if (formTransacao.editando) return;
-    byId('tStatus').value = byId('tData').value > hojeISO() ? 'false' : 'true';
+function primeiraContaCorrente(excluirId = '') {
+    const conta = dados.contas.find(c => c.tipo === 'corrente' && c.id !== excluirId);
+    return conta ? conta.id : '';
 }
 
-function popularSelectDeContas(seletor, placeholder, { permitirNova = true } = {}) {
-    const opcoes = [`<option value="">${esc(placeholder)}</option>`];
-    dados.contas.forEach(conta => {
-        opcoes.push(`<option value="${esc(conta.id)}">${esc(rotuloConta(conta))}</option>`);
+// Sugere a conta mais usada recentemente, para a pessoa não precisar escolher toda vez.
+function contaPadrao() {
+    if (dados.contas.length === 1) return dados.contas[0].id;
+    const recente = [...dados.transacoes]
+        .filter(t => contaPorId(t.conta_id) && t.categoria_id !== CAT_TRANSFERENCIA)
+        .sort((a, b) => comparar(String(b.updated_at || ''), String(a.updated_at || '')))[0];
+    return recente ? recente.conta_id : '';
+}
+
+function descricaoSemParcela(texto) {
+    return String(texto).replace(/\s*\(\d+\/\d+\)$/, '').trim();
+}
+
+function lancamentosParecidos(tipo) {
+    return [...dados.transacoes]
+        .filter(t => t.tipo === tipo && t.categoria_id !== CAT_TRANSFERENCIA)
+        .sort((a, b) => comparar(String(b.updated_at || ''), String(a.updated_at || '')));
+}
+
+function sugestoesDeDescricao(tipo) {
+    const padrao = {
+        despesa: ['Mercado', 'Combustível', 'Restaurante', 'Farmácia'],
+        receita: ['Salário', 'Freelance', 'Reembolso'],
+        transferencia: ['Pagamento da fatura', 'Transferência entre contas']
+    }[tipo] || [];
+    if (tipo === 'transferencia') return padrao;
+
+    // Prefere o que a pessoa já registrou antes.
+    const recentes = [];
+    lancamentosParecidos(tipo).forEach(t => {
+        const nome = descricaoSemParcela(t.descricao);
+        if (nome && !recentes.includes(nome) && recentes.length < 4) recentes.push(nome);
     });
-    if (permitirNova) opcoes.push(`<option value="${NOVA_CONTA}">➕ Nova conta ou cartão…</option>`);
-    seletor.innerHTML = opcoes.join('');
+    return [...recentes, ...padrao.filter(item => !recentes.includes(item))].slice(0, 5);
 }
 
-function popularContasDoFormulario() {
-    const origem = byId('tConta');
-    const destino = byId('tContaDestino');
-    const valorOrigem = origem.value;
-    const valorDestino = destino.value;
-    popularSelectDeContas(origem, 'Escolha uma conta');
-    popularSelectDeContas(destino, 'Escolha uma conta');
-    origem.value = valorOrigem;
-    destino.value = valorDestino;
-}
-
-function popularCategoriasDoFormulario(tipo, selecionada) {
-    const compativeis = dados.categorias.filter(c =>
-        c.id !== CAT_TRANSFERENCIA && (c.tipo === tipo || c.tipo === 'outros' || !c.tipo)
-    );
-    if (selecionada && selecionada === formTransacao.categoriaOriginal && !compativeis.some(c => c.id === selecionada)) {
-        const original = categoriaPorId(selecionada);
-        if (original) compativeis.push(original);
+function categoriasParaTipo(tipo) {
+    const todas = dados.categorias.filter(c => c.id !== CAT_TRANSFERENCIA);
+    const lista = todas.filter(c => c.tipo === tipo || c.tipo === 'outros' || !c.tipo);
+    const base = lista.length > 0 ? lista : todas;
+    // Na edição, mantém a categoria original mesmo que ela seja de outro tipo.
+    const original = categoriaPorId(lanc.categoriaOriginal);
+    if (lanc.editando && original && lanc.categoriaOriginal !== CAT_TRANSFERENCIA && !base.includes(original)) {
+        return [...base, original];
     }
-    const seletor = byId('tCategoria');
-    seletor.innerHTML = compativeis
-        .map(c => `<option value="${esc(c.id)}">${esc(iconeCategoria(c))} ${esc(nomeCategoria(c))}</option>`)
-        .join('');
-    if (selecionada && compativeis.some(c => c.id === selecionada)) seletor.value = selecionada;
+    return base;
 }
 
-function ajustarFormularioPorTipo() {
-    const tipo = valorDoRadio('tTipo') || 'despesa';
-    byId('campo-t-contaDestino').hidden = tipo !== 'transferencia';
-    byId('campo-t-categoria').hidden = tipo === 'transferencia';
-    const podeRepetir = !formTransacao.editando && tipo !== 'transferencia';
-    byId('campo-t-repeticao').hidden = !podeRepetir;
-    if (podeRepetir) popularRepeticao(tipo);
-    ajustarQuantidade();
-    byId('tContaRotulo').textContent = {
-        despesa: 'Paga com (conta ou cartão)',
-        receita: 'Entra em qual conta',
-        transferencia: 'Sai de qual conta'
-    }[tipo];
-
-    const situacao = byId('tStatus');
-    situacao.options[0].text = ROTULOS_SITUACAO[tipo].sim;
-    situacao.options[1].text = ROTULOS_SITUACAO[tipo].nao;
-    popularCategoriasDoFormulario(tipo, byId('tCategoria').value);
+function botaoOpcao(campo, valor, rotulo, ativo, tracejado = false) {
+    return `<button type="button" class="opt${tracejado ? ' opt-acao' : ''}" data-action="lanc-escolher" data-campo="${campo}" data-valor="${esc(valor)}" aria-pressed="${ativo}">${esc(rotulo)}</button>`;
 }
 
-function renderFotoDoFormulario() {
-    const previa = byId('tFotoPrevia');
-    const origem = fotoSegura(formTransacao.foto);
-    previa.innerHTML = origem
-        ? `<img src="${esc(origem)}" alt="Comprovante anexado"><button type="button" class="btn-texto" data-action="form-foto-remover">Remover</button>`
-        : '';
+function chipsDeContas(campo, excluirId) {
+    const selecionada = campo === 'conta' ? lanc.contaId : lanc.destinoId;
+    const chips = dados.contas
+        .filter(conta => conta.id !== excluirId)
+        .map(conta => botaoOpcao(campo, conta.id, rotuloConta(conta), conta.id === selecionada));
+    chips.push(botaoOpcao(campo, NOVA_CONTA, '➕ Nova conta', false, true));
+    return chips.join('');
 }
 
-function abrirFormularioTransacao(id) {
+function abrirLancamento({ id = null, tipo = 'despesa', destinoId = '', valor = null, descricao = '' } = {}) {
     const transacao = id ? achar('transacoes', id) : null;
     if (id && !transacao) {
         mostrarToast('Lançamento não encontrado.', 'erro');
@@ -1642,100 +1756,336 @@ function abrirFormularioTransacao(id) {
     }
     const transferencia = transacao ? ehTransferencia(transacao) : false;
 
-    limparErros('t');
-    byId('formTransacao').reset();
-    formTransacao.editando = Boolean(transacao);
-    formTransacao.foto = transacao ? (transacao.foto || null) : null;
-    formTransacao.categoriaOriginal = transacao ? transacao.categoria_id : '';
-    byId('tId').value = transacao ? transacao.id : '';
-
-    popularContasDoFormulario();
-    const tipo = transacao ? (transferencia ? 'transferencia' : transacao.tipo) : 'despesa';
-    definirRadio('tTipo', tipo);
-    // Na edição o tipo "transferência" não pode ser trocado, para não quebrar o par de lançamentos.
-    document.querySelectorAll('input[name="tTipo"]').forEach(radio => {
-        radio.disabled = Boolean(transacao) && (transferencia || radio.value === 'transferencia');
+    limparErros('l');
+    Object.assign(lanc, {
+        editando: Boolean(transacao),
+        id: transacao ? transacao.id : '',
+        tipo: transacao ? (transferencia ? 'transferencia' : transacao.tipo) : tipo,
+        categoriaId: '',
+        contaId: '',
+        destinoId,
+        dataModo: 'hoje',
+        data: hojeISO(),
+        repeticao: 'unica',
+        quantidade: 3,
+        pago: true,
+        pagoManual: false,
+        foto: null,
+        categoriaOriginal: '',
+        salvando: false
     });
-    ajustarFormularioPorTipo();
 
     if (transacao) {
-        byId('tDescricao').value = transacao.descricao;
-        byId('tValor').value = numeroParaCampo(transacao.valor);
-        byId('tData').value = transacao.data;
-        byId('tStatus').value = String(Boolean(transacao.pago));
+        lanc.categoriaOriginal = transacao.categoria_id;
+        lanc.data = transacao.data;
+        lanc.dataModo = modoDaData(transacao.data);
+        lanc.pago = Boolean(transacao.pago);
+        lanc.pagoManual = true;
+        lanc.foto = transacao.foto || null;
         if (transferencia) {
             const grupo = grupoDoLancamento(transacao);
-            byId('tConta').value = grupo.find(t => t.tipo === 'despesa').conta_id;
-            byId('tContaDestino').value = grupo.find(t => t.tipo === 'receita').conta_id;
+            lanc.contaId = grupo.find(t => t.tipo === 'despesa').conta_id;
+            lanc.destinoId = grupo.find(t => t.tipo === 'receita').conta_id;
         } else {
-            byId('tConta').value = transacao.conta_id;
-            popularCategoriasDoFormulario(tipo, transacao.categoria_id);
+            lanc.categoriaId = transacao.categoria_id;
+            lanc.contaId = transacao.conta_id;
         }
+        byId('lValor').value = numeroParaCampo(transacao.valor);
+        byId('lDescricao').value = transacao.descricao;
     } else {
-        byId('tData').value = hojeISO();
-        ajustarSituacaoPelaData();
+        lanc.contaId = tipo === 'transferencia' ? primeiraContaCorrente(destinoId) : contaPadrao();
+        byId('lValor').value = valor ? numeroParaCampo(valor) : '';
+        byId('lDescricao').value = descricao;
     }
+    byId('lData').value = lanc.data;
 
-    const info = byId('tInfo');
-    const parcelado = transacao && (transacao.parcela_total || 1) > 1;
-    info.hidden = !parcelado;
-    if (parcelado) info.textContent = `Este é o lançamento ${transacao.parcela_num} de ${transacao.parcela_total} de uma sequência. A alteração vale só para ele.`;
+    const info = byId('lInfo');
+    const sequencia = transacao && !transferencia && (transacao.parcela_total || 1) > 1;
+    info.hidden = !sequencia;
+    info.textContent = sequencia
+        ? `Este é o lançamento ${transacao.parcela_num} de ${transacao.parcela_total} de uma sequência. A alteração vale só para ele.`
+        : '';
 
-    byId('tTitulo').textContent = transacao ? (transferencia ? 'Editar transferência' : 'Editar lançamento') : 'Novo lançamento';
-    byId('btnExcluirTransacao').hidden = !transacao;
-    renderFotoDoFormulario();
-    abrirModal('modalTransacao', transacao ? null : 'tDescricao');
+    renderLancamento();
+    abrirModal('modalLancamento', transacao ? null : 'lValor');
 }
 
-function lerFormularioTransacao() {
-    const tipo = valorDoRadio('tTipo') || 'despesa';
-    const modo = formTransacao.editando || tipo === 'transferencia' ? 'unica' : (byId('tRepeticao').value || 'unica');
+function dicaDaSituacao() {
+    if (!lanc.editando && lanc.tipo !== 'transferencia' && lanc.repeticao !== 'unica') {
+        return 'Só o primeiro lançamento é marcado agora. Os próximos ficam agendados, um por mês.';
+    }
+    if (lanc.pago) return '';
+    return lanc.data > hojeISO()
+        ? 'Agendado: entra na previsão do mês. Quando acontecer, marque como pago na lista.'
+        : 'Fica como pendente até você marcar como pago.';
+}
+
+function renderFotoDoLancamento() {
+    const origem = fotoSegura(lanc.foto);
+    byId('lFotoArea').innerHTML = origem
+        ? `<img src="${esc(origem)}" alt="Comprovante anexado"><button type="button" class="btn-texto" data-action="lanc-foto-remover">Remover foto</button>`
+        : '<button type="button" class="btn btn-sec" data-action="lanc-foto">📷 Anexar comprovante</button>';
+}
+
+function renderPrevia() {
+    const destino = byId('lPrevia');
+    const valor = lerDinheiro(byId('lValor').value);
+    if (!valor || valor <= 0) {
+        destino.innerHTML = '<span>Digite o valor para ver o resumo do lançamento.</span>';
+        return;
+    }
+    const transferencia = lanc.tipo === 'transferencia';
+    const modo = lanc.editando || transferencia ? 'unica' : lanc.repeticao;
+    const nomeDoTipo = ROTULOS_TIPO[lanc.tipo];
+
+    let titulo = `${nomeDoTipo} de ${formatarMoeda(valor)}`;
+    if (modo === 'parcelado') {
+        titulo += ` em ${lanc.quantidade}x de ${formatarMoeda(dividirEmParcelas(valor, lanc.quantidade)[0])}`;
+    } else if (modo === 'mensal') {
+        titulo += ` todo mês, por ${lanc.quantidade} meses`;
+    }
+
+    const partes = [];
+    if (transferencia) {
+        if (contaPorId(lanc.contaId) && contaPorId(lanc.destinoId)) partes.push(`${nomeConta(lanc.contaId)} → ${nomeConta(lanc.destinoId)}`);
+    } else {
+        const categoria = categoriaPorId(lanc.categoriaId);
+        if (categoria) partes.push(nomeCategoria(categoria));
+        if (contaPorId(lanc.contaId)) partes.push(nomeConta(lanc.contaId));
+    }
+    if (dataValida(lanc.data)) partes.push(rotuloDia(lanc.data).toLowerCase());
+    if (modo !== 'unica' && dataValida(lanc.data)) partes.push(`último em ${formatarDataBR(somarMeses(lanc.data, lanc.quantidade - 1))}`);
+    const situacoes = { despesa: ['paga', 'a pagar'], receita: ['recebida', 'a receber'], transferencia: ['feita', 'a fazer'] }[lanc.tipo];
+    partes.push(lanc.pago ? situacoes[0] : (lanc.data > hojeISO() ? 'agendada' : situacoes[1]));
+
+    destino.innerHTML = `<strong>${esc(titulo)}</strong><span>${esc(partes.join(' · '))}</span>`;
+}
+
+function renderLancamento() {
+    const transferencia = lanc.tipo === 'transferencia';
+    const semRepeticao = lanc.editando || transferencia || lanc.repeticao === 'unica';
+
+    byId('modalLancamento').dataset.tom = lanc.tipo;
+    byId('lTitulo').textContent = lanc.editando
+        ? (transferencia ? 'Editar transferência' : `Editar ${lanc.tipo}`)
+        : TITULOS_LANCAMENTO[lanc.tipo];
+    definirRadio('lTipo', lanc.tipo);
+    document.querySelectorAll('input[name="lTipo"]').forEach(radio => {
+        // Na edição, transferência não vira despesa/receita (e vice-versa): quebraria o par de lançamentos.
+        radio.disabled = lanc.editando && (transferencia || radio.value === 'transferencia');
+    });
+
+    byId('campo-l-categoria').hidden = transferencia;
+    byId('campo-l-contaDestino').hidden = !transferencia;
+    byId('campo-l-repeticao').hidden = lanc.editando || transferencia;
+    byId('campo-l-quantidade').hidden = semRepeticao;
+    byId('lContaRotulo').textContent = ROTULOS_CONTA[lanc.tipo];
+
+    lanc.sugestoes = sugestoesDeDescricao(lanc.tipo);
+    byId('lSugestoes').innerHTML = lanc.sugestoes
+        .map((texto, i) => `<button type="button" class="sugestao" data-action="lanc-sugestao" data-indice="${i}">${esc(texto)}</button>`)
+        .join('');
+
+    byId('lCategorias').innerHTML = categoriasParaTipo(lanc.tipo)
+        .map(c => botaoOpcao('categoria', c.id, `${iconeCategoria(c)} ${nomeCategoria(c)}`, c.id === lanc.categoriaId))
+        .join('');
+    byId('lContas').innerHTML = chipsDeContas('conta', '');
+    byId('lContasDestino').innerHTML = chipsDeContas('destino', lanc.contaId);
+    byId('lDatas').innerHTML = OPCOES_DATA.map(([modo, rotulo]) => botaoOpcao('data', modo, rotulo, lanc.dataModo === modo)).join('');
+    byId('lData').hidden = lanc.dataModo !== 'outra';
+    byId('lRepeticoes').innerHTML = (OPCOES_REPETICAO[lanc.tipo] || [])
+        .map(([modo, rotulo]) => botaoOpcao('repeticao', modo, rotulo, lanc.repeticao === modo))
+        .join('');
+    byId('lQuantidade').value = String(lanc.quantidade);
+    byId('lQuantidadeRotulo').textContent = lanc.repeticao === 'parcelado' ? 'Quantas parcelas' : 'Por quantos meses';
+
+    byId('lPago').checked = lanc.pago;
+    byId('lPagoRotulo').textContent = ROTULOS_SITUACAO[lanc.tipo].sim;
+    byId('lPagoDica').textContent = dicaDaSituacao();
+    renderFotoDoLancamento();
+
+    byId('btnExcluirLanc').hidden = !lanc.editando;
+    byId('btnSalvarNovo').hidden = lanc.editando;
+    renderPrevia();
+}
+
+// Se a data é futura, o lançamento nasce como "agendado"; se é hoje ou passado, como "já realizado".
+function ajustarPagoAutomatico() {
+    if (!lanc.editando && !lanc.pagoManual) lanc.pago = lanc.data <= hojeISO();
+}
+
+function aoMudarTipoLancamento(tipo) {
+    if (lanc.editando && (lanc.tipo === 'transferencia' || tipo === 'transferencia')) return;
+    if (!TIPOS.includes(tipo)) return;
+    lanc.tipo = tipo;
+    if (!categoriasParaTipo(tipo).some(c => c.id === lanc.categoriaId)) lanc.categoriaId = '';
+    if (tipo === 'receita' && lanc.repeticao === 'parcelado') lanc.repeticao = 'unica';
+    if (tipo === 'transferencia') {
+        if (!lanc.contaId || contaEhCartao(lanc.contaId)) lanc.contaId = primeiraContaCorrente(lanc.destinoId);
+        if (lanc.destinoId === lanc.contaId) lanc.destinoId = '';
+    }
+    renderLancamento();
+}
+
+function escolherNoLancamento(campo, valor) {
+    if ((campo === 'conta' || campo === 'destino') && valor === NOVA_CONTA) {
+        abrirFormularioConta(null, { origem: 'lancamento', campo: campo === 'conta' ? 'contaId' : 'destinoId' });
+        return;
+    }
+    if (campo === 'categoria') {
+        lanc.categoriaId = valor;
+    } else if (campo === 'conta') {
+        lanc.contaId = valor;
+        if (lanc.destinoId === valor) lanc.destinoId = '';
+    } else if (campo === 'destino') {
+        lanc.destinoId = valor;
+    } else if (campo === 'data') {
+        lanc.dataModo = valor;
+        if (valor === 'outra') {
+            const digitada = byId('lData').value;
+            lanc.data = dataValida(digitada) ? digitada : hojeISO();
+            byId('lData').value = lanc.data;
+        } else {
+            lanc.data = dataDoModo(valor);
+        }
+        ajustarPagoAutomatico();
+    } else if (campo === 'repeticao') {
+        if (lanc.repeticao !== valor) lanc.quantidade = valor === 'mensal' ? 12 : 3;
+        lanc.repeticao = valor;
+    }
+    limparErroDoCampoPorId(`campo-l-${campo === 'destino' ? 'contaDestino' : campo}`);
+    renderLancamento();
+}
+
+function limparErroDoCampoPorId(id) {
+    const campo = byId(id);
+    if (!campo) return;
+    campo.classList.remove('erro');
+    const mensagem = campo.querySelector('.campo-erro');
+    if (mensagem) mensagem.hidden = true;
+}
+
+function mudarQuantidade(delta) {
+    definirQuantidade(lanc.quantidade + delta);
+    renderLancamento();
+}
+
+function definirQuantidade(valor) {
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) return;
+    lanc.quantidade = Math.min(MAX_PARCELAS, Math.max(2, Math.round(numero)));
+}
+
+// Se a descrição já foi usada antes, preenche categoria, conta e valor (quando estiverem vazios).
+function aprenderComDescricao() {
+    const texto = byId('lDescricao').value.trim().toLowerCase();
+    if (lanc.editando || lanc.tipo === 'transferencia' || texto.length < 2) return;
+    const anterior = lancamentosParecidos(lanc.tipo).find(t => descricaoSemParcela(t.descricao).toLowerCase() === texto);
+    if (!anterior) return;
+
+    let mudou = false;
+    if (!lanc.categoriaId && categoriaPorId(anterior.categoria_id) && categoriasParaTipo(lanc.tipo).some(c => c.id === anterior.categoria_id)) {
+        lanc.categoriaId = anterior.categoria_id;
+        mudou = true;
+    }
+    if (!lanc.contaId && contaPorId(anterior.conta_id)) {
+        lanc.contaId = anterior.conta_id;
+        mudou = true;
+    }
+    const campoValor = byId('lValor');
+    if (!campoValor.value.trim() && (anterior.parcela_total || 1) === 1) {
+        campoValor.value = numeroParaCampo(anterior.valor);
+        mudou = true;
+    }
+    if (mudou) renderLancamento();
+}
+
+function usarSugestao(indice) {
+    const texto = lanc.sugestoes[indice];
+    if (!texto) return;
+    byId('lDescricao').value = texto;
+    limparErroDoCampoPorId('campo-l-descricao');
+    aprenderComDescricao();
+    renderPrevia();
+    const valor = byId('lValor');
+    if (!valor.value.trim()) valor.focus();
+}
+
+function lancamentoTemDados() {
+    return !lanc.editando && Boolean(byId('lValor').value.trim() || byId('lDescricao').value.trim());
+}
+
+function entradaDoLancamento() {
+    const transferencia = lanc.tipo === 'transferencia';
+    const modo = lanc.editando || transferencia ? 'unica' : lanc.repeticao;
     return {
-        tipo,
-        descricao: byId('tDescricao').value,
-        valor: lerDinheiro(byId('tValor').value),
-        data: byId('tData').value,
-        contaId: byId('tConta').value,
-        contaDestinoId: byId('tContaDestino').value,
-        categoriaId: tipo === 'transferencia' ? CAT_TRANSFERENCIA : byId('tCategoria').value,
+        tipo: lanc.tipo,
+        descricao: byId('lDescricao').value,
+        valor: lerDinheiro(byId('lValor').value),
+        data: lanc.data,
+        contaId: lanc.contaId,
+        contaDestinoId: lanc.destinoId,
+        categoriaId: transferencia ? CAT_TRANSFERENCIA : lanc.categoriaId,
         modo,
-        quantidade: modo === 'unica' ? 1 : Number(byId('tQuantidade').value),
-        pago: byId('tStatus').value === 'true',
-        foto: formTransacao.foto
+        quantidade: modo === 'unica' ? 1 : lanc.quantidade,
+        pago: lanc.pago,
+        foto: lanc.foto
     };
 }
 
-async function salvarFormularioTransacao(evento) {
-    evento.preventDefault();
-    if (byId('btnSalvarTransacao').disabled) return;
+function prepararProximoLancamento() {
+    Object.assign(lanc, { categoriaId: '', repeticao: 'unica', quantidade: 3, foto: null, pagoManual: false });
+    ajustarPagoAutomatico();
+    byId('lValor').value = '';
+    byId('lDescricao').value = '';
+    limparErros('l');
+    renderLancamento();
+    byId('lValor').focus();
+}
 
-    const entrada = lerFormularioTransacao();
-    const erros = validarLancamento(entrada, { edicao: formTransacao.editando });
-    mostrarErros('t', erros);
+async function salvarLancamento(emSequencia = false) {
+    if (lanc.salvando) return;
+    if (lanc.dataModo === 'outra') lanc.data = byId('lData').value;
+    const entrada = entradaDoLancamento();
+    const erros = validarLancamento(entrada, { edicao: lanc.editando });
+    mostrarErros('l', erros);
     if (Object.keys(erros).length > 0) return;
 
-    marcarOcupado('btnSalvarTransacao', true, 'Salvando…');
+    lanc.salvando = true;
+    marcarOcupado('btnSalvarLanc', true, 'Salvando…');
+    byId('btnSalvarNovo').disabled = true;
     try {
-        if (formTransacao.editando) await atualizarLancamento(byId('tId').value, entrada);
+        if (lanc.editando) await atualizarLancamento(lanc.id, entrada);
         else await criarLancamentos(entrada);
-        fecharModal('modalTransacao');
-        mostrarToast(formTransacao.editando ? 'Alterações salvas.' : 'Lançamento salvo.');
+
+        const agendado = entrada.data > hojeISO();
+        const mesDoLancamento = entrada.data.slice(0, 7);
+        const foraDaTela = !periodoPersonalizado() && mesDoLancamento !== ui.mes;
+        let texto = lanc.editando ? 'Alterações salvas.' : (agendado ? 'Lançamento agendado.' : `${ROTULOS_TIPO[entrada.tipo]} salva.`);
+        if (emSequencia && !lanc.editando) texto += ' Pode lançar o próximo.';
+        const acao = foraDaTela ? { rotulo: `Ver ${rotuloMes(mesDoLancamento).split(' ')[0].toLowerCase()}`, fn: () => irParaMes(mesDoLancamento) } : null;
+
+        if (emSequencia && !lanc.editando) prepararProximoLancamento();
+        else fecharModal('modalLancamento');
+        mostrarToast(texto, 'ok', acao);
     } catch (erro) {
         console.error(erro);
-        if (erro.erros) mostrarErros('t', erro.erros);
+        if (erro.erros) mostrarErros('l', erro.erros);
         else mostrarToast('Não foi possível salvar. Seus dados continuam na tela, tente de novo.', 'erro');
     } finally {
-        marcarOcupado('btnSalvarTransacao', false);
+        lanc.salvando = false;
+        marcarOcupado('btnSalvarLanc', false);
+        byId('btnSalvarNovo').disabled = false;
     }
 }
 
-async function aoEscolherFotoDoFormulario() {
-    const entrada = byId('tFoto');
+async function aoEscolherFotoDoLancamento() {
+    const entrada = byId('lFoto');
     const arquivo = entrada.files && entrada.files[0];
     if (!arquivo) return;
     try {
-        formTransacao.foto = await reduzirImagem(arquivo);
-        renderFotoDoFormulario();
+        lanc.foto = await reduzirImagem(arquivo);
+        renderFotoDoLancamento();
     } catch (erro) {
         console.error(erro);
         mostrarToast('Não foi possível usar essa foto. Tente outra imagem.', 'erro');
@@ -1828,16 +2178,6 @@ async function salvarFormularioConta(evento) {
     if (contexto && !id) aplicarContaCriada(contexto, conta);
 }
 
-// Depois de criar uma conta "no meio" de outro fluxo, a pessoa volta e já a encontra selecionada.
-function aplicarContaCriada(contexto, conta) {
-    if (contexto.origem === 'assistente') {
-        if (chat.passo === 'conta' || chat.passo === 'contaDestino') responder(conta.id, rotuloConta(conta));
-    } else if (contexto.origem === 'formulario') {
-        popularContasDoFormulario();
-        byId(contexto.campo).value = conta.id;
-    }
-}
-
 // ============================================================
 // COFRINHOS E METAS
 // ============================================================
@@ -1848,7 +2188,7 @@ function abrirFormularioMeta(id) {
         return;
     }
     limparErros('m');
-    popularSelectDeContas(byId('mConta'), 'Nenhuma', { permitirNova: false });
+    popularSelectDeContas(byId('mConta'), 'Nenhuma');
     byId('mId').value = meta ? meta.id : '';
     byId('mNome').value = meta ? meta.nome : '';
     byId('mObjetivo').value = meta ? numeroParaCampo(meta.valor_objetivo) : '';
@@ -2014,566 +2354,27 @@ function baixarPDF() {
 }
 
 // ============================================================
-// ASSISTENTE DE NOVO LANÇAMENTO
-// ============================================================
-const chat = {
-    passo: null,
-    dados: {},
-    extras: { pago: true, foto: null },
-    mensagens: [],
-    pilha: [],
-    marca: 0,
-    opcoesAtuais: [],
-    salvando: false,
-    resultado: null,
-    mostrarResumo: false
-};
-
-const OPCAO_NOVA_CONTA = { rotulo: '➕ Nova conta ou cartão', valor: NOVA_CONTA, acao: true };
-
-function ok(valor) {
-    return { ok: true, valor };
-}
-
-function recusar(erro) {
-    return { ok: false, erro };
-}
-
-function sugestoesDeDescricao(tipo) {
-    const padrao = {
-        despesa: ['Mercado', 'Combustível', 'Restaurante', 'Farmácia'],
-        receita: ['Salário', 'Freelance', 'Reembolso'],
-        transferencia: ['Pagamento da fatura', 'Transferência entre contas']
-    }[tipo] || [];
-    if (tipo === 'transferencia') return padrao;
-
-    // Usa o que a pessoa já registrou antes, para digitar menos.
-    const recentes = [];
-    [...dados.transacoes]
-        .filter(t => t.tipo === tipo && t.categoria_id !== CAT_TRANSFERENCIA)
-        .sort((a, b) => comparar(String(b.updated_at || ''), String(a.updated_at || '')))
-        .forEach(t => {
-            const nome = String(t.descricao).replace(/\s*\(\d+\/\d+\)$/, '').trim();
-            if (nome && !recentes.includes(nome) && recentes.length < 4) recentes.push(nome);
-        });
-    return [...recentes, ...padrao.filter(item => !recentes.includes(item))].slice(0, 5);
-}
-
-function categoriasDoAssistente(tipo) {
-    const todas = dados.categorias.filter(c => c.id !== CAT_TRANSFERENCIA);
-    const compativeis = todas.filter(c => c.tipo === tipo || c.tipo === 'outros' || !c.tipo);
-    return compativeis.length > 0 ? compativeis : todas;
-}
-
-const PASSOS = {
-    tipo: {
-        pergunta: () => 'O que você quer registrar?',
-        opcoes: () => [
-            { rotulo: '💸 Despesa', valor: 'despesa' },
-            { rotulo: '💰 Receita', valor: 'receita' },
-            { rotulo: '🔄 Transferência ou fatura', valor: 'transferencia' }
-        ],
-        aceitar: valor => TIPOS.includes(valor) ? ok(valor) : recusar('Escolha uma das opções abaixo.'),
-        guardar: (d, valor) => { d.tipo = valor; },
-        exibir: valor => ROTULOS_TIPO[valor]
-    },
-    valor: {
-        pergunta: d => ({
-            despesa: 'Quanto foi a despesa?',
-            receita: 'Quanto você recebeu?',
-            transferencia: 'Qual o valor da transferência ou do pagamento da fatura?'
-        }[d.tipo]),
-        campo: 'texto',
-        teclado: 'decimal',
-        placeholder: 'Ex.: 45,90',
-        foco: true,
-        aceitar: texto => {
-            const valor = lerDinheiro(texto);
-            if (valor === null) return recusar('Não entendi esse valor. Digite só números, por exemplo 45,90.');
-            if (valor <= 0) return recusar('O valor precisa ser maior que zero.');
-            if (valor > VALOR_MAXIMO) return recusar('Esse valor é grande demais. Confira se digitou certo.');
-            return ok(valor);
-        },
-        guardar: (d, valor) => { d.valor = valor; },
-        exibir: valor => formatarMoeda(valor)
-    },
-    descricao: {
-        pergunta: d => d.tipo === 'transferencia'
-            ? 'Como quer chamar? Escreva ou toque em uma sugestão.'
-            : 'Do que se trata? Escreva ou toque em uma sugestão.',
-        campo: 'texto',
-        teclado: 'text',
-        placeholder: 'Ex.: Mercado',
-        foco: true,
-        opcoes: d => sugestoesDeDescricao(d.tipo).map(texto => ({ rotulo: texto, valor: texto })),
-        aceitar: texto => {
-            const limpo = String(texto).trim().replace(/\s+/g, ' ');
-            if (limpo.length < 2) return recusar('Escreva pelo menos 2 letras.');
-            if (limpo.length > 60) return recusar('Use no máximo 60 caracteres.');
-            return ok(limpo);
-        },
-        guardar: (d, valor) => { d.descricao = valor; },
-        exibir: valor => valor
-    },
-    conta: {
-        pergunta: d => {
-            if (dados.contas.length === 0) return 'Você ainda não tem conta ou cartão cadastrado. Cadastre o primeiro para continuar.';
-            return {
-                despesa: 'De qual conta ou cartão saiu o dinheiro?',
-                receita: 'Em qual conta o dinheiro entrou?',
-                transferencia: 'De qual conta o dinheiro vai sair?'
-            }[d.tipo];
-        },
-        opcoes: () => [...dados.contas.map(c => ({ rotulo: rotuloConta(c), valor: c.id })), OPCAO_NOVA_CONTA],
-        aceitar: id => contaPorId(id) ? ok(id) : recusar('Escolha uma das contas abaixo.'),
-        guardar: (d, id) => { d.contaId = id; },
-        exibir: id => rotuloConta(contaPorId(id))
-    },
-    contaDestino: {
-        pergunta: d => dados.contas.some(c => c.id !== d.contaId)
-            ? 'Para qual conta o dinheiro vai? Para pagar a fatura, escolha o cartão.'
-            : 'Para transferir, é preciso ter outra conta ou cartão. Cadastre a conta de destino.',
-        opcoes: d => [
-            ...dados.contas.filter(c => c.id !== d.contaId).map(c => ({ rotulo: rotuloConta(c), valor: c.id })),
-            OPCAO_NOVA_CONTA
-        ],
-        aceitar: (id, d) => {
-            if (!contaPorId(id)) return recusar('Escolha uma das contas abaixo.');
-            if (id === d.contaId) return recusar('A origem e o destino precisam ser diferentes.');
-            return ok(id);
-        },
-        guardar: (d, id) => { d.contaDestinoId = id; },
-        exibir: id => rotuloConta(contaPorId(id))
-    },
-    parcelas: {
-        pergunta: () => 'Foi parcelado? Escolha ou digite o número de parcelas.',
-        campo: 'texto',
-        teclado: 'numeric',
-        placeholder: 'Ex.: 3',
-        opcoes: () => [1, 2, 3, 4, 5, 6, 10, 12].map(n => ({ rotulo: n === 1 ? 'À vista' : `${n}x`, valor: n })),
-        aceitar: texto => {
-            const encontrado = String(texto).trim().match(/^(\d{1,3})\s*x?$/i);
-            const parcelas = encontrado ? Number(encontrado[1]) : NaN;
-            if (!Number.isInteger(parcelas) || parcelas < 1 || parcelas > MAX_PARCELAS) {
-                return recusar(`Digite um número de 1 a ${MAX_PARCELAS}. Para pagar de uma vez, escolha "À vista".`);
-            }
-            return ok(parcelas);
-        },
-        guardar: (d, valor) => { d.parcelas = valor; },
-        exibir: valor => valor === 1 ? 'À vista' : `${valor}x`
-    },
-    categoria: {
-        pergunta: () => 'Qual é a categoria?',
-        opcoes: d => categoriasDoAssistente(d.tipo).map(c => ({ rotulo: `${iconeCategoria(c)} ${nomeCategoria(c)}`, valor: c.id })),
-        aceitar: id => categoriaPorId(id) ? ok(id) : recusar('Escolha uma das categorias abaixo.'),
-        guardar: (d, id) => { d.categoriaId = id; },
-        exibir: id => `${iconeCategoria(categoriaPorId(id))} ${nomeCategoria(categoriaPorId(id))}`
-    },
-    data: {
-        pergunta: () => 'Quando aconteceu?',
-        opcoes: () => [
-            { rotulo: '📅 Hoje', valor: 'hoje' },
-            { rotulo: '📅 Ontem', valor: 'ontem' },
-            { rotulo: '🗓️ Outra data', valor: 'outra' },
-            { rotulo: '📆 Agendar para o futuro', valor: 'futura' }
-        ],
-        aceitar: valor => ['hoje', 'ontem', 'outra', 'futura'].includes(valor) ? ok(valor) : recusar('Escolha uma das opções abaixo.'),
-        guardar: (d, valor) => {
-            d.dataModo = valor;
-            d.data = valor === 'hoje' ? hojeISO() : (valor === 'ontem' ? somarDias(hojeISO(), -1) : null);
-        },
-        exibir: valor => ({ hoje: 'Hoje', ontem: 'Ontem', outra: 'Outra data', futura: 'Agendar para o futuro' }[valor])
-    },
-    dataCustom: {
-        pergunta: d => d.dataModo === 'futura'
-            ? 'Para qual dia no futuro? Escolha no calendário.'
-            : 'Escolha a data no calendário.',
-        campo: 'data',
-        aceitar: (iso, d) => {
-            if (!dataValida(iso)) return recusar('Escolha uma data válida no calendário.');
-            if (d.dataModo === 'futura' && iso <= hojeISO()) return recusar('Para agendar, escolha uma data a partir de amanhã.');
-            return ok(iso);
-        },
-        guardar: (d, iso) => { d.data = iso; },
-        exibir: iso => formatarDataBR(iso)
-    },
-    repeticao: {
-        pergunta: () => 'Esse lançamento se repete todo mês, como aluguel ou salário? Escolha ou digite por quantos meses.',
-        campo: 'texto',
-        teclado: 'numeric',
-        placeholder: 'Ex.: 8',
-        opcoes: () => [
-            { rotulo: 'Só uma vez', valor: 1 },
-            { rotulo: '3 meses', valor: 3 },
-            { rotulo: '6 meses', valor: 6 },
-            { rotulo: '12 meses', valor: 12 }
-        ],
-        aceitar: texto => {
-            const encontrado = String(texto).trim().match(/^(\d{1,3})\s*(meses|mês|mes|x)?$/i);
-            const meses = encontrado ? Number(encontrado[1]) : NaN;
-            if (!Number.isInteger(meses) || meses < 1 || meses > MAX_PARCELAS) {
-                return recusar(`Digite um número de 1 a ${MAX_PARCELAS}. Se não se repete, escolha "Só uma vez".`);
-            }
-            return ok(meses);
-        },
-        guardar: (d, valor) => { d.repeticao = valor; },
-        exibir: valor => valor === 1 ? 'Só uma vez' : `Todo mês, por ${valor} meses`
-    },
-    confirmar: {
-        pergunta: () => 'Confira os dados abaixo. Se estiver tudo certo, é só salvar.'
-    }
-};
-
-// Os passos mudam conforme as respostas: transferência não tem categoria, cartão pergunta parcelas.
-function sequenciaDePassos(d) {
-    const sequencia = ['tipo', 'valor', 'descricao', 'conta'];
-    if (d.tipo === 'transferencia') {
-        sequencia.push('contaDestino');
-    } else {
-        if (d.tipo === 'despesa' && contaEhCartao(d.contaId)) sequencia.push('parcelas');
-        sequencia.push('categoria');
-    }
-    sequencia.push('data');
-    if (podeRepetir(d)) sequencia.push('repeticao');
-    sequencia.push('confirmar');
-    return sequencia;
-}
-
-// Despesa parcelada no cartão já é uma sequência; os demais podem se repetir todo mês.
-function podeRepetir(d) {
-    if (d.tipo === 'transferencia') return false;
-    return !(d.tipo === 'despesa' && contaEhCartao(d.contaId) && (d.parcelas || 1) > 1);
-}
-
-function reiniciarAssistente() {
-    Object.assign(chat, {
-        passo: null,
-        dados: {},
-        extras: { pago: true, foto: null },
-        mensagens: [{ de: 'bot', texto: 'Oi! Vou te ajudar a registrar um lançamento, um passo de cada vez.' }],
-        pilha: [],
-        marca: 0,
-        opcoesAtuais: [],
-        salvando: false,
-        resultado: null,
-        mostrarResumo: false
-    });
-    irPara('tipo');
-}
-
-function abrirAssistente() {
-    reiniciarAssistente();
-    abrirModal('modalChat');
-}
-
-function irPara(id) {
-    chat.passo = id;
-    // Data futura = agendado: o interruptor "já foi pago" começa desligado.
-    if (id === 'confirmar') chat.extras.pago = !(chat.dados.data > hojeISO());
-    chat.mensagens.push({ de: 'bot', texto: PASSOS[id].pergunta(chat.dados) });
-    chat.marca = chat.mensagens.length;
-    renderChat(true);
-}
-
-function avancar() {
-    if (chat.passo === 'data' && ['outra', 'futura'].includes(chat.dados.dataModo)) {
-        irPara('dataCustom');
-        return;
-    }
-    const sequencia = sequenciaDePassos(chat.dados);
-    const base = chat.passo === 'dataCustom' ? 'data' : chat.passo;
-    irPara(sequencia[sequencia.indexOf(base) + 1] || 'confirmar');
-}
-
-function responder(bruto, rotuloDigitado) {
-    if (chat.salvando || !PASSOS[chat.passo] || !PASSOS[chat.passo].aceitar) return;
-
-    if (bruto === NOVA_CONTA) {
-        abrirFormularioConta(null, { origem: 'assistente' });
-        return;
-    }
-
-    const passo = PASSOS[chat.passo];
-    const resultado = passo.aceitar(bruto, chat.dados);
-    const textoDoUsuario = String(rotuloDigitado ?? bruto).trim();
-
-    if (!resultado.ok) {
-        if (textoDoUsuario) chat.mensagens.push({ de: 'user', texto: textoDoUsuario });
-        chat.mensagens.push({ de: 'erro', texto: resultado.erro });
-        renderChat(true);
-        return;
-    }
-
-    chat.pilha.push({ passo: chat.passo, dados: { ...chat.dados }, marca: chat.marca });
-    chat.mensagens.push({ de: 'user', texto: passo.exibir(resultado.valor) });
-    passo.guardar(chat.dados, resultado.valor);
-    avancar();
-}
-
-function voltarPasso() {
-    if (chat.salvando || chat.passo === 'concluido' || chat.pilha.length === 0) return;
-    const anterior = chat.pilha.pop();
-    chat.passo = anterior.passo;
-    chat.dados = anterior.dados;
-    chat.mensagens.length = anterior.marca;
-    chat.marca = anterior.marca;
-    renderChat(false);
-}
-
-function entradaDoAssistente() {
-    const d = chat.dados;
-    const parcelado = d.tipo === 'despesa' && contaEhCartao(d.contaId) && (d.parcelas || 1) > 1;
-    const meses = podeRepetir(d) ? (d.repeticao || 1) : 1;
-    const modo = parcelado ? 'parcelado' : (meses > 1 ? 'mensal' : 'unica');
-    return {
-        tipo: d.tipo,
-        descricao: d.descricao,
-        valor: d.valor,
-        data: d.data,
-        contaId: d.contaId,
-        contaDestinoId: d.contaDestinoId,
-        categoriaId: d.tipo === 'transferencia' ? CAT_TRANSFERENCIA : d.categoriaId,
-        modo,
-        quantidade: parcelado ? d.parcelas : (modo === 'mensal' ? meses : 1),
-        pago: chat.extras.pago,
-        foto: chat.extras.foto
-    };
-}
-
-async function salvarDoAssistente() {
-    if (chat.salvando) return;
-    const entrada = entradaDoAssistente();
-    const erros = validarLancamento(entrada);
-    const mensagens = Object.values(erros);
-    if (mensagens.length > 0) {
-        mostrarToast(mensagens[0], 'erro');
-        return;
-    }
-
-    chat.salvando = true;
-    renderChat(false);
-    try {
-        const itens = await criarLancamentos(entrada);
-        chat.resultado = { entrada, quantidade: itens.length };
-        chat.passo = 'concluido';
-    } catch (erro) {
-        console.error(erro);
-        chat.mensagens.push({ de: 'erro', texto: 'Não foi possível salvar. Seus dados continuam aqui, é só tentar de novo.' });
-    } finally {
-        chat.salvando = false;
-        renderChat(true);
-    }
-}
-
-async function aoEscolherFotoDoAssistente() {
-    const entrada = byId('chatFoto');
-    const arquivo = entrada.files && entrada.files[0];
-    if (!arquivo) return;
-    try {
-        chat.extras.foto = await reduzirImagem(arquivo);
-        renderChat(false);
-    } catch (erro) {
-        console.error(erro);
-        mostrarToast('Não foi possível usar essa foto. Tente outra imagem.', 'erro');
-    } finally {
-        entrada.value = '';
-    }
-}
-
-function htmlConfirmacao() {
-    const e = entradaDoAssistente();
-    const transferencia = e.tipo === 'transferencia';
-    const sinal = e.tipo === 'receita' ? '+ ' : (e.tipo === 'despesa' ? '- ' : '');
-    const classe = e.tipo === 'receita' ? 'pos' : (e.tipo === 'despesa' ? 'neg' : '');
-
-    const linhas = [['Descrição', e.descricao]];
-    if (transferencia) {
-        linhas.push(['Sai de', rotuloConta(contaPorId(e.contaId))]);
-        linhas.push(['Entra em', rotuloConta(contaPorId(e.contaDestinoId))]);
-    } else {
-        linhas.push([e.tipo === 'receita' ? 'Entra em' : 'Conta', rotuloConta(contaPorId(e.contaId))]);
-        const categoria = categoriaPorId(e.categoriaId);
-        linhas.push(['Categoria', `${iconeCategoria(categoria)} ${nomeCategoria(categoria)}`]);
-    }
-    linhas.push(['Data', formatarDataBR(e.data)]);
-    if (e.modo === 'parcelado') {
-        linhas.push(['Parcelas', `${e.quantidade}x de ${formatarMoeda(dividirEmParcelas(e.valor, e.quantidade)[0])}`]);
-    }
-    if (e.modo === 'mensal') linhas.push(['Repete', `Todo mês, por ${e.quantidade} meses`]);
-
-    const foto = fotoSegura(e.foto);
-    let notaParcelas = '';
-    if (e.modo !== 'unica') {
-        notaParcelas = '<p class="cartao-nota">Só o 1º lançamento entra como pago. Os próximos ficam agendados, um por mês.</p>';
-    } else if (e.data > hojeISO()) {
-        notaParcelas = '<p class="cartao-nota">Data futura: o lançamento fica agendado e aparece na previsão do mês. Quando acontecer, é só marcar como pago.</p>';
-    }
-    return `
-        <div class="cartao-resumo">
-            <p class="cartao-tipo">${esc(ROTULOS_TIPO[e.tipo])}</p>
-            <p class="cartao-valor ${classe}">${sinal}${formatarMoeda(e.valor)}</p>
-            <dl class="cartao-linhas">
-                ${linhas.map(([nome, valor]) => `<div class="cartao-linha"><dt>${esc(nome)}</dt><dd>${esc(valor)}</dd></div>`).join('')}
-            </dl>
-            <label class="interruptor">
-                <span>${esc(ROTULOS_SITUACAO[e.tipo].sim)}</span>
-                <input type="checkbox" id="chatPago" ${chat.extras.pago ? 'checked' : ''}>
-            </label>
-            ${notaParcelas}
-            <div class="foto-linha">
-                ${foto
-        ? `<img src="${esc(foto)}" alt="Comprovante anexado"><button type="button" class="btn-texto" data-action="chat-foto-remover">Remover foto</button>`
-        : '<button type="button" class="btn btn-sec" data-action="chat-foto">📷 Anexar comprovante (opcional)</button>'}
-            </div>
-        </div>`;
-}
-
-function htmlSucesso() {
-    const { entrada, quantidade } = chat.resultado;
-    const titulos = { despesa: 'Despesa salva!', receita: 'Receita salva!', transferencia: 'Transferência salva!' };
-    const titulo = entrada.data > hojeISO() ? 'Lançamento agendado!' : titulos[entrada.tipo];
-    const nome = entrada.descricao.trim();
-    let detalhe = `${nome} · ${formatarMoeda(entrada.valor)}`;
-    if (entrada.modo === 'parcelado') {
-        detalhe = `${nome}: ${entrada.quantidade}x de ${formatarMoeda(dividirEmParcelas(entrada.valor, entrada.quantidade)[0])}`;
-    } else if (entrada.modo === 'mensal') {
-        detalhe = `${nome}: ${formatarMoeda(entrada.valor)} por mês`;
-    }
-    const mesDoLancamento = entrada.data.slice(0, 7);
-    const foraDoMes = !(ui.inicio || ui.fim) && mesDoLancamento !== ui.mes;
-    const envio = navigator.onLine
-        ? 'Salvo e sendo enviado para a nuvem.'
-        : 'Salvo no aparelho. Será enviado quando a internet voltar.';
-
-    let html = `
-        <div class="sucesso">
-            <svg class="sucesso-check" viewBox="0 0 72 72" aria-hidden="true">
-                <circle cx="36" cy="36" r="34"></circle>
-                <path d="M21 37 L32 48 L52 26"></path>
-            </svg>
-            <h3>${esc(titulo)}</h3>
-            <p>${esc(detalhe)}</p>
-            <p>${esc(envio)}</p>
-            ${quantidade > 1 && entrada.tipo !== 'transferencia' ? `<p>${quantidade} lançamentos criados, um por mês.</p>` : ''}
-            ${foraDoMes ? `<p>Este lançamento é de ${esc(rotuloMes(mesDoLancamento))}, por isso não aparece no mês que está na tela.</p>` : ''}
-        </div>`;
-
-    if (chat.mostrarResumo) {
-        const resumo = resumoDoMes(mesDoLancamento);
-        html += `
-            <div class="cartao-resumo">
-                <p class="cartao-tipo">Resumo de ${esc(rotuloMes(mesDoLancamento))}</p>
-                <dl class="cartao-linhas">
-                    <div class="cartao-linha"><dt>Entradas</dt><dd class="pos">${formatarMoeda(resumo.entradas)}</dd></div>
-                    <div class="cartao-linha"><dt>Saídas</dt><dd class="neg">${formatarMoeda(resumo.saidas)}</dd></div>
-                    <div class="cartao-linha"><dt>Resultado do mês</dt><dd class="${resumo.saldo < 0 ? 'neg' : 'pos'}">${formatarMoeda(resumo.saldo)}</dd></div>
-                </dl>
-            </div>`;
-    }
-    return html;
-}
-
-function htmlAcoesDoRodape() {
-    if (chat.passo === 'concluido') {
-        const mesDoLancamento = chat.resultado.entrada.data.slice(0, 7);
-        const foraDoMes = !(ui.inicio || ui.fim) && mesDoLancamento !== ui.mes;
-        return [
-            '<button type="button" class="btn btn-bloco" data-action="chat-novo">Registrar outro</button>',
-            foraDoMes ? `<button type="button" class="btn btn-sec btn-bloco" data-action="chat-ir-mes">Ver ${esc(rotuloMes(mesDoLancamento))}</button>` : '',
-            chat.mostrarResumo ? '' : '<button type="button" class="btn btn-sec btn-bloco" data-action="chat-resumo">Ver resumo do mês</button>',
-            '<button type="button" class="btn-texto" data-action="chat-concluir">Concluir</button>'
-        ].join('');
-    }
-    return `
-        <button type="button" class="btn btn-bloco" data-action="chat-salvar" ${chat.salvando ? 'disabled' : ''}>${chat.salvando ? 'Salvando…' : 'Salvar lançamento'}</button>
-        <button type="button" class="btn-texto" data-action="chat-concluir" ${chat.salvando ? 'disabled' : ''}>Cancelar</button>`;
-}
-
-function renderChat(animarUltima) {
-    const concluido = chat.passo === 'concluido';
-    const confirmando = chat.passo === 'confirmar' || concluido;
-    const passo = PASSOS[chat.passo];
-
-    // Cabeçalho e progresso
-    const sequencia = sequenciaDePassos(chat.dados);
-    const indice = concluido ? sequencia.length : sequencia.indexOf(chat.passo === 'dataCustom' ? 'data' : chat.passo) + 1;
-    byId('chatProgressoBarra').style.width = `${Math.round((indice / sequencia.length) * 100)}%`;
-    byId('chatPassoTexto').textContent = concluido ? 'Tudo certo!' : `Passo ${indice} de ${sequencia.length}`;
-    byId('chatVoltar').hidden = concluido || chat.salvando || chat.pilha.length === 0;
-
-    // Conversa
-    const ultima = chat.mensagens.length - 1;
-    let html = chat.mensagens
-        .map((m, i) => `<div class="bolha bolha-${m.de}${animarUltima && i === ultima ? ' nova' : ''}">${esc(m.texto)}</div>`)
-        .join('');
-    if (chat.passo === 'confirmar') html += htmlConfirmacao();
-    if (concluido) html += htmlSucesso();
-    const area = byId('chatMensagens');
-    area.innerHTML = html;
-    area.scrollTop = area.scrollHeight;
-
-    const interruptor = byId('chatPago');
-    if (interruptor) {
-        interruptor.onchange = () => {
-            chat.extras.pago = interruptor.checked;
-        };
-    }
-
-    // Rodapé: opções, ações ou campo de digitação
-    const rodape = byId('chatOpcoes');
-    if (confirmando) {
-        chat.opcoesAtuais = [];
-        rodape.className = 'acoes-chat';
-        rodape.innerHTML = htmlAcoesDoRodape();
-    } else {
-        chat.opcoesAtuais = passo.opcoes ? passo.opcoes(chat.dados) : [];
-        rodape.className = 'opcoes';
-        rodape.innerHTML = chat.opcoesAtuais
-            .map((opcao, i) => `<button type="button" class="opcao${opcao.acao ? ' opcao-acao' : ''}" data-action="chat-opcao" data-indice="${i}">${esc(opcao.rotulo)}</button>`)
-            .join('');
-    }
-
-    const formulario = byId('chatForm');
-    const campo = byId('chatCampo');
-    const mostrarCampo = !confirmando && Boolean(passo.campo);
-    formulario.hidden = !mostrarCampo;
-    if (mostrarCampo) {
-        const ehData = passo.campo === 'data';
-        campo.type = ehData ? 'date' : 'text';
-        campo.setAttribute('inputmode', passo.teclado || 'text');
-        campo.placeholder = passo.placeholder || '';
-        const primeiroDiaFuturo = somarDias(hojeISO(), 1);
-        const agendando = ehData && chat.dados.dataModo === 'futura';
-        campo.min = agendando ? primeiroDiaFuturo : '';
-        campo.value = ehData ? (agendando ? primeiroDiaFuturo : hojeISO()) : '';
-        byId('chatEnviar').textContent = ehData ? 'Confirmar' : 'Enviar';
-        if (passo.foco) setTimeout(() => campo.focus(), 80);
-    }
-}
-
-function enviarDoCampoDoAssistente(evento) {
-    evento.preventDefault();
-    const passo = PASSOS[chat.passo];
-    if (!passo || !passo.campo) return;
-    const campo = byId('chatCampo');
-    const texto = campo.value.trim();
-    campo.value = '';
-    responder(texto, passo.campo === 'data' ? formatarDataBR(texto) : texto);
-}
-
-function escolherOpcaoDoAssistente(indice) {
-    const opcao = chat.opcoesAtuais[indice];
-    if (opcao) responder(opcao.valor, opcao.rotulo);
-}
-
-// ============================================================
 // AÇÕES DA INTERFACE (um único ouvinte de clique para o app inteiro)
 // ============================================================
 const ACOES = {
     'mes-anterior': () => mudarMes(-1),
     'mes-seguinte': () => mudarMes(1),
+    'ir-hoje': () => irParaMes(mesAtualISO()),
     'abrir-menu': () => abrirModal('modalMenu'),
-    'novo-lancamento': () => abrirAssistente(),
+    'novo-despesa': () => abrirLancamento({ tipo: 'despesa' }),
+    'novo-receita': () => abrirLancamento({ tipo: 'receita' }),
+    'novo-transferencia': () => abrirLancamento({ tipo: 'transferencia' }),
+    'pagar-fatura': elemento => {
+        const cartao = achar('contas', elemento.dataset.id);
+        if (!cartao) return;
+        // Sugere o valor das compras do período no cartão; a pessoa ajusta se precisar.
+        abrirLancamento({
+            tipo: 'transferencia',
+            destinoId: cartao.id,
+            valor: gastosDoCartaoNoPeriodo(cartao, periodoDoResumo()) || null,
+            descricao: 'Pagamento da fatura'
+        });
+    },
     'fechar-modal': elemento => fecharModal(elemento.closest('.modal').id),
     'clicar-fora': () => aoClicarFora(),
     'alternar-senha': elemento => {
@@ -2587,12 +2388,17 @@ const ACOES = {
     'sincronizar-agora': () => sincronizarAgora(),
     'sair': () => encerrarSessao(),
     'limpar-filtros': () => limparFiltros(),
-    'filtro-status': elemento => {
-        ui.status = elemento.dataset.status;
+    'filtro-visao': elemento => {
+        ui.visao = elemento.dataset.visao;
+        renderizar();
+    },
+    'filtrar-categoria': elemento => {
+        ui.categoria = ui.categoria === elemento.dataset.id ? '' : elemento.dataset.id;
+        sincronizarCamposDeFiltro();
         renderizar();
     },
     'ver-pendentes': () => {
-        ui.status = 'pendentes';
+        ui.visao = 'pendentes';
         renderizar();
         byId('tituloLancamentos').scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
@@ -2602,48 +2408,53 @@ const ACOES = {
     'nova-meta': () => abrirFormularioMeta(null),
     'editar-meta': elemento => abrirFormularioMeta(elemento.dataset.id),
     'excluir-meta': () => excluirMeta(byId('mId').value),
-    'editar-transacao': elemento => abrirFormularioTransacao(elemento.dataset.id),
-    'excluir-transacao': () => excluirTransacao(byId('tId').value),
+    'editar-transacao': elemento => abrirLancamento({ id: elemento.dataset.id }),
+    'excluir-transacao': () => excluirTransacao(lanc.id),
     'marcar-pago': elemento => marcarComoPago(elemento.dataset.id),
     'ver-comprovante': elemento => {
         const transacao = achar('transacoes', elemento.dataset.id);
         if (transacao) abrirZoom(transacao.foto);
     },
     'fechar-zoom': () => fecharZoom(),
-    'form-foto-escolher': () => byId('tFoto').click(),
-    'form-foto-remover': () => {
-        formTransacao.foto = null;
-        renderFotoDoFormulario();
+    'lanc-escolher': elemento => escolherNoLancamento(elemento.dataset.campo, elemento.dataset.valor),
+    'lanc-sugestao': elemento => usarSugestao(Number(elemento.dataset.indice)),
+    'lanc-qtd': elemento => mudarQuantidade(Number(elemento.dataset.delta)),
+    'lanc-salvar-novo': () => salvarLancamento(true),
+    'lanc-foto': () => byId('lFoto').click(),
+    'lanc-foto-remover': () => {
+        lanc.foto = null;
+        renderFotoDoLancamento();
     },
     'abrir-exportar': () => abrirExportar(),
     'exportar-csv': () => baixarCSV(),
     'exportar-pdf': () => baixarPDF(),
     'resposta-confirmacao': elemento => responderConfirmacao(Number(elemento.dataset.indice)),
-    'chat-opcao': elemento => escolherOpcaoDoAssistente(Number(elemento.dataset.indice)),
-    'chat-voltar': () => voltarPasso(),
-    'chat-salvar': () => salvarDoAssistente(),
-    'chat-concluir': () => fecharModal('modalChat'),
-    'chat-novo': () => {
-        reiniciarAssistente();
-    },
-    'chat-resumo': () => {
-        chat.mostrarResumo = true;
-        renderChat(false);
-    },
-    'chat-ir-mes': () => {
-        irParaMes(chat.resultado.entrada.data.slice(0, 7));
-        fecharModal('modalChat');
-    },
-    'chat-foto': () => byId('chatFoto').click(),
-    'chat-foto-remover': () => {
-        chat.extras.foto = null;
-        renderChat(false);
-    },
-    'chat-formulario': () => {
-        fecharModal('modalChat');
-        abrirFormularioTransacao(null);
-    }
+    'toast-acao': () => usarAcaoDoToast()
 };
+
+// Deslizar para os lados troca de mês (fora de carrosséis, campos e filtros).
+function registrarGestoDeMes() {
+    let toque = null;
+    document.addEventListener('touchstart', evento => {
+        if (pilhaModais.length > 0 || evento.touches.length !== 1) {
+            toque = null;
+            return;
+        }
+        const ponto = evento.touches[0];
+        toque = { x: ponto.clientX, y: ponto.clientY, alvo: evento.target };
+    }, { passive: true });
+    document.addEventListener('touchend', evento => {
+        if (!toque) return;
+        const ponto = evento.changedTouches[0];
+        const dx = ponto.clientX - toque.x;
+        const dy = ponto.clientY - toque.y;
+        const alvo = toque.alvo;
+        toque = null;
+        if (Math.abs(dx) < 90 || Math.abs(dy) > 45 || byId('app').hidden) return;
+        if (alvo && alvo.closest && alvo.closest('.carrossel, .chips, input, select, textarea')) return;
+        mudarMes(dx < 0 ? 1 : -1);
+    }, { passive: true });
+}
 
 function registrarEventos() {
     document.addEventListener('click', evento => {
@@ -2671,25 +2482,42 @@ function registrarEventos() {
     });
 
     byId('formLogin').addEventListener('submit', entrar);
-    byId('formTransacao').addEventListener('submit', salvarFormularioTransacao);
+    byId('formLancamento').addEventListener('submit', evento => {
+        evento.preventDefault();
+        salvarLancamento(false);
+    });
     byId('formConta').addEventListener('submit', salvarFormularioConta);
     byId('formMeta').addEventListener('submit', salvarFormularioMeta);
-    byId('chatForm').addEventListener('submit', enviarDoCampoDoAssistente);
 
-    document.querySelectorAll('input[name="tTipo"]').forEach(radio => radio.addEventListener('change', ajustarFormularioPorTipo));
-    document.querySelectorAll('input[name="cTipo"]').forEach(radio => radio.addEventListener('change', ajustarFormularioConta));
-    ['tConta', 'tContaDestino'].forEach(id => {
-        byId(id).addEventListener('change', evento => {
-            if (evento.target.value !== NOVA_CONTA) return;
-            evento.target.value = '';
-            abrirFormularioConta(null, { origem: 'formulario', campo: id });
-        });
+    document.querySelectorAll('input[name="lTipo"]').forEach(radio => {
+        radio.addEventListener('change', () => aoMudarTipoLancamento(radio.value));
     });
+    document.querySelectorAll('input[name="cTipo"]').forEach(radio => radio.addEventListener('change', ajustarFormularioConta));
 
-    byId('tRepeticao').addEventListener('change', ajustarQuantidade);
-    byId('tData').addEventListener('change', ajustarSituacaoPelaData);
-    byId('tFoto').addEventListener('change', aoEscolherFotoDoFormulario);
-    byId('chatFoto').addEventListener('change', aoEscolherFotoDoAssistente);
+    byId('lValor').addEventListener('input', renderPrevia);
+    byId('lValor').addEventListener('blur', evento => {
+        const valor = lerDinheiro(evento.target.value);
+        if (valor !== null && valor > 0) evento.target.value = numeroParaCampo(valor);
+    });
+    byId('lDescricao').addEventListener('input', renderPrevia);
+    byId('lDescricao').addEventListener('change', aprenderComDescricao);
+    byId('lData').addEventListener('change', evento => {
+        if (!dataValida(evento.target.value)) return;
+        lanc.data = evento.target.value;
+        ajustarPagoAutomatico();
+        renderLancamento();
+    });
+    byId('lQuantidade').addEventListener('change', evento => {
+        definirQuantidade(evento.target.value);
+        renderLancamento();
+    });
+    byId('lPago').addEventListener('change', evento => {
+        lanc.pago = evento.target.checked;
+        lanc.pagoManual = true;
+        byId('lPagoDica').textContent = dicaDaSituacao();
+        renderPrevia();
+    });
+    byId('lFoto').addEventListener('change', aoEscolherFotoDoLancamento);
 
     byId('filtroInicio').addEventListener('change', aoMudarPeriodo);
     byId('filtroFim').addEventListener('change', aoMudarPeriodo);
@@ -2712,6 +2540,7 @@ function registrarEventos() {
         const desatualizado = Date.now() - ultimaSincOk > SYNC_VALIDADE_MS;
         if (contarPendentes() > 0 || desatualizado) agendarSync(true);
     });
+    registrarGestoDeMes();
 }
 
 // ============================================================
