@@ -33,6 +33,10 @@
             --neg-soft: #fbe7e3;
             --warn: #8f5509;
             --warn-soft: #fbefd8;
+            --pos-forte: #157a4d;
+            --pos-forte-ink: #ffffff;
+            --neg-forte: #bf3a27;
+            --neg-forte-ink: #ffffff;
             --hero-bg: #0b5566;
             --hero-ink: #ffffff;
             --hero-soft: rgba(255, 255, 255, 0.78);
@@ -41,7 +45,6 @@
             --raio-p: 10px;
             --raio-m: 14px;
             --raio-g: 24px;
-            --sombra-flutuante: 0 12px 28px rgba(11, 40, 36, 0.22);
             --fonte: ui-rounded, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
             --area-topo: env(safe-area-inset-top, 0px);
             --area-base: env(safe-area-inset-bottom, 0px);
@@ -64,10 +67,13 @@
             --neg-soft: rgba(255, 142, 121, 0.16);
             --warn: #f0b656;
             --warn-soft: rgba(240, 182, 86, 0.16);
+            --pos-forte: #5fd39a;
+            --pos-forte-ink: #06241a;
+            --neg-forte: #ff8e79;
+            --neg-forte-ink: #2b0e08;
             --hero-bg: #12414c;
             --hero-ink: #eaf7fa;
             --hero-soft: rgba(234, 247, 250, 0.74);
-            --sombra-flutuante: 0 12px 28px rgba(0, 0, 0, 0.5);
         }
 
         /* ==================== Base ==================== */
@@ -260,15 +266,14 @@
             position: sticky;
             top: 0;
             z-index: 20;
-            padding: calc(10px + var(--area-topo)) 16px 10px;
+            padding: calc(10px + var(--area-topo)) 16px 8px;
             background: var(--bg);
         }
 
         .topo-linha {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            gap: 10px;
             max-width: 520px;
             margin: 0 auto;
         }
@@ -278,6 +283,8 @@
             flex: 1;
             align-items: center;
             justify-content: space-between;
+            gap: 4px;
+            min-width: 0;
             padding: 4px;
             border: 1px solid var(--line);
             border-radius: 999px;
@@ -292,31 +299,56 @@
             font-size: 22px;
         }
 
-        .mes-rotulo {
-            font-weight: 800;
+        .mes-centro {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 0;
+            line-height: 1.15;
             text-align: center;
         }
 
-        /* ==================== Conteúdo ==================== */
+        .mes-rotulo {
+            font-weight: 800;
+        }
+
+        .mes-estado {
+            color: var(--ink-soft);
+            font-size: 0.74rem;
+            font-weight: 700;
+        }
+
+        .btn-hoje {
+            min-height: 40px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--brand-soft);
+            color: var(--brand);
+            font-weight: 800;
+        }
+
+        /* ==================== Balanço do mês ==================== */
         .conteudo {
             max-width: 520px;
             margin: 0 auto;
-            padding: 4px 16px calc(120px + var(--area-base));
+            padding: 4px 16px calc(130px + var(--area-base));
         }
 
-        .resumo {
-            padding: 22px 20px 18px;
+        .balanco {
+            padding: 20px 20px 6px;
             border-radius: var(--raio-g);
             background: var(--hero-bg);
             color: var(--hero-ink);
         }
 
-        .resumo-rotulo {
+        .balanco-rotulo {
             color: var(--hero-soft);
+            font-weight: 700;
         }
 
-        .resumo-valor {
-            margin: 2px 0 18px;
+        .balanco-valor {
+            margin: 2px 0 4px;
             font-size: 2.6rem;
             font-weight: 800;
             line-height: 1.1;
@@ -324,43 +356,222 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .resumo-valor.negativo {
+        .balanco-valor.negativo {
             color: var(--hero-neg);
         }
 
-        .resumo-par {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            padding-top: 14px;
-            border-top: 1px solid rgba(255, 255, 255, 0.22);
-        }
-
-        .resumo-par span {
-            display: block;
+        .balanco-hoje {
             color: var(--hero-soft);
-            font-size: 0.88rem;
-        }
-
-        .resumo-par strong {
-            font-size: 1.2rem;
-            font-variant-numeric: tabular-nums;
-        }
-
-        #totalRec { color: var(--hero-pos); }
-        #totalDes { color: var(--hero-neg); }
-
-        .resumo-anterior {
-            margin-top: 12px;
-            font-size: 0.92rem;
+            font-size: 0.9rem;
             font-weight: 700;
         }
 
-        .resumo-nota {
-            margin-top: 12px;
+        .equacao {
+            margin-top: 14px;
+        }
+
+        .equacao li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 11px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .equacao li > div {
+            min-width: 0;
+        }
+
+        .equacao small {
+            display: block;
             color: var(--hero-soft);
             font-size: 0.8rem;
         }
+
+        .equacao strong {
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .equacao .mais { color: var(--hero-pos); }
+        .equacao .menos { color: var(--hero-neg); }
+
+        .balanco-cartao {
+            padding: 10px 0 14px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            color: var(--hero-soft);
+            font-size: 0.84rem;
+        }
+
+        /* ==================== Contas em carrossel ==================== */
+        .carrossel {
+            display: flex;
+            gap: 10px;
+            margin: 0 -16px;
+            padding: 2px 16px 8px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .carrossel > li {
+            flex: 0 0 min(76%, 260px);
+            scroll-snap-align: start;
+        }
+
+        .carrossel > .vazio {
+            flex: 1 0 100%;
+        }
+
+        .conta-card {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--line);
+            border-radius: var(--raio-m);
+            background: var(--surface);
+        }
+
+        .conta-card-corpo {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            width: 100%;
+            padding: 14px;
+            border: 0;
+            background: transparent;
+            text-align: left;
+        }
+
+        .conta-topo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .conta-card .mini {
+            align-self: flex-start;
+            margin: 0 14px 14px;
+        }
+
+        .valor-grande {
+            font-size: 1.4rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ==================== Para onde vai o dinheiro ==================== */
+        .cat-linha {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 12px;
+            border: 1.5px solid transparent;
+            border-radius: var(--raio-m);
+            background: var(--surface);
+            text-align: left;
+        }
+
+        .cat-linha[aria-pressed="true"] {
+            border-color: var(--brand);
+            background: var(--brand-soft);
+        }
+
+        .cat-corpo {
+            display: flex;
+            flex: 1;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .cat-topo {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .cat-corpo .barra > span {
+            background: var(--neg);
+        }
+
+        /* ==================== Barra de ações fixa ==================== */
+        .barra-acoes {
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 30;
+            padding: 10px 16px calc(12px + var(--area-base));
+            border-top: 1px solid var(--line);
+            background: var(--bg);
+        }
+
+        .barra-acoes-grade {
+            display: grid;
+            grid-template-columns: 1fr 1fr 56px;
+            gap: 10px;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .acao-grande,
+        .acao-transf {
+            min-height: 56px;
+            border-radius: var(--raio-m);
+            font-weight: 800;
+            transition: transform 0.15s ease;
+        }
+
+        .acao-grande:active,
+        .acao-transf:active {
+            transform: scale(0.97);
+        }
+
+        .acao-grande {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 0;
+            font-size: 1.05rem;
+        }
+
+        .acao-simbolo {
+            font-size: 1.5rem;
+            line-height: 1;
+        }
+
+        .acao-despesa {
+            background: var(--neg-forte);
+            color: var(--neg-forte-ink);
+        }
+
+        .acao-receita {
+            background: var(--pos-forte);
+            color: var(--pos-forte-ink);
+        }
+
+        .acao-transf {
+            border: 1.5px solid var(--line);
+            background: var(--surface);
+            font-size: 1.4rem;
+        }
+
+        /* ==================== Listas e lançamentos ==================== */
+
+
+
+
+
+
+
+
+
+
 
         .aviso {
             display: block;
@@ -460,8 +671,6 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* Contas */
-        .conta-corpo,
         .meta-corpo {
             display: flex;
             align-items: center;
@@ -474,11 +683,6 @@
             text-align: left;
         }
 
-        .conta-saldo {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-        }
 
         /* Metas */
         .meta-corpo {
@@ -514,9 +718,12 @@
         .chips {
             display: flex;
             gap: 8px;
+            margin-bottom: 4px;
+            overflow-x: auto;
         }
 
         .chip {
+            flex: none;
             min-height: 36px;
             padding: 0 14px;
             border: 1px solid var(--line);
@@ -593,45 +800,6 @@
         .mini-link {
             background: var(--brand-soft);
             color: var(--brand);
-        }
-
-        /* ==================== Botão principal flutuante ==================== */
-        .fab-area {
-            position: fixed;
-            right: 0;
-            bottom: calc(16px + var(--area-base));
-            left: 0;
-            z-index: 30;
-            display: flex;
-            justify-content: center;
-            pointer-events: none;
-        }
-
-        .fab {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            min-height: 56px;
-            padding: 0 26px;
-            border: 0;
-            border-radius: 999px;
-            background: var(--brand);
-            box-shadow: var(--sombra-flutuante);
-            color: var(--brand-ink);
-            font-size: 1.05rem;
-            font-weight: 800;
-            pointer-events: auto;
-            transition: transform 0.15s ease;
-        }
-
-        .fab:active {
-            transform: scale(0.96);
-        }
-
-        .fab-mais {
-            margin-top: -2px;
-            font-size: 1.6rem;
-            line-height: 1;
         }
 
         /* ==================== Janelas (modais) ==================== */
@@ -777,8 +945,7 @@
         .campo input[type="password"],
         .campo input[type="number"],
         .campo input[type="date"],
-        .campo select,
-        .chat-entrada input {
+        .campo select {
             display: block;
             width: 100%;
             min-height: 48px;
@@ -802,8 +969,7 @@
         }
 
         .campo input:focus,
-        .campo select:focus,
-        .chat-entrada input:focus {
+        .campo select:focus {
             border-color: var(--brand);
             background-color: var(--surface);
         }
@@ -913,193 +1079,150 @@
             object-fit: cover;
         }
 
-        /* ==================== Assistente de lançamento ==================== */
-        .modal-chat {
-            height: 88vh;
-            height: 88dvh;
-            max-height: 720px;
+        /* ==================== Tela de lançamento ==================== */
+        .modal-lanc {
+            --tom: var(--brand);
+            --tom-soft: var(--brand-soft);
         }
 
-        .chat-topo {
-            padding: 14px 16px 10px;
-            border-bottom: 1px solid var(--line);
+        .modal-lanc[data-tom="despesa"] {
+            --tom: var(--neg);
+            --tom-soft: var(--neg-soft);
         }
 
-        .chat-linha {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .modal-lanc[data-tom="receita"] {
+            --tom: var(--pos);
+            --tom-soft: var(--pos-soft);
         }
 
-        .chat-linha h2 {
-            flex: 1;
-            font-size: 1.15rem;
-            font-weight: 800;
+        .modal-lanc .modal-cab h2 {
+            color: var(--tom);
         }
 
-        .progresso {
-            height: 6px;
-            margin-top: 10px;
-            overflow: hidden;
-            border-radius: 999px;
-            background: var(--surface-2);
+        .modal-lanc .segmento input:checked + span {
+            color: var(--tom);
         }
 
-        .progresso span {
-            display: block;
-            width: 0;
-            height: 100%;
-            border-radius: inherit;
-            background: var(--brand);
-            transition: width 0.3s ease;
+        .modal-lanc .btn-tom {
+            background: var(--tom);
+            color: var(--surface);
         }
 
-        .chat-passo {
-            margin-top: 6px;
-            color: var(--ink-soft);
-            font-size: 0.82rem;
-        }
-
-        .chat-msgs {
-            display: flex;
-            flex: 1;
-            flex-direction: column;
-            gap: 10px;
-            min-height: 0;
-            padding: 16px;
-            overflow-y: auto;
-            background: var(--bg);
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .bolha {
-            max-width: 86%;
-            padding: 11px 14px;
-            border-radius: 18px;
-            line-height: 1.4;
-            overflow-wrap: anywhere;
-            white-space: pre-line;
-        }
-
-        .bolha-bot {
-            align-self: flex-start;
-            border: 1px solid var(--line);
-            border-bottom-left-radius: 6px;
-            background: var(--surface);
-        }
-
-        .bolha-user {
-            align-self: flex-end;
-            border-bottom-right-radius: 6px;
-            background: var(--brand);
-            color: var(--brand-ink);
-        }
-
-        .bolha-erro {
-            align-self: flex-start;
-            border-bottom-left-radius: 6px;
-            background: var(--neg-soft);
-            color: var(--neg);
+        .lanc-info {
+            margin-bottom: 10px;
+            padding: 10px 12px;
+            border-radius: var(--raio-p);
+            background: var(--warn-soft);
+            color: var(--warn);
+            font-size: 0.9rem;
             font-weight: 600;
         }
 
-        .bolha.nova {
-            animation: entrar 0.25s ease-out both;
-        }
-
-        .chat-rodape {
+        .valor-linha {
             display: flex;
-            flex-direction: column;
-            gap: 10px;
-            padding: 12px 16px 14px;
-            border-top: 1px solid var(--line);
-            background: var(--surface);
+            align-items: baseline;
+            gap: 8px;
+            padding-bottom: 4px;
+            border-bottom: 2px solid var(--tom);
         }
 
-        .opcoes {
+        .valor-linha > span {
+            color: var(--tom);
+            font-size: 1.4rem;
+            font-weight: 800;
+        }
+
+        .campo .valor-linha input[type="text"] {
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            color: var(--tom);
+            font-size: 2.2rem;
+            font-weight: 800;
+        }
+
+        .campo .valor-linha input[type="text"]:focus {
+            background: transparent;
+        }
+
+        .grade-chips {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            max-height: 38vh;
-            overflow-y: auto;
         }
 
-        .opcao {
-            min-height: 46px;
-            padding: 0 16px;
-            border: 1.5px solid var(--brand);
+        .grade-chips + input[type="date"] {
+            margin-top: 8px;
+        }
+
+        .opt {
+            min-height: 44px;
+            padding: 0 14px;
+            border: 1.5px solid var(--line);
             border-radius: 999px;
             background: var(--surface);
-            color: var(--brand);
             font-weight: 700;
         }
 
-        .opcao:active {
-            background: var(--brand);
-            color: var(--brand-ink);
+        .opt[aria-pressed="true"] {
+            border-color: var(--tom);
+            background: var(--tom-soft);
+            color: var(--tom);
         }
 
-        .opcao-acao {
+        .opt-acao {
             border-style: dashed;
+            color: var(--ink-soft);
         }
 
-        .acoes-chat {
+        .sugestoes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .sugestao {
+            min-height: 34px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--surface-2);
+            font-size: 0.86rem;
+            font-weight: 700;
+        }
+
+        .passos-qtd {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .campo .passos-qtd input[type="number"] {
+            width: 90px;
+            text-align: center;
+        }
+
+        .lanc-previa {
             display: flex;
             flex-direction: column;
-            gap: 8px;
-        }
-
-        .chat-entrada {
-            display: flex;
-            gap: 8px;
-        }
-
-        .chat-entrada input {
-            flex: 1;
-            min-width: 0;
-            border-radius: 999px;
-            padding: 0 16px;
-        }
-
-        .cartao-resumo {
-            align-self: stretch;
-            padding: 16px;
-            border: 1px solid var(--line);
+            gap: 2px;
+            margin-top: 18px;
+            padding: 14px;
             border-radius: var(--raio-m);
-            background: var(--surface);
+            background: var(--tom-soft);
         }
 
-        .cartao-tipo {
+        .lanc-previa strong {
+            color: var(--tom);
+        }
+
+        .lanc-previa span {
             color: var(--ink-soft);
-            font-weight: 700;
-        }
-
-        .cartao-valor {
-            font-size: 1.9rem;
-            font-weight: 800;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .cartao-linhas {
-            margin-top: 10px;
-        }
-
-        .cartao-linha {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 9px 0;
-            border-top: 1px solid var(--line);
-        }
-
-        .cartao-linha dt {
-            color: var(--ink-soft);
-        }
-
-        .cartao-linha dd {
-            font-weight: 700;
-            text-align: right;
-            overflow-wrap: anywhere;
+            font-size: 0.9rem;
         }
 
         .interruptor {
@@ -1107,8 +1230,6 @@
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            padding-top: 12px;
-            border-top: 1px solid var(--line);
             font-weight: 700;
         }
 
@@ -1147,53 +1268,27 @@
             transform: translateX(22px);
         }
 
-        .cartao-nota {
-            margin-top: 8px;
-            color: var(--ink-soft);
-            font-size: 0.84rem;
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .sucesso {
-            align-self: stretch;
-            padding: 12px 4px;
-            text-align: center;
-        }
-
-        .sucesso h3 {
-            margin-top: 10px;
-            font-size: 1.25rem;
+        .toast-acao {
+            min-height: 32px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.22);
+            color: inherit;
             font-weight: 800;
-        }
-
-        .sucesso p {
-            margin-top: 4px;
-            color: var(--ink-soft);
-        }
-
-        .sucesso-check {
-            width: 72px;
-            height: 72px;
-        }
-
-        .sucesso-check circle {
-            fill: var(--pos-soft);
-        }
-
-        .sucesso-check path {
-            fill: none;
-            stroke: var(--pos);
-            stroke-width: 5;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            stroke-dasharray: 40;
-            stroke-dashoffset: 40;
-            animation: tracar 0.5s 0.15s ease-out forwards;
+            white-space: nowrap;
         }
 
         /* ==================== Avisos e visualizador ==================== */
         .toast {
             position: fixed;
-            bottom: calc(92px + var(--area-base));
+            bottom: calc(104px + var(--area-base));
             left: 50%;
             z-index: 2000;
             max-width: min(92vw, 460px);
@@ -1248,14 +1343,7 @@
         }
 
         /* ==================== Animações ==================== */
-        @keyframes entrar {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: none; }
-        }
 
-        @keyframes tracar {
-            to { stroke-dashoffset: 0; }
-        }
 
         @media (min-width: 700px) {
             .modal {
@@ -1273,9 +1361,6 @@
                 transition: transform 0.25s ease, opacity 0.25s ease;
             }
 
-            .modal-chat {
-                height: 680px;
-            }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -1312,9 +1397,13 @@
             <div class="topo-linha">
                 <div class="mes-nav">
                     <button type="button" class="icone-btn" data-action="mes-anterior" aria-label="Mês anterior">‹</button>
-                    <span class="mes-rotulo" id="mesRotulo" aria-live="polite"></span>
+                    <div class="mes-centro" aria-live="polite">
+                        <span class="mes-rotulo" id="mesRotulo"></span>
+                        <span class="mes-estado" id="mesEstado"></span>
+                    </div>
                     <button type="button" class="icone-btn" data-action="mes-seguinte" aria-label="Próximo mês">›</button>
                 </div>
+                <button type="button" class="btn-hoje" id="btnHoje" data-action="ir-hoje" hidden>Hoje</button>
                 <button type="button" class="icone-btn" data-action="abrir-menu" aria-label="Filtros e ajustes">
                     ⚙️<span class="ponto-sync" id="pontoSync" hidden></span>
                 </button>
@@ -1322,21 +1411,41 @@
         </header>
 
         <main class="conteudo">
-            <section class="resumo" aria-label="Resumo do período">
-                <p class="resumo-rotulo" id="resumoRotulo">Saldo nas contas</p>
-                <p class="resumo-valor" id="saldoTotal">R$ 0,00</p>
-                <div class="resumo-par">
-                    <div>
-                        <span id="rotuloEntradas">Entradas</span>
-                        <strong id="totalRec">R$ 0,00</strong>
-                    </div>
-                    <div>
-                        <span id="rotuloSaidas">Saídas</span>
-                        <strong id="totalDes">R$ 0,00</strong>
-                    </div>
-                </div>
-                <p class="resumo-anterior" id="resumoAnterior" hidden></p>
-                <p class="resumo-nota" id="resumoNota"></p>
+            <section class="balanco" aria-label="Balanço do mês">
+                <p class="balanco-rotulo" id="balancoRotulo"></p>
+                <p class="balanco-valor" id="saldoTotal">R$ 0,00</p>
+                <p class="balanco-hoje" id="balancoHoje" hidden></p>
+                <ul class="equacao">
+                    <li>
+                        <div>
+                            <span>Começou o mês com</span>
+                            <small>O que já estava nas contas</small>
+                        </div>
+                        <strong id="eqInicio">R$ 0,00</strong>
+                    </li>
+                    <li>
+                        <div>
+                            <span>Receitas</span>
+                            <small id="eqRecDetalhe"></small>
+                        </div>
+                        <strong class="mais" id="eqRec">+ R$ 0,00</strong>
+                    </li>
+                    <li>
+                        <div>
+                            <span>Despesas</span>
+                            <small id="eqDesDetalhe"></small>
+                        </div>
+                        <strong class="menos" id="eqDes">- R$ 0,00</strong>
+                    </li>
+                    <li id="eqTransLinha" hidden>
+                        <div>
+                            <span>Faturas e transferências</span>
+                            <small>Pagamentos entre suas contas</small>
+                        </div>
+                        <strong id="eqTrans"></strong>
+                    </li>
+                </ul>
+                <p class="balanco-cartao" id="balancoCartao" hidden></p>
             </section>
 
             <button type="button" class="aviso" id="avisoPendentes" data-action="ver-pendentes" hidden></button>
@@ -1351,7 +1460,15 @@
                     <h2 id="tituloContas">Contas e cartões</h2>
                     <button type="button" class="btn-texto" data-action="nova-conta">Adicionar</button>
                 </div>
-                <ul class="lista" id="listaContas"></ul>
+                <ul class="carrossel" id="listaContas"></ul>
+            </section>
+
+            <section class="secao" id="secaoCategorias" aria-labelledby="tituloCategorias" hidden>
+                <div class="secao-topo">
+                    <h2 id="tituloCategorias">Para onde vai o dinheiro</h2>
+                    <small class="sub">Toque para filtrar</small>
+                </div>
+                <ul class="lista" id="listaCategorias"></ul>
             </section>
 
             <section class="secao" aria-labelledby="tituloMetas">
@@ -1364,22 +1481,29 @@
 
             <section class="secao" aria-labelledby="tituloLancamentos">
                 <div class="secao-topo">
-                    <h2 id="tituloLancamentos">Lançamentos</h2>
-                    <div class="chips" role="group" aria-label="Mostrar">
-                        <button type="button" class="chip" data-action="filtro-status" data-status="todas" aria-pressed="true">Todos</button>
-                        <button type="button" class="chip" data-action="filtro-status" data-status="pendentes" aria-pressed="false">Pendentes</button>
-                    </div>
+                    <h2 id="tituloLancamentos">Lançamentos do mês</h2>
+                </div>
+                <div class="chips" role="group" aria-label="Mostrar">
+                    <button type="button" class="chip" data-action="filtro-visao" data-visao="todas" aria-pressed="true">Todos</button>
+                    <button type="button" class="chip" data-action="filtro-visao" data-visao="receitas" aria-pressed="false">Receitas</button>
+                    <button type="button" class="chip" data-action="filtro-visao" data-visao="despesas" aria-pressed="false">Despesas</button>
+                    <button type="button" class="chip" data-action="filtro-visao" data-visao="pendentes" aria-pressed="false">Pendentes</button>
                 </div>
                 <div id="listaTransacoes"></div>
             </section>
         </main>
 
-        <div class="fab-area">
-            <button type="button" class="fab" data-action="novo-lancamento">
-                <span class="fab-mais" aria-hidden="true">+</span>
-                Novo lançamento
-            </button>
-        </div>
+        <nav class="barra-acoes" aria-label="Novo lançamento">
+            <div class="barra-acoes-grade">
+                <button type="button" class="acao-grande acao-despesa" data-action="novo-despesa">
+                    <span class="acao-simbolo" aria-hidden="true">−</span> Despesa
+                </button>
+                <button type="button" class="acao-grande acao-receita" data-action="novo-receita">
+                    <span class="acao-simbolo" aria-hidden="true">+</span> Receita
+                </button>
+                <button type="button" class="acao-transf" data-action="novo-transferencia" aria-label="Transferência ou pagamento de fatura">⇄</button>
+            </div>
+        </nav>
     </div>
 
     <div class="overlay" id="overlay" data-action="clicar-fora"></div>
@@ -1432,122 +1556,100 @@
         </div>
     </div>
 
-    <!-- ==================== Assistente de novo lançamento ==================== -->
-    <div class="modal modal-chat" id="modalChat" role="dialog" aria-modal="true" aria-labelledby="chatTitulo">
-        <div class="chat-topo">
-            <div class="chat-linha">
-                <button type="button" class="icone-btn" id="chatVoltar" data-action="chat-voltar" aria-label="Voltar um passo" hidden>‹</button>
-                <h2 id="chatTitulo">Novo lançamento</h2>
-                <button type="button" class="btn-texto" data-action="chat-formulario">Usar formulário</button>
-                <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
-            </div>
-            <div class="progresso" aria-hidden="true"><span id="chatProgressoBarra"></span></div>
-            <p class="chat-passo" id="chatPassoTexto"></p>
-        </div>
-        <div class="chat-msgs" id="chatMensagens" aria-live="polite"></div>
-        <div class="chat-rodape">
-            <div class="opcoes" id="chatOpcoes"></div>
-            <form class="chat-entrada" id="chatForm" novalidate hidden>
-                <input id="chatCampo" type="text" autocomplete="off" aria-label="Sua resposta">
-                <button type="submit" class="btn" id="chatEnviar">Enviar</button>
-            </form>
-        </div>
-        <input type="file" id="chatFoto" accept="image/*" hidden>
-    </div>
-
-    <!-- ==================== Formulário de lançamento ==================== -->
-    <div class="modal" id="modalTransacao" role="dialog" aria-modal="true" aria-labelledby="tTitulo">
+    <!-- ==================== Lançamento (criar e editar) ==================== -->
+    <div class="modal modal-lanc" id="modalLancamento" role="dialog" aria-modal="true" aria-labelledby="lTitulo" data-tom="despesa">
         <div class="modal-cab">
-            <h2 id="tTitulo">Novo lançamento</h2>
+            <h2 id="lTitulo">Nova despesa</h2>
             <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
         </div>
-        <form id="formTransacao" novalidate>
+        <form id="formLancamento" novalidate>
             <div class="modal-corpo">
-                <input type="hidden" id="tId">
-                <p id="tInfo" hidden></p>
+                <p class="lanc-info" id="lInfo" hidden></p>
 
-                <div class="campo" id="campo-t-tipo">
-                    <span class="campo-rotulo" id="tTipoRotulo">Tipo</span>
-                    <div class="segmentos" role="radiogroup" aria-labelledby="tTipoRotulo">
-                        <label class="segmento"><input type="radio" name="tTipo" value="despesa" checked><span>💸 Despesa</span></label>
-                        <label class="segmento"><input type="radio" name="tTipo" value="receita"><span>💰 Receita</span></label>
-                        <label class="segmento"><input type="radio" name="tTipo" value="transferencia"><span>🔄 Transf.</span></label>
-                    </div>
-                    <p class="campo-erro" id="erro-t-tipo" hidden></p>
+                <div class="segmentos" role="radiogroup" aria-label="Tipo de lançamento">
+                    <label class="segmento"><input type="radio" name="lTipo" value="despesa" checked><span>💸 Despesa</span></label>
+                    <label class="segmento"><input type="radio" name="lTipo" value="receita"><span>💰 Receita</span></label>
+                    <label class="segmento"><input type="radio" name="lTipo" value="transferencia"><span>🔄 Transf.</span></label>
                 </div>
 
-                <div class="campo" id="campo-t-descricao">
-                    <label for="tDescricao">Descrição</label>
-                    <input type="text" id="tDescricao" maxlength="60" placeholder="Ex.: Supermercado" autocomplete="off">
-                    <p class="campo-erro" id="erro-t-descricao" hidden></p>
-                </div>
-
-                <div class="campo" id="campo-t-valor">
-                    <label for="tValor">Valor</label>
-                    <div class="entrada-moeda">
+                <div class="campo" id="campo-l-valor">
+                    <label for="lValor">Quanto?</label>
+                    <div class="valor-linha">
                         <span aria-hidden="true">R$</span>
-                        <input type="text" id="tValor" inputmode="decimal" placeholder="0,00" autocomplete="off">
+                        <input type="text" id="lValor" inputmode="decimal" placeholder="0,00" autocomplete="off">
                     </div>
-                    <p class="campo-erro" id="erro-t-valor" hidden></p>
+                    <p class="campo-erro" id="erro-l-valor" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-data">
-                    <label for="tData">Data</label>
-                    <input type="date" id="tData">
-                    <p class="campo-erro" id="erro-t-data" hidden></p>
+                <div class="campo" id="campo-l-descricao">
+                    <label for="lDescricao">O que é?</label>
+                    <input type="text" id="lDescricao" maxlength="60" placeholder="Ex.: Supermercado" autocomplete="off">
+                    <div class="sugestoes" id="lSugestoes"></div>
+                    <p class="campo-erro" id="erro-l-descricao" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-conta">
-                    <label for="tConta" id="tContaRotulo">Conta ou cartão</label>
-                    <select id="tConta"></select>
-                    <p class="campo-erro" id="erro-t-conta" hidden></p>
+                <div class="campo" id="campo-l-categoria">
+                    <span class="campo-rotulo">Categoria</span>
+                    <div class="grade-chips" id="lCategorias" role="group" aria-label="Categoria"></div>
+                    <p class="campo-erro" id="erro-l-categoria" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-contaDestino" hidden>
-                    <label for="tContaDestino">Conta de destino</label>
-                    <select id="tContaDestino"></select>
+                <div class="campo" id="campo-l-conta">
+                    <span class="campo-rotulo" id="lContaRotulo">Pago com</span>
+                    <div class="grade-chips" id="lContas" role="group" aria-labelledby="lContaRotulo"></div>
+                    <p class="campo-erro" id="erro-l-conta" hidden></p>
+                </div>
+
+                <div class="campo" id="campo-l-contaDestino" hidden>
+                    <span class="campo-rotulo" id="lDestinoRotulo">Vai para</span>
+                    <div class="grade-chips" id="lContasDestino" role="group" aria-labelledby="lDestinoRotulo"></div>
                     <p class="campo-dica">Para pagar a fatura, escolha o cartão.</p>
-                    <p class="campo-erro" id="erro-t-contaDestino" hidden></p>
+                    <p class="campo-erro" id="erro-l-contaDestino" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-categoria">
-                    <label for="tCategoria">Categoria</label>
-                    <select id="tCategoria"></select>
-                    <p class="campo-erro" id="erro-t-categoria" hidden></p>
+                <div class="campo" id="campo-l-data">
+                    <span class="campo-rotulo">Quando?</span>
+                    <div class="grade-chips" id="lDatas" role="group" aria-label="Quando"></div>
+                    <input type="date" id="lData" aria-label="Escolha a data" hidden>
+                    <p class="campo-erro" id="erro-l-data" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-repeticao">
-                    <label for="tRepeticao">Repetição</label>
-                    <select id="tRepeticao"></select>
-                    <p class="campo-dica">Use para contas fixas, parcelas e valores que vão se repetir nos próximos meses.</p>
+                <div class="campo" id="campo-l-repeticao">
+                    <span class="campo-rotulo">Repetir?</span>
+                    <div class="grade-chips" id="lRepeticoes" role="group" aria-label="Repetição"></div>
+                    <p class="campo-erro" id="erro-l-repeticao" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-quantidade" hidden>
-                    <label for="tQuantidade" id="tQuantidadeRotulo">Quantidade</label>
-                    <input type="number" id="tQuantidade" min="2" max="60" value="2" inputmode="numeric">
-                    <p class="campo-erro" id="erro-t-quantidade" hidden></p>
+                <div class="campo" id="campo-l-quantidade" hidden>
+                    <label for="lQuantidade" id="lQuantidadeRotulo">Por quantos meses</label>
+                    <div class="passos-qtd">
+                        <button type="button" class="icone-btn" data-action="lanc-qtd" data-delta="-1" aria-label="Diminuir">−</button>
+                        <input type="number" id="lQuantidade" min="2" max="60" value="3" inputmode="numeric">
+                        <button type="button" class="icone-btn" data-action="lanc-qtd" data-delta="1" aria-label="Aumentar">+</button>
+                    </div>
+                    <p class="campo-erro" id="erro-l-quantidade" hidden></p>
                 </div>
 
-                <div class="campo" id="campo-t-status">
-                    <label for="tStatus">Situação</label>
-                    <select id="tStatus">
-                        <option value="true">Já foi pago</option>
-                        <option value="false">Ainda não foi pago</option>
-                    </select>
+                <div class="lanc-previa" id="lPrevia" aria-live="polite"></div>
+
+                <div class="campo">
+                    <label class="interruptor">
+                        <span id="lPagoRotulo">Já foi pago</span>
+                        <input type="checkbox" id="lPago" checked>
+                    </label>
+                    <p class="campo-dica" id="lPagoDica"></p>
                 </div>
 
                 <div class="campo">
                     <span class="campo-rotulo">Comprovante (opcional)</span>
-                    <input type="file" id="tFoto" accept="image/*" hidden>
-                    <div class="foto-linha">
-                        <button type="button" class="btn btn-sec" data-action="form-foto-escolher">📷 Anexar foto</button>
-                        <span id="tFotoPrevia"></span>
-                    </div>
+                    <input type="file" id="lFoto" accept="image/*" hidden>
+                    <div class="foto-linha" id="lFotoArea"></div>
                 </div>
             </div>
             <div class="modal-acoes">
-                <button type="button" class="btn btn-perigo" id="btnExcluirTransacao" data-action="excluir-transacao" hidden>Excluir</button>
-                <button type="submit" class="btn" id="btnSalvarTransacao">Salvar</button>
+                <button type="button" class="btn btn-perigo" id="btnExcluirLanc" data-action="excluir-transacao" hidden>Excluir</button>
+                <button type="button" class="btn btn-sec" id="btnSalvarNovo" data-action="lanc-salvar-novo">Salvar e novo</button>
+                <button type="submit" class="btn btn-tom" id="btnSalvarLanc">Salvar</button>
             </div>
         </form>
     </div>
@@ -1688,7 +1790,10 @@
         <div class="modal-acoes coluna" id="confBotoes"></div>
     </div>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite">
+        <span id="toastTexto"></span>
+        <button type="button" class="toast-acao" id="toastAcao" data-action="toast-acao" hidden></button>
+    </div>
 
     <div class="visualizador" id="visualizador" data-action="fechar-zoom" hidden>
         <button type="button" class="icone-btn" data-action="fechar-zoom" aria-label="Fechar imagem">✕</button>
