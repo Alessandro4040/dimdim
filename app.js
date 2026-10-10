@@ -16,6 +16,9 @@ const MAX_SYNC_RETRIES = 3;
 const SYNC_DEBOUNCE_MS = 2000;
 const SYNC_PERIODICO_MS = 5 * 60 * 1000;
 const SYNC_VALIDADE_MS = 2 * 60 * 1000;
+const LIMITE_LISTA = 60;
+const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+const URL_AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
 
 const ROTULOS_TIPO = { despesa: 'Despesa', receita: 'Receita', transferencia: 'Transferência' };
 const ROTULOS_SITUACAO = {
@@ -28,7 +31,7 @@ const ROTULOS_SITUACAO = {
 // ESTADO
 // ============================================================
 const dados = { transacoes: [], contas: [], metas: [], categorias: [] };
-const ui = { mes: mesAtualISO(), inicio: '', fim: '', busca: '', categoria: '', visao: 'todas' };
+const ui = { mes: mesAtualISO(), inicio: '', fim: '', busca: '', categoria: '', visao: 'todas', mostrar: LIMITE_LISTA };
 
 let db = null;
 let appIniciado = false;
@@ -41,6 +44,15 @@ let sincRetryTimer = null;
 let sincTentativas = 0;
 let ultimaSincOk = 0;
 let estadoSync = null;
+let valoresOcultos = lerLocal('valoresOcultos') === '1';
+let ultimoArrasto = 0;
+let timerBusca = null;
+let carregandoPdf = null;
+
+// Índices em memória: evitam percorrer todos os lançamentos a cada desenho da tela.
+let indices = { contas: new Map(), categorias: new Map(), porConta: new Map(), mesInicio: new Map() };
+let versaoDados = 0;
+let memoPeriodo = { chave: '', itens: [] };
 
 // ============================================================
 // UTILITÁRIOS
@@ -94,10 +106,15 @@ function arredondar(numero) {
     return Math.round((numero + Number.EPSILON) * 100) / 100;
 }
 
-function formatarMoeda(valor) {
+function formatarMoedaReal(valor) {
     let numero = Number(valor) || 0;
     if (Math.abs(numero) < 0.005) numero = 0;
     return formatadorMoeda.format(numero).replace(/\u00a0/g, ' ');
+}
+
+// Com os valores ocultos (como nos apps de banco), todo dinheiro na tela aparece como "R$ ***".
+function formatarMoeda(valor) {
+    return valoresOcultos ? 'R$ ***' : formatarMoedaReal(valor);
 }
 
 // Converte "45,90", "1.234,56", "1234.5" ou números vindos da planilha.
@@ -271,6 +288,21 @@ function alternarTema() {
     gravarLocal('tema', temaAtual);
 }
 
+function atualizarBotaoValores() {
+    const botao = byId('btnValores');
+    if (!botao) return;
+    botao.textContent = valoresOcultos ? '🙈' : '👁️';
+    botao.setAttribute('aria-pressed', String(valoresOcultos));
+    botao.setAttribute('aria-label', valoresOcultos ? 'Mostrar valores' : 'Ocultar valores');
+}
+
+function alternarValores() {
+    valoresOcultos = !valoresOcultos;
+    gravarLocal('valoresOcultos', valoresOcultos ? '1' : '0');
+    atualizarBotaoValores();
+    renderizar();
+}
+
 // ============================================================
 // ARMAZENAMENTO LOCAL (IndexedDB)
 // ============================================================
@@ -363,6 +395,32 @@ async function recarregarDados() {
         await aplicarMudancas({ gravar: { categorias: lidos.categorias } });
     }
     STORES.forEach(nome => { dados[nome] = lidos[nome]; });
+    reconstruirIndices();
+    try {
+        renderizar();
+    } catch (erro) {
+        console.error('Falha ao desenhar a tela:', erro);
+    }
+}
+
+// Reflete na memória o que acabou de ser gravado, sem reler o banco inteiro.
+function aplicarNaMemoria({ gravar = {}, remover = {} }) {
+    Object.entries(gravar).forEach(([nome, itens]) => {
+        const posicoes = new Map(dados[nome].map((item, i) => [item.id, i]));
+        itens.forEach(item => {
+            if (posicoes.has(item.id)) {
+                dados[nome][posicoes.get(item.id)] = item;
+            } else {
+                posicoes.set(item.id, dados[nome].length);
+                dados[nome].push(item);
+            }
+        });
+    });
+    Object.entries(remover).forEach(([nome, ids]) => {
+        const sumiram = new Set(ids);
+        dados[nome] = dados[nome].filter(item => !sumiram.has(item.id));
+    });
+    reconstruirIndices();
     try {
         renderizar();
     } catch (erro) {
@@ -373,7 +431,7 @@ async function recarregarDados() {
 // Caminho único para qualquer alteração: salva, atualiza a tela e agenda o envio.
 async function confirmarMudancas(mudancas) {
     await aplicarMudancas(mudancas);
-    await recarregarDados();
+    aplicarNaMemoria(mudancas);
     agendarSync();
 }
 
@@ -710,12 +768,37 @@ function achar(store, id) {
     return dados[store].find(item => item.id === id);
 }
 
+function reconstruirIndices() {
+    const contas = new Map(dados.contas.map(conta => [conta.id, conta]));
+    const categorias = new Map(dados.categorias.map(categoria => [categoria.id, categoria]));
+    const porConta = new Map();
+    dados.transacoes.forEach(t => {
+        const lista = porConta.get(t.conta_id);
+        if (lista) lista.push(t);
+        else porConta.set(t.conta_id, [t]);
+    });
+    // Mês em que cada conta começou: lançamento mais antigo ou mês de criação/edição.
+    const mesInicio = new Map();
+    dados.contas.forEach(conta => {
+        let menor = '';
+        (porConta.get(conta.id) || []).forEach(t => {
+            const mes = dataValida(t.data) ? t.data.slice(0, 7) : '';
+            if (mes && (!menor || mes < menor)) menor = mes;
+        });
+        const criacao = String(conta.updated_at || '').slice(0, 7);
+        if (/^\d{4}-\d{2}$/.test(criacao) && (!menor || criacao < menor)) menor = criacao;
+        mesInicio.set(conta.id, menor || mesAtualISO());
+    });
+    indices = { contas, categorias, porConta, mesInicio };
+    versaoDados += 1;
+}
+
 function contaPorId(id) {
-    return dados.contas.find(conta => conta.id === id);
+    return indices.contas.get(id);
 }
 
 function categoriaPorId(id) {
-    return dados.categorias.find(categoria => categoria.id === id);
+    return indices.categorias.get(id);
 }
 
 function contaEhCartao(id) {
@@ -760,14 +843,8 @@ function periodoDoResumo() {
 }
 
 // Mês em que a conta começou a ser usada: antes dele o saldo da conta é zero.
-// Usa o lançamento mais antigo da conta ou, se não houver, o mês em que ela foi criada ou editada.
 function mesDeInicioDaConta(conta) {
-    const meses = dados.transacoes
-        .filter(t => t.conta_id === conta.id && dataValida(t.data))
-        .map(t => t.data.slice(0, 7));
-    const criacao = String(conta.updated_at || '').slice(0, 7);
-    if (/^\d{4}-\d{2}$/.test(criacao)) meses.push(criacao);
-    return meses.sort()[0] || mesAtualISO();
+    return indices.mesInicio.get(conta.id) || mesAtualISO();
 }
 
 // Saldo acumulado da conta até uma data: saldo inicial + tudo o que entrou e saiu até lá.
@@ -776,9 +853,8 @@ function mesDeInicioDaConta(conta) {
 function saldoDaContaAte(conta, ate, incluirPendentes) {
     if (mesDeInicioDaConta(conta) > ate.slice(0, 7)) return 0;
     let total = Number(conta.saldo_inicial) || 0;
-    dados.transacoes.forEach(t => {
-        if (t.conta_id !== conta.id || t.data > ate) return;
-        if (!t.pago && !incluirPendentes) return;
+    (indices.porConta.get(conta.id) || []).forEach(t => {
+        if (t.data > ate || (!t.pago && !incluirPendentes)) return;
         const valor = Number(t.valor) || 0;
         if (t.tipo === 'receita') total += valor;
         else if (t.tipo === 'despesa') total -= valor;
@@ -789,26 +865,27 @@ function saldoDaContaAte(conta, ate, incluirPendentes) {
 // Quanto foi gasto no cartão dentro do período (compras e parcelas que caem nele).
 function gastosDoCartaoNoPeriodo(conta, periodo) {
     let total = 0;
-    dados.transacoes.forEach(t => {
-        if (t.conta_id !== conta.id || t.tipo !== 'despesa' || t.data < periodo.inicio || t.data > periodo.fim) return;
+    (indices.porConta.get(conta.id) || []).forEach(t => {
+        if (t.tipo !== 'despesa' || t.categoria_id === CAT_TRANSFERENCIA || t.data < periodo.inicio || t.data > periodo.fim) return;
         total += Number(t.valor) || 0;
     });
     return arredondar(total);
 }
 
-// Saldo acumulado de hoje (tudo o que já foi pago). Serve para o limite disponível do cartão.
+// Situação real das contas hoje: saldo das contas correntes e limite livre dos cartões
+// (saldo inicial ou limite + tudo o que já foi pago ou recebido).
 function saldosDasContas() {
     const saldos = {};
     dados.contas.forEach(conta => {
-        saldos[conta.id] = Number(conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite) || 0;
+        let total = Number(conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite) || 0;
+        (indices.porConta.get(conta.id) || []).forEach(t => {
+            if (!t.pago) return;
+            const valor = Number(t.valor) || 0;
+            if (t.tipo === 'receita') total += valor;
+            else if (t.tipo === 'despesa') total -= valor;
+        });
+        saldos[conta.id] = arredondar(total);
     });
-    dados.transacoes.forEach(t => {
-        if (!t.pago || !(t.conta_id in saldos)) return;
-        const valor = Number(t.valor) || 0;
-        if (t.tipo === 'receita') saldos[t.conta_id] += valor;
-        else if (t.tipo === 'despesa') saldos[t.conta_id] -= valor;
-    });
-    Object.keys(saldos).forEach(id => { saldos[id] = arredondar(saldos[id]); });
     return saldos;
 }
 
@@ -827,9 +904,14 @@ function passaNosFiltros(transacao) {
     return true;
 }
 
+// O resultado fica guardado até os dados ou os filtros mudarem. Quem usa não deve alterar a lista.
 function lancamentosDoPeriodo() {
-    const { inicio, fim } = limitesDoPeriodo();
-    return dados.transacoes.filter(t => t.data >= inicio && t.data <= fim && passaNosFiltros(t));
+    const chave = [versaoDados, ui.mes, ui.inicio, ui.fim, ui.busca, ui.categoria].join('|');
+    if (memoPeriodo.chave !== chave) {
+        const { inicio, fim } = limitesDoPeriodo();
+        memoPeriodo = { chave, itens: dados.transacoes.filter(t => t.data >= inicio && t.data <= fim && passaNosFiltros(t)) };
+    }
+    return memoPeriodo.itens;
 }
 
 function filtrosAtivos() {
@@ -1188,6 +1270,13 @@ function detalheDoGrupo(grupo, feito, aberto) {
 }
 
 function renderBalanco() {
+    // Montante: situação real de hoje, igual em qualquer mês.
+    const montante = totalNasContasHoje();
+    const elementoMontante = byId('montanteValor');
+    elementoMontante.textContent = formatarMoeda(montante);
+    elementoMontante.classList.toggle('negativo', montante < 0);
+
+    // Balanço do mês na tela, em forma de conta.
     const balanco = balancoDoPeriodo();
     const emMes = !periodoPersonalizado();
     const nomeDoMes = emMes ? rotuloMes(ui.mes).toLowerCase() : '';
@@ -1199,10 +1288,6 @@ function renderBalanco() {
     const valor = byId('saldoTotal');
     valor.textContent = formatarMoeda(balanco.fim);
     valor.classList.toggle('negativo', balanco.fim < 0);
-
-    const hoje = byId('balancoHoje');
-    hoje.hidden = !(emMes && ui.mes === mesAtualISO());
-    hoje.textContent = hoje.hidden ? '' : `Hoje você tem ${formatarMoeda(totalNasContasHoje())} nas contas`;
 
     byId('eqInicio').textContent = formatarMoeda(balanco.inicio);
     byId('eqRec').textContent = `+ ${formatarMoeda(balanco.receitas.total)}`;
@@ -1232,11 +1317,6 @@ function renderAvisos() {
     byId('faixaFiltros').hidden = !filtrosAtivos();
 }
 
-function rotuloDoSaldoDaConta() {
-    if (periodoPersonalizado()) return 'Saldo no fim do período';
-    return ui.mes < mesAtualISO() ? 'Saldo no fim do mês' : 'Saldo previsto';
-}
-
 function renderContas() {
     const lista = byId('listaContas');
     if (dados.contas.length === 0) {
@@ -1247,29 +1327,30 @@ function renderContas() {
             </li>`;
         return;
     }
+    const saldos = saldosDasContas();
     const periodo = periodoDoResumo();
-    const saldosHoje = saldosDasContas();
-    const noMesAtual = !periodoPersonalizado() && ui.mes === mesAtualISO();
     lista.innerHTML = dados.contas.map(conta => {
         const cartao = conta.tipo === 'cartao';
-        const valor = cartao ? gastosDoCartaoNoPeriodo(conta, periodo) : saldoDaContaAte(conta, periodo.fim, true);
+        const saldo = saldos[conta.id];
         const vencimento = cartao && Number(conta.vencimento) ? ` · vence dia ${esc(conta.vencimento)}` : '';
-        const limite = cartao && noMesAtual ? `<small class="sub">Limite livre hoje: ${formatarMoeda(saldosHoje[conta.id])}</small>` : '';
+        const compras = cartao
+            ? `<small>Compras no período: ${formatarMoeda(gastosDoCartaoNoPeriodo(conta, periodo))}</small>`
+            : '';
         return `
-            <li class="conta-card">
-                <button type="button" class="conta-card-corpo" data-action="editar-conta" data-id="${esc(conta.id)}">
-                    <span class="conta-topo">
-                        <span class="icone-circulo" aria-hidden="true">${cartao ? '💳' : '🏦'}</span>
-                        <span class="texto-bloco">
-                            <strong>${esc(conta.nome)}</strong>
-                            <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${vencimento}</small>
-                        </span>
+            <li class="conta">
+                <button type="button" class="conta-corpo" data-action="editar-conta" data-id="${esc(conta.id)}">
+                    <span class="icone-circulo" aria-hidden="true">${cartao ? '💳' : '🏦'}</span>
+                    <span class="texto-bloco">
+                        <strong>${esc(conta.nome)}</strong>
+                        <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${vencimento}</small>
+                        ${compras}
                     </span>
-                    <small class="sub">${cartao ? 'Compras neste período' : rotuloDoSaldoDaConta()}</small>
-                    <strong class="valor-grande ${!cartao && valor < 0 ? 'neg' : ''}">${formatarMoeda(valor)}</strong>
-                    ${limite}
+                    <span class="conta-saldo">
+                        <small class="sub">${cartao ? 'Limite disponível' : 'Saldo'}</small>
+                        <strong class="valor ${saldo < 0 ? 'neg' : ''}">${formatarMoeda(saldo)}</strong>
+                    </span>
                 </button>
-                ${cartao ? `<button type="button" class="mini mini-link" data-action="pagar-fatura" data-id="${esc(conta.id)}">Pagar fatura</button>` : ''}
+                ${cartao ? `<div class="conta-extras"><button type="button" class="mini mini-link" data-action="pagar-fatura" data-id="${esc(conta.id)}">Pagar fatura</button></div>` : ''}
             </li>`;
     }).join('');
 }
@@ -1329,24 +1410,32 @@ function renderTransacoes() {
 
     const container = byId('listaTransacoes');
     if (ordenadas.length === 0) {
-        let mensagem = 'Nenhum lançamento neste mês. Toque em "Despesa" ou "Receita" para registrar o primeiro.';
+        let mensagem = 'Nenhum lançamento neste mês. Toque em "Novo lançamento" para registrar o primeiro.';
         if (somentePendentes) mensagem = 'Nenhum lançamento pendente. Tudo em dia!';
         else if (filtrosAtivos() || ui.visao !== 'todas') mensagem = 'Nenhum lançamento encontrado com esses filtros.';
-        else if (!periodoPersonalizado() && ui.mes > mesAtualISO()) mensagem = 'Nada agendado para este mês. Toque em "Despesa" ou "Receita" e escolha "Amanhã" ou "Outra data" para planejar.';
+        else if (!periodoPersonalizado() && ui.mes > mesAtualISO()) mensagem = 'Nada agendado para este mês. Toque em "Novo lançamento" e escolha "Amanhã" ou "Outra data" para planejar.';
         container.innerHTML = `<div class="vazio">${mensagem}</div>`;
         return;
     }
 
+    // Só desenha uma parte da lista; o resto aparece em "Ver mais" (mantém a tela leve).
+    const visiveis = ordenadas.slice(0, ui.mostrar);
+    const restantes = ordenadas.length - visiveis.length;
     const porDia = new Map();
-    ordenadas.forEach(t => {
+    visiveis.forEach(t => {
         if (!porDia.has(t.data)) porDia.set(t.data, []);
         porDia.get(t.data).push(t);
     });
-    container.innerHTML = [...porDia.entries()].map(([data, itens]) => `
+    const grupos = [...porDia.entries()].map(([data, itens]) => `
         <div class="dia">
             <h3 class="dia-titulo">${esc(dataValida(data) ? rotuloDia(data) : data)}</h3>
             <ul class="lanc-lista">${itens.map(htmlLancamento).join('')}</ul>
         </div>`).join('');
+    const dica = '<p class="dica-arrastar">Dica: deslize um lançamento para a esquerda para excluir.</p>';
+    const verMais = restantes > 0
+        ? `<button type="button" class="btn btn-sec btn-bloco" data-action="ver-mais">Ver mais ${restantes}</button>`
+        : '';
+    container.innerHTML = grupos + verMais + dica;
 }
 
 function mudarMes(delta) {
@@ -1360,6 +1449,7 @@ function irParaMes(mes) {
     ui.inicio = '';
     ui.fim = '';
     ui.visao = 'todas';
+    ui.mostrar = LIMITE_LISTA;
     sincronizarCamposDeFiltro();
     renderizar();
 }
@@ -1371,6 +1461,7 @@ function aoMudarPeriodo() {
     ui.inicio = inicio;
     ui.fim = fim;
     ui.visao = 'todas';
+    ui.mostrar = LIMITE_LISTA;
     sincronizarCamposDeFiltro();
     renderizar();
 }
@@ -1427,27 +1518,35 @@ function htmlLancamento(t) {
         extras.push(`<button type="button" class="mini mini-link" data-action="ver-comprovante" data-id="${esc(t.id)}">📎 Ver comprovante</button>`);
     }
 
+    // A frente desliza para a esquerda e revela o fundo vermelho de "Excluir".
     return `
-        <li class="lanc">
-            <button type="button" class="lanc-corpo" data-action="editar-transacao" data-id="${esc(t.id)}">
-                <span class="icone-circulo" aria-hidden="true">${esc(icone)}</span>
-                <span class="texto-bloco">
-                    <strong>${esc(t.descricao)}</strong>
-                    <small>${detalhe}</small>
-                </span>
-                <span class="valor ${classe}">${sinal} ${formatarMoeda(t.valor)}</span>
-            </button>
-            ${extras.length ? `<div class="lanc-extras">${extras.join('')}</div>` : ''}
+        <li class="lanc" data-id="${esc(t.id)}">
+            <div class="lanc-fundo" aria-hidden="true">🗑️ Excluir</div>
+            <div class="lanc-frente">
+                <button type="button" class="lanc-corpo" data-action="editar-transacao" data-id="${esc(t.id)}">
+                    <span class="icone-circulo" aria-hidden="true">${esc(icone)}</span>
+                    <span class="texto-bloco">
+                        <strong>${esc(t.descricao)}</strong>
+                        <small>${detalhe}</small>
+                    </span>
+                    <span class="valor ${classe}">${sinal} ${formatarMoeda(t.valor)}</span>
+                </button>
+                ${extras.length ? `<div class="lanc-extras">${extras.join('')}</div>` : ''}
+            </div>
         </li>`;
 }
 
 function renderFiltroCategorias() {
     const seletor = byId('filtroCategoria');
-    const opcoes = ['<option value="">Todas as categorias</option>'];
-    dados.categorias
-        .filter(c => c.id !== CAT_TRANSFERENCIA)
-        .forEach(c => opcoes.push(`<option value="${esc(c.id)}">${esc(iconeCategoria(c))} ${esc(nomeCategoria(c))}</option>`));
-    seletor.innerHTML = opcoes.join('');
+    const chave = dados.categorias.map(c => c.id + c.nome).join('|');
+    if (seletor.dataset.chave !== chave) {
+        const opcoes = ['<option value="">Todas as categorias</option>'];
+        dados.categorias
+            .filter(c => c.id !== CAT_TRANSFERENCIA)
+            .forEach(c => opcoes.push(`<option value="${esc(c.id)}">${esc(iconeCategoria(c))} ${esc(nomeCategoria(c))}</option>`));
+        seletor.innerHTML = opcoes.join('');
+        seletor.dataset.chave = chave;
+    }
     seletor.value = ui.categoria;
 }
 
@@ -1463,6 +1562,7 @@ function limparFiltros() {
     ui.fim = '';
     ui.busca = '';
     ui.categoria = '';
+    ui.mostrar = LIMITE_LISTA;
     sincronizarCamposDeFiltro();
     renderizar();
 }
@@ -1672,6 +1772,10 @@ const OPCOES_REPETICAO = {
 const TITULOS_LANCAMENTO = { despesa: 'Nova despesa', receita: 'Nova receita', transferencia: 'Transferência ou fatura' };
 const ROTULOS_CONTA = { despesa: 'Pago com', receita: 'Entrou em', transferencia: 'Sai de' };
 
+function tipoPreferido() {
+    return lerLocal('ultimoTipo') === 'receita' ? 'receita' : 'despesa';
+}
+
 function dataDoModo(modo) {
     if (modo === 'ontem') return somarDias(hojeISO(), -1);
     if (modo === 'amanha') return somarDias(hojeISO(), 1);
@@ -1838,9 +1942,9 @@ function renderPrevia() {
     const modo = lanc.editando || transferencia ? 'unica' : lanc.repeticao;
     const nomeDoTipo = ROTULOS_TIPO[lanc.tipo];
 
-    let titulo = `${nomeDoTipo} de ${formatarMoeda(valor)}`;
+    let titulo = `${nomeDoTipo} de ${formatarMoedaReal(valor)}`;
     if (modo === 'parcelado') {
-        titulo += ` em ${lanc.quantidade}x de ${formatarMoeda(dividirEmParcelas(valor, lanc.quantidade)[0])}`;
+        titulo += ` em ${lanc.quantidade}x de ${formatarMoedaReal(dividirEmParcelas(valor, lanc.quantidade)[0])}`;
     } else if (modo === 'mensal') {
         titulo += ` todo mês, por ${lanc.quantidade} meses`;
     }
@@ -2058,6 +2162,7 @@ async function salvarLancamento(emSequencia = false) {
         if (lanc.editando) await atualizarLancamento(lanc.id, entrada);
         else await criarLancamentos(entrada);
 
+        if (entrada.tipo !== 'transferencia') gravarLocal('ultimoTipo', entrada.tipo);
         const agendado = entrada.data > hojeISO();
         const mesDoLancamento = entrada.data.slice(0, 7);
         const foraDaTela = !periodoPersonalizado() && mesDoLancamento !== ui.mes;
@@ -2324,25 +2429,47 @@ function baixarCSV() {
     mostrarToast('Planilha gerada.');
 }
 
-function baixarPDF() {
-    if (!window.jspdf || !window.jspdf.jsPDF) {
-        mostrarErroExportacao('O gerador de PDF não carregou. Conecte à internet e tente de novo.');
-        return;
+function carregarScript(url) {
+    return new Promise((resolver, rejeitar) => {
+        const script = document.createElement('script');
+        script.src = url;
+        script.onload = () => resolver();
+        script.onerror = () => rejeitar(new Error('Não foi possível carregar ' + url));
+        document.head.appendChild(script);
+    });
+}
+
+// O gerador de PDF só é baixado na primeira vez que alguém exporta (deixa o app mais leve ao abrir).
+function garantirGeradorDePdf() {
+    if (!carregandoPdf) {
+        carregandoPdf = carregarScript(URL_JSPDF)
+            .then(() => carregarScript(URL_AUTOTABLE))
+            .catch(erro => {
+                carregandoPdf = null;
+                throw erro;
+            });
     }
+    return carregandoPdf;
+}
+
+async function baixarPDF() {
     const relatorio = lancamentosParaRelatorio();
     if (!relatorio) return;
-    const documento = new window.jspdf.jsPDF();
-    if (typeof documento.autoTable !== 'function') {
-        mostrarErroExportacao('O gerador de PDF não carregou. Conecte à internet e tente de novo.');
+    try {
+        await garantirGeradorDePdf();
+    } catch (erro) {
+        console.error(erro);
+        mostrarErroExportacao('Não foi possível carregar o gerador de PDF. Conecte à internet e tente de novo.');
         return;
     }
+    const documento = new window.jspdf.jsPDF();
     documento.setFontSize(14);
     documento.text(`Lançamentos de ${formatarDataBR(relatorio.inicio)} a ${formatarDataBR(relatorio.fim)}`, 14, 16);
     documento.autoTable({
         head: [CABECALHO_RELATORIO],
         body: relatorio.itens.map(t => {
             const linha = linhaDoRelatorio(t);
-            linha[3] = formatarMoeda(linha[3]);
+            linha[3] = formatarMoedaReal(linha[3]);
             return linha;
         }),
         startY: 22,
@@ -2361,9 +2488,12 @@ const ACOES = {
     'mes-seguinte': () => mudarMes(1),
     'ir-hoje': () => irParaMes(mesAtualISO()),
     'abrir-menu': () => abrirModal('modalMenu'),
-    'novo-despesa': () => abrirLancamento({ tipo: 'despesa' }),
-    'novo-receita': () => abrirLancamento({ tipo: 'receita' }),
-    'novo-transferencia': () => abrirLancamento({ tipo: 'transferencia' }),
+    'novo-lancamento': () => abrirLancamento({ tipo: tipoPreferido() }),
+    'alternar-valores': () => alternarValores(),
+    'ver-mais': () => {
+        ui.mostrar += LIMITE_LISTA;
+        renderTransacoes();
+    },
     'pagar-fatura': elemento => {
         const cartao = achar('contas', elemento.dataset.id);
         if (!cartao) return;
@@ -2390,15 +2520,18 @@ const ACOES = {
     'limpar-filtros': () => limparFiltros(),
     'filtro-visao': elemento => {
         ui.visao = elemento.dataset.visao;
+        ui.mostrar = LIMITE_LISTA;
         renderizar();
     },
     'filtrar-categoria': elemento => {
         ui.categoria = ui.categoria === elemento.dataset.id ? '' : elemento.dataset.id;
+        ui.mostrar = LIMITE_LISTA;
         sincronizarCamposDeFiltro();
         renderizar();
     },
     'ver-pendentes': () => {
         ui.visao = 'pendentes';
+        ui.mostrar = LIMITE_LISTA;
         renderizar();
         byId('tituloLancamentos').scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
@@ -2432,26 +2565,102 @@ const ACOES = {
     'toast-acao': () => usarAcaoDoToast()
 };
 
-// Deslizar para os lados troca de mês (fora de carrosséis, campos e filtros).
-function registrarGestoDeMes() {
-    let toque = null;
+const ARRASTO_MINIMO_PX = 12;
+const arrasto = { ativo: false, travado: false, x: 0, y: 0, frente: null, largura: 0 };
+
+function iniciarArrasto(frente, x, y) {
+    Object.assign(arrasto, { ativo: true, travado: false, x, y, frente, largura: frente.offsetWidth || 320 });
+}
+
+// Acompanha o dedo enquanto a linha desliza para a esquerda. Rolagem vertical cancela o gesto.
+function moverArrasto(x, y) {
+    if (!arrasto.ativo) return false;
+    const dx = x - arrasto.x;
+    const dy = y - arrasto.y;
+    if (!arrasto.travado) {
+        if (Math.abs(dy) > ARRASTO_MINIMO_PX && Math.abs(dy) > Math.abs(dx)) {
+            arrasto.ativo = false;
+            return false;
+        }
+        if (dx < -ARRASTO_MINIMO_PX && Math.abs(dx) > Math.abs(dy)) arrasto.travado = true;
+        else return false;
+    }
+    arrasto.frente.style.transition = 'none';
+    arrasto.frente.style.transform = `translateX(${Math.min(0, dx)}px)`;
+    return true;
+}
+
+function cancelarArrasto() {
+    if (arrasto.ativo && arrasto.frente) {
+        arrasto.frente.style.transition = '';
+        arrasto.frente.style.transform = '';
+    }
+    arrasto.ativo = false;
+}
+
+// Passou de ~1/3 da largura: exclui (com "Desfazer"). Antes disso, a linha volta ao lugar.
+function finalizarArrasto(x) {
+    if (!arrasto.ativo) return false;
+    const { travado, frente, largura } = arrasto;
+    const dx = x - arrasto.x;
+    arrasto.ativo = false;
+    if (!travado) return false;
+    ultimoArrasto = Date.now();
+    frente.style.transition = '';
+    if (dx < -Math.min(120, largura * 0.35)) {
+        frente.style.transform = 'translateX(-100%)';
+        excluirPorArrasto(frente.parentElement.dataset.id, frente);
+        return true;
+    }
+    frente.style.transform = '';
+    return false;
+}
+
+async function excluirPorArrasto(id, frente) {
+    await excluirTransacao(id);
+    // Se a pessoa cancelou (por exemplo, na pergunta de sequência), a linha volta ao lugar.
+    if (achar('transacoes', id)) frente.style.transform = '';
+}
+
+function registrarGestos() {
+    let toqueMes = null;
     document.addEventListener('touchstart', evento => {
-        if (pilhaModais.length > 0 || evento.touches.length !== 1) {
-            toque = null;
+        toqueMes = null;
+        cancelarArrasto();
+        if (pilhaModais.length > 0 || evento.touches.length !== 1) return;
+        const ponto = evento.touches[0];
+        const frente = evento.target.closest ? evento.target.closest('.lanc-frente') : null;
+        if (frente) {
+            iniciarArrasto(frente, ponto.clientX, ponto.clientY);
             return;
         }
-        const ponto = evento.touches[0];
-        toque = { x: ponto.clientX, y: ponto.clientY, alvo: evento.target };
+        toqueMes = { x: ponto.clientX, y: ponto.clientY, alvo: evento.target };
     }, { passive: true });
+
+    document.addEventListener('touchmove', evento => {
+        if (!arrasto.ativo) return;
+        const ponto = evento.touches[0];
+        moverArrasto(ponto.clientX, ponto.clientY);
+    }, { passive: true });
+
+    document.addEventListener('touchcancel', () => {
+        toqueMes = null;
+        cancelarArrasto();
+    }, { passive: true });
+
     document.addEventListener('touchend', evento => {
-        if (!toque) return;
         const ponto = evento.changedTouches[0];
-        const dx = ponto.clientX - toque.x;
-        const dy = ponto.clientY - toque.y;
-        const alvo = toque.alvo;
-        toque = null;
+        if (arrasto.ativo) {
+            finalizarArrasto(ponto.clientX);
+            return;
+        }
+        if (!toqueMes) return;
+        const dx = ponto.clientX - toqueMes.x;
+        const dy = ponto.clientY - toqueMes.y;
+        const alvo = toqueMes.alvo;
+        toqueMes = null;
         if (Math.abs(dx) < 90 || Math.abs(dy) > 45 || byId('app').hidden) return;
-        if (alvo && alvo.closest && alvo.closest('.carrossel, .chips, input, select, textarea')) return;
+        if (alvo && alvo.closest && alvo.closest('.chips, input, select, textarea')) return;
         mudarMes(dx < 0 ? 1 : -1);
     }, { passive: true });
 }
@@ -2460,6 +2669,7 @@ function registrarEventos() {
     document.addEventListener('click', evento => {
         const alvo = evento.target.closest('[data-action]');
         if (!alvo) return;
+        if (alvo.dataset.action === 'editar-transacao' && Date.now() - ultimoArrasto < 350) return;
         const acao = ACOES[alvo.dataset.action];
         if (acao) acao(alvo, evento);
     });
@@ -2523,10 +2733,13 @@ function registrarEventos() {
     byId('filtroFim').addEventListener('change', aoMudarPeriodo);
     byId('filtroBusca').addEventListener('input', evento => {
         ui.busca = evento.target.value.trim().toLowerCase();
-        renderizar();
+        ui.mostrar = LIMITE_LISTA;
+        clearTimeout(timerBusca);
+        timerBusca = setTimeout(renderizar, 150);
     });
     byId('filtroCategoria').addEventListener('change', evento => {
         ui.categoria = evento.target.value;
+        ui.mostrar = LIMITE_LISTA;
         renderizar();
     });
 
@@ -2540,7 +2753,7 @@ function registrarEventos() {
         const desatualizado = Date.now() - ultimaSincOk > SYNC_VALIDADE_MS;
         if (contarPendentes() > 0 || desatualizado) agendarSync(true);
     });
-    registrarGestoDeMes();
+    registrarGestos();
 }
 
 // ============================================================
@@ -2548,6 +2761,7 @@ function registrarEventos() {
 // ============================================================
 function iniciar() {
     aplicarTema(temaAtual);
+    atualizarBotaoValores();
     registrarEventos();
 
     if (authToken) {
