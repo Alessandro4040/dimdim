@@ -12,8 +12,6 @@
     <meta name="apple-mobile-web-app-title" content="Finanças">
     <link rel="manifest" href="./manifest.json">
     <link rel="apple-touch-icon" href="./money-icon.png">
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
         /* ==================== Tokens ==================== */
         :root {
@@ -33,14 +31,9 @@
             --neg-soft: #fbe7e3;
             --warn: #8f5509;
             --warn-soft: #fbefd8;
-            --pos-forte: #157a4d;
-            --pos-forte-ink: #ffffff;
-            --neg-forte: #bf3a27;
-            --neg-forte-ink: #ffffff;
             --hero-bg: #0b5566;
             --hero-ink: #ffffff;
             --hero-soft: rgba(255, 255, 255, 0.78);
-            --hero-pos: #8fe3b8;
             --hero-neg: #ffb4a6;
             --raio-p: 10px;
             --raio-m: 14px;
@@ -67,10 +60,6 @@
             --neg-soft: rgba(255, 142, 121, 0.16);
             --warn: #f0b656;
             --warn-soft: rgba(240, 182, 86, 0.16);
-            --pos-forte: #5fd39a;
-            --pos-forte-ink: #06241a;
-            --neg-forte: #ff8e79;
-            --neg-forte-ink: #2b0e08;
             --hero-bg: #12414c;
             --hero-ink: #eaf7fa;
             --hero-soft: rgba(234, 247, 250, 0.74);
@@ -328,27 +317,34 @@
             font-weight: 800;
         }
 
-        /* ==================== Balanço do mês ==================== */
+        /* ==================== Montante e balanço do mês ==================== */
         .conteudo {
             max-width: 520px;
             margin: 0 auto;
-            padding: 4px 16px calc(130px + var(--area-base));
+            padding: 4px 16px calc(112px + var(--area-base));
         }
 
-        .balanco {
-            padding: 20px 20px 6px;
+        .montante {
+            padding: 18px 20px 16px;
             border-radius: var(--raio-g);
             background: var(--hero-bg);
             color: var(--hero-ink);
         }
 
-        .balanco-rotulo {
+        .montante-topo {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .montante-rotulo {
             color: var(--hero-soft);
             font-weight: 700;
         }
 
-        .balanco-valor {
-            margin: 2px 0 4px;
+        .montante-valor {
+            margin: 2px 0 6px;
             font-size: 2.6rem;
             font-weight: 800;
             line-height: 1.1;
@@ -356,18 +352,49 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .balanco-valor.negativo {
+        .montante-valor.negativo {
             color: var(--hero-neg);
         }
 
-        .balanco-hoje {
+        .montante-nota {
             color: var(--hero-soft);
-            font-size: 0.9rem;
+            font-size: 0.82rem;
+        }
+
+        .btn-valores {
+            border-color: rgba(255, 255, 255, 0.28);
+            background: rgba(255, 255, 255, 0.14);
+            color: var(--hero-ink);
+        }
+
+        .balanco {
+            margin-top: 14px;
+            padding: 16px 18px 4px;
+            border: 1px solid var(--line);
+            border-radius: var(--raio-g);
+            background: var(--surface);
+        }
+
+        .balanco-rotulo {
+            color: var(--ink-soft);
+            font-size: 0.92rem;
             font-weight: 700;
         }
 
+        .balanco-valor {
+            margin: 2px 0 4px;
+            font-size: 1.9rem;
+            font-weight: 800;
+            letter-spacing: -0.01em;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .balanco-valor.negativo {
+            color: var(--neg);
+        }
+
         .equacao {
-            margin-top: 14px;
+            margin-top: 10px;
         }
 
         .equacao li {
@@ -376,7 +403,7 @@
             justify-content: space-between;
             gap: 12px;
             padding: 11px 0;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border-top: 1px solid var(--line);
         }
 
         .equacao li > div {
@@ -385,7 +412,7 @@
 
         .equacao small {
             display: block;
-            color: var(--hero-soft);
+            color: var(--ink-soft);
             font-size: 0.8rem;
         }
 
@@ -394,48 +421,28 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .equacao .mais { color: var(--hero-pos); }
-        .equacao .menos { color: var(--hero-neg); }
+        .equacao .mais { color: var(--pos); }
+        .equacao .menos { color: var(--neg); }
 
         .balanco-cartao {
             padding: 10px 0 14px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-            color: var(--hero-soft);
+            border-top: 1px solid var(--line);
+            color: var(--ink-soft);
             font-size: 0.84rem;
         }
 
-        /* ==================== Contas em carrossel ==================== */
-        .carrossel {
-            display: flex;
-            gap: 10px;
-            margin: 0 -16px;
-            padding: 2px 16px 8px;
-            overflow-x: auto;
-            scroll-snap-type: x mandatory;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .carrossel > li {
-            flex: 0 0 min(76%, 260px);
-            scroll-snap-align: start;
-        }
-
-        .carrossel > .vazio {
-            flex: 1 0 100%;
-        }
-
-        .conta-card {
-            display: flex;
-            flex-direction: column;
+        /* ==================== Contas ==================== */
+        .conta {
+            overflow: hidden;
             border: 1px solid var(--line);
             border-radius: var(--raio-m);
             background: var(--surface);
         }
 
-        .conta-card-corpo {
+        .conta-corpo {
             display: flex;
-            flex-direction: column;
-            gap: 4px;
+            align-items: center;
+            gap: 12px;
             width: 100%;
             padding: 14px;
             border: 0;
@@ -443,22 +450,14 @@
             text-align: left;
         }
 
-        .conta-topo {
+        .conta-saldo {
             display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 6px;
+            flex-direction: column;
+            align-items: flex-end;
         }
 
-        .conta-card .mini {
-            align-self: flex-start;
-            margin: 0 14px 14px;
-        }
-
-        .valor-grande {
-            font-size: 1.4rem;
-            font-weight: 800;
-            font-variant-numeric: tabular-nums;
+        .conta-extras {
+            padding: 0 14px 12px 66px;
         }
 
         /* ==================== Para onde vai o dinheiro ==================== */
@@ -498,67 +497,43 @@
             background: var(--neg);
         }
 
-        /* ==================== Barra de ações fixa ==================== */
-        .barra-acoes {
+        /* ==================== Botão de novo lançamento ==================== */
+        .fab-area {
             position: fixed;
             right: 0;
-            bottom: 0;
+            bottom: calc(16px + var(--area-base));
             left: 0;
             z-index: 30;
-            padding: 10px 16px calc(12px + var(--area-base));
-            border-top: 1px solid var(--line);
-            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
         }
 
-        .barra-acoes-grade {
-            display: grid;
-            grid-template-columns: 1fr 1fr 56px;
+        .fab {
+            display: inline-flex;
+            align-items: center;
             gap: 10px;
-            max-width: 520px;
-            margin: 0 auto;
-        }
-
-        .acao-grande,
-        .acao-transf {
-            min-height: 56px;
-            border-radius: var(--raio-m);
+            min-height: 58px;
+            padding: 0 28px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--brand);
+            box-shadow: 0 12px 28px rgba(11, 40, 36, 0.28);
+            color: var(--brand-ink);
+            font-size: 1.08rem;
             font-weight: 800;
+            pointer-events: auto;
             transition: transform 0.15s ease;
         }
 
-        .acao-grande:active,
-        .acao-transf:active {
-            transform: scale(0.97);
+        .fab:active {
+            transform: scale(0.96);
         }
 
-        .acao-grande {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            border: 0;
-            font-size: 1.05rem;
-        }
-
-        .acao-simbolo {
-            font-size: 1.5rem;
+        .fab-mais {
+            margin-top: -2px;
+            font-size: 1.7rem;
             line-height: 1;
-        }
-
-        .acao-despesa {
-            background: var(--neg-forte);
-            color: var(--neg-forte-ink);
-        }
-
-        .acao-receita {
-            background: var(--pos-forte);
-            color: var(--pos-forte-ink);
-        }
-
-        .acao-transf {
-            border: 1.5px solid var(--line);
-            background: var(--surface);
-            font-size: 1.4rem;
         }
 
         /* ==================== Listas e lançamentos ==================== */
@@ -741,6 +716,15 @@
 
         .dia {
             margin-top: 14px;
+            content-visibility: auto;
+            contain-intrinsic-size: auto 180px;
+        }
+
+        .dica-arrastar {
+            margin-top: 14px;
+            color: var(--ink-soft);
+            font-size: 0.82rem;
+            text-align: center;
         }
 
         .dia-titulo {
@@ -757,8 +741,32 @@
             background: var(--surface);
         }
 
+        .lanc {
+            position: relative;
+            overflow: hidden;
+        }
+
         .lanc + .lanc {
             border-top: 1px solid var(--line);
+        }
+
+        .lanc-fundo {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 22px;
+            background: var(--neg);
+            color: var(--surface);
+            font-weight: 800;
+        }
+
+        .lanc-frente {
+            position: relative;
+            background: var(--surface);
+            touch-action: pan-y;
+            transition: transform 0.2s ease;
         }
 
         .lanc-corpo {
@@ -1411,10 +1419,18 @@
         </header>
 
         <main class="conteudo">
+            <section class="montante" aria-label="Montante nas contas">
+                <div class="montante-topo">
+                    <p class="montante-rotulo">Montante nas contas</p>
+                    <button type="button" class="icone-btn btn-valores" id="btnValores" data-action="alternar-valores" aria-pressed="false" aria-label="Ocultar valores">👁️</button>
+                </div>
+                <p class="montante-valor" id="montanteValor">R$ 0,00</p>
+                <p class="montante-nota">Soma das contas correntes, só com o que já foi pago ou recebido.</p>
+            </section>
+
             <section class="balanco" aria-label="Balanço do mês">
                 <p class="balanco-rotulo" id="balancoRotulo"></p>
                 <p class="balanco-valor" id="saldoTotal">R$ 0,00</p>
-                <p class="balanco-hoje" id="balancoHoje" hidden></p>
                 <ul class="equacao">
                     <li>
                         <div>
@@ -1460,7 +1476,7 @@
                     <h2 id="tituloContas">Contas e cartões</h2>
                     <button type="button" class="btn-texto" data-action="nova-conta">Adicionar</button>
                 </div>
-                <ul class="carrossel" id="listaContas"></ul>
+                <ul class="lista" id="listaContas"></ul>
             </section>
 
             <section class="secao" id="secaoCategorias" aria-labelledby="tituloCategorias" hidden>
@@ -1493,17 +1509,12 @@
             </section>
         </main>
 
-        <nav class="barra-acoes" aria-label="Novo lançamento">
-            <div class="barra-acoes-grade">
-                <button type="button" class="acao-grande acao-despesa" data-action="novo-despesa">
-                    <span class="acao-simbolo" aria-hidden="true">−</span> Despesa
-                </button>
-                <button type="button" class="acao-grande acao-receita" data-action="novo-receita">
-                    <span class="acao-simbolo" aria-hidden="true">+</span> Receita
-                </button>
-                <button type="button" class="acao-transf" data-action="novo-transferencia" aria-label="Transferência ou pagamento de fatura">⇄</button>
-            </div>
-        </nav>
+        <div class="fab-area">
+            <button type="button" class="fab" data-action="novo-lancamento">
+                <span class="fab-mais" aria-hidden="true">+</span>
+                Novo lançamento
+            </button>
+        </div>
     </div>
 
     <div class="overlay" id="overlay" data-action="clicar-fora"></div>
