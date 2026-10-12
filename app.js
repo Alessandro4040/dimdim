@@ -1040,6 +1040,9 @@ function montarLancamentos(entrada) {
     }
 
     const quantidade = entrada.modo === 'unica' ? 1 : entrada.quantidade;
+    // Compra parcelada no cartão: o valor total já ocupa o limite no momento da compra
+    // (todas as parcelas contam), e cada parcela aparece no mês dela.
+    const compraNoCartao = entrada.tipo === 'despesa' && entrada.modo === 'parcelado' && contaEhCartao(entrada.contaId);
     // Parcelado divide o valor total; mensal repete o mesmo valor todo mês.
     const valores = entrada.modo === 'parcelado'
         ? dividirEmParcelas(entrada.valor, quantidade)
@@ -1053,8 +1056,8 @@ function montarLancamentos(entrada) {
         data: somarMeses(entrada.data, i),
         conta_id: entrada.contaId,
         categoria_id: entrada.categoriaId,
-        // Só o primeiro lançamento pode nascer pago; os próximos aguardam o mês deles.
-        pago: i === 0 ? entrada.pago : false,
+        // Fora do cartão parcelado, só o primeiro lançamento nasce pago; os próximos aguardam o mês deles.
+        pago: compraNoCartao ? true : (i === 0 ? entrada.pago : false),
         parcela_num: i + 1,
         parcela_total: quantidade,
         foto: i === 0 ? (entrada.foto || null) : null
@@ -1270,17 +1273,34 @@ function detalheDoGrupo(grupo, feito, aberto) {
 }
 
 function renderBalanco() {
-    // Montante: situação real de hoje, igual em qualquer mês.
-    const montante = totalNasContasHoje();
+    const balanco = balancoDoPeriodo();
+    const emMes = !periodoPersonalizado();
+    const noMesAtual = emMes && ui.mes === mesAtualISO();
+    const nomeDoMes = emMes ? rotuloMes(ui.mes).toLowerCase() : '';
+
+    // Montante: no mês atual é a situação real de hoje. Em outros meses é o saldo no fim daquele mês
+    // (zero antes de a conta existir; previsão nos meses futuros).
+    let montante = balanco.fim;
+    let rotuloMontante = 'Montante no fim do período';
+    let notaMontante = 'Saldo das contas correntes até o fim do período escolhido.';
+    if (noMesAtual) {
+        montante = totalNasContasHoje();
+        rotuloMontante = 'Montante nas contas';
+        notaMontante = 'Soma das contas correntes, só com o que já foi pago ou recebido.';
+    } else if (emMes && ui.mes < mesAtualISO()) {
+        rotuloMontante = `Montante no fim de ${nomeDoMes}`;
+        notaMontante = 'Saldo das contas correntes no fim desse mês.';
+    } else if (emMes) {
+        rotuloMontante = `Montante previsto para o fim de ${nomeDoMes}`;
+        notaMontante = 'Previsão: soma o que sobrou dos meses anteriores com o que está agendado.';
+    }
+    byId('montanteRotulo').textContent = rotuloMontante;
+    byId('montanteNota').textContent = notaMontante;
     const elementoMontante = byId('montanteValor');
     elementoMontante.textContent = formatarMoeda(montante);
     elementoMontante.classList.toggle('negativo', montante < 0);
 
     // Balanço do mês na tela, em forma de conta.
-    const balanco = balancoDoPeriodo();
-    const emMes = !periodoPersonalizado();
-    const nomeDoMes = emMes ? rotuloMes(ui.mes).toLowerCase() : '';
-
     let rotulo = 'Saldo no fim do período';
     if (emMes) rotulo = ui.mes < mesAtualISO() ? `Saldo no fim de ${nomeDoMes}` : `Previsão para o fim de ${nomeDoMes}`;
     byId('balancoRotulo').textContent = rotulo;
@@ -1303,7 +1323,7 @@ function renderBalanco() {
     cartao.hidden = Math.abs(balanco.cartao) <= 0.005;
     cartao.textContent = cartao.hidden
         ? ''
-        : `No cartão: ${formatarMoeda(balanco.cartao)} em compras. Elas só saem das contas quando você paga a fatura.`;
+        : `No cartão: ${formatarMoeda(balanco.cartao)} em compras e parcelas deste período. Elas só saem das contas quando você paga a fatura.`;
 }
 
 function renderAvisos() {
@@ -1327,14 +1347,30 @@ function renderContas() {
             </li>`;
         return;
     }
-    const saldos = saldosDasContas();
     const periodo = periodoDoResumo();
+    const emMes = !periodoPersonalizado();
+    const noMesAtual = emMes && ui.mes === mesAtualISO();
+    const saldosHoje = saldosDasContas();
+    let rotuloSaldo = 'Saldo no fim do período';
+    if (emMes && ui.mes < mesAtualISO()) rotuloSaldo = 'Saldo no fim do mês';
+    else if (emMes && !noMesAtual) rotuloSaldo = 'Saldo previsto';
+
     lista.innerHTML = dados.contas.map(conta => {
         const cartao = conta.tipo === 'cartao';
-        const saldo = saldos[conta.id];
+        const compras = cartao ? gastosDoCartaoNoPeriodo(conta, periodo) : 0;
+        // Mês atual: situação real de hoje. Outros meses: saldo no fim do mês (zero antes da conta existir)
+        // e, no cartão, as compras e parcelas que caem naquele mês.
+        let valor = 0;
+        let rotuloValor = rotuloSaldo;
+        if (cartao) {
+            valor = noMesAtual ? saldosHoje[conta.id] : compras;
+            rotuloValor = noMesAtual ? 'Limite disponível' : 'Compras e parcelas do mês';
+        } else {
+            valor = noMesAtual ? saldosHoje[conta.id] : saldoDaContaAte(conta, periodo.fim, true);
+        }
         const vencimento = cartao && Number(conta.vencimento) ? ` · vence dia ${esc(conta.vencimento)}` : '';
-        const compras = cartao
-            ? `<small>Compras no período: ${formatarMoeda(gastosDoCartaoNoPeriodo(conta, periodo))}</small>`
+        const linhaCompras = cartao && noMesAtual
+            ? `<small>Compras e parcelas do mês: ${formatarMoeda(compras)}</small>`
             : '';
         return `
             <li class="conta">
@@ -1343,11 +1379,11 @@ function renderContas() {
                     <span class="texto-bloco">
                         <strong>${esc(conta.nome)}</strong>
                         <small>${cartao ? 'Cartão de crédito' : 'Conta ou carteira'}${vencimento}</small>
-                        ${compras}
+                        ${linhaCompras}
                     </span>
                     <span class="conta-saldo">
-                        <small class="sub">${cartao ? 'Limite disponível' : 'Saldo'}</small>
-                        <strong class="valor ${saldo < 0 ? 'neg' : ''}">${formatarMoeda(saldo)}</strong>
+                        <small class="sub">${rotuloValor}</small>
+                        <strong class="valor ${!cartao && valor < 0 ? 'neg' : ''}">${formatarMoeda(valor)}</strong>
                     </span>
                 </button>
                 ${cartao ? `<div class="conta-extras"><button type="button" class="mini mini-link" data-action="pagar-fatura" data-id="${esc(conta.id)}">Pagar fatura</button></div>` : ''}
@@ -1757,6 +1793,7 @@ const lanc = {
     quantidade: 3,
     pago: true,
     pagoManual: false,
+    pagoForcado: false,
     foto: null,
     categoriaOriginal: '',
     sugestoes: [],
@@ -1874,6 +1911,7 @@ function abrirLancamento({ id = null, tipo = 'despesa', destinoId = '', valor = 
         quantidade: 3,
         pago: true,
         pagoManual: false,
+        pagoForcado: false,
         foto: null,
         categoriaOriginal: '',
         salvando: false
@@ -1914,7 +1952,14 @@ function abrirLancamento({ id = null, tipo = 'despesa', destinoId = '', valor = 
     abrirModal('modalLancamento', transacao ? null : 'lValor');
 }
 
+function compraParceladaNoCartao() {
+    return !lanc.editando && lanc.tipo === 'despesa' && lanc.repeticao === 'parcelado' && contaEhCartao(lanc.contaId);
+}
+
 function dicaDaSituacao() {
+    if (compraParceladaNoCartao()) {
+        return 'O valor total reduz o limite do cartão agora. As parcelas aparecem nos meses seguintes, e o limite volta quando você paga a fatura.';
+    }
     if (!lanc.editando && lanc.tipo !== 'transferencia' && lanc.repeticao !== 'unica') {
         return 'Só o primeiro lançamento é marcado agora. Os próximos ficam agendados, um por mês.';
     }
@@ -1960,7 +2005,8 @@ function renderPrevia() {
     if (dataValida(lanc.data)) partes.push(rotuloDia(lanc.data).toLowerCase());
     if (modo !== 'unica' && dataValida(lanc.data)) partes.push(`último em ${formatarDataBR(somarMeses(lanc.data, lanc.quantidade - 1))}`);
     const situacoes = { despesa: ['paga', 'a pagar'], receita: ['recebida', 'a receber'], transferencia: ['feita', 'a fazer'] }[lanc.tipo];
-    partes.push(lanc.pago ? situacoes[0] : (lanc.data > hojeISO() ? 'agendada' : situacoes[1]));
+    if (compraParceladaNoCartao()) partes.push(`reduz o limite em ${formatarMoedaReal(valor)}`);
+    else partes.push(lanc.pago ? situacoes[0] : (lanc.data > hojeISO() ? 'agendada' : situacoes[1]));
 
     destino.innerHTML = `<strong>${esc(titulo)}</strong><span>${esc(partes.join(' · '))}</span>`;
 }
@@ -2003,7 +2049,17 @@ function renderLancamento() {
     byId('lQuantidade').value = String(lanc.quantidade);
     byId('lQuantidadeRotulo').textContent = lanc.repeticao === 'parcelado' ? 'Quantas parcelas' : 'Por quantos meses';
 
+    const travado = compraParceladaNoCartao();
+    if (travado) {
+        lanc.pago = true;
+        lanc.pagoForcado = true;
+    } else if (lanc.pagoForcado) {
+        lanc.pagoForcado = false;
+        lanc.pagoManual = false;
+        ajustarPagoAutomatico();
+    }
     byId('lPago').checked = lanc.pago;
+    byId('lPago').disabled = travado;
     byId('lPagoRotulo').textContent = ROTULOS_SITUACAO[lanc.tipo].sim;
     byId('lPagoDica').textContent = dicaDaSituacao();
     renderFotoDoLancamento();
