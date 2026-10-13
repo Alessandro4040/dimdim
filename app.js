@@ -16,6 +16,7 @@ const MAX_SYNC_RETRIES = 3;
 const SYNC_DEBOUNCE_MS = 2000;
 const SYNC_PERIODICO_MS = 5 * 60 * 1000;
 const SYNC_VALIDADE_MS = 2 * 60 * 1000;
+const VERSAO_APP = '2026.10.12-5';
 const LIMITE_LISTA = 60;
 const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const URL_AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
@@ -2571,6 +2572,7 @@ const ACOES = {
         elemento.setAttribute('aria-pressed', String(mostrar));
     },
     'alternar-tema': () => alternarTema(),
+    'atualizar-app': () => atualizarApp(),
     'sincronizar-agora': () => sincronizarAgora(),
     'sair': () => encerrarSessao(),
     'limpar-filtros': () => limparFiltros(),
@@ -2827,12 +2829,43 @@ function iniciar() {
         mostrarLogin();
     }
 
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./service-worker.js')
-                .catch(erro => console.warn('Não foi possível ativar o modo offline:', erro));
-        });
+    byId('versaoApp').textContent = `Versão ${VERSAO_APP}`;
+    registrarModoOffline();
+}
+
+// Registra o modo offline e recarrega sozinho quando uma versão nova do app assume o controle.
+function registrarModoOffline() {
+    if (!('serviceWorker' in navigator)) return;
+    const jaTinhaControlador = Boolean(navigator.serviceWorker.controller);
+    let recarregando = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!jaTinhaControlador || recarregando) return;
+        recarregando = true;
+        window.location.reload();
+    });
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' })
+            .then(registro => registro.update())
+            .catch(erro => console.warn('Não foi possível ativar o modo offline:', erro));
+    });
+}
+
+// Apaga só o cache do app (não os seus dados) e baixa tudo de novo.
+async function atualizarApp() {
+    mostrarToast('Atualizando o app…');
+    try {
+        if ('serviceWorker' in navigator) {
+            const registros = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registros.map(registro => registro.unregister()));
+        }
+        if (window.caches) {
+            const chaves = await caches.keys();
+            await Promise.all(chaves.map(chave => caches.delete(chave)));
+        }
+    } catch (erro) {
+        console.warn('Não foi possível limpar o cache:', erro);
     }
+    window.location.reload();
 }
 
 iniciar();
