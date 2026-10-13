@@ -16,7 +16,7 @@ const MAX_SYNC_RETRIES = 3;
 const SYNC_DEBOUNCE_MS = 2000;
 const SYNC_PERIODICO_MS = 5 * 60 * 1000;
 const SYNC_VALIDADE_MS = 2 * 60 * 1000;
-const VERSAO_APP = '2026.10.12-5';
+const VERSAO_APP = '2026.10.13-6';
 const LIMITE_LISTA = 60;
 const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const URL_AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
@@ -873,14 +873,22 @@ function gastosDoCartaoNoPeriodo(conta, periodo) {
     return arredondar(total);
 }
 
+function ehParcelaDeCompra(transacao) {
+    return String(transacao.id_original || '').startsWith('p-');
+}
+
 // Situação real das contas hoje: saldo das contas correntes e limite livre dos cartões
 // (saldo inicial ou limite + tudo o que já foi pago ou recebido).
+// No cartão, as parcelas de uma compra parcelada contam por inteiro desde o dia da compra,
+// mesmo as dos meses seguintes: o valor total já ocupa o limite.
 function saldosDasContas() {
     const saldos = {};
     dados.contas.forEach(conta => {
-        let total = Number(conta.tipo === 'corrente' ? conta.saldo_inicial : conta.limite) || 0;
+        const cartao = conta.tipo === 'cartao';
+        let total = Number(cartao ? conta.limite : conta.saldo_inicial) || 0;
         (indices.porConta.get(conta.id) || []).forEach(t => {
-            if (!t.pago) return;
+            const compraParcelada = cartao && t.tipo === 'despesa' && ehParcelaDeCompra(t);
+            if (!t.pago && !compraParcelada) return;
             const valor = Number(t.valor) || 0;
             if (t.tipo === 'receita') total += valor;
             else if (t.tipo === 'despesa') total -= valor;
@@ -1019,7 +1027,10 @@ function validarLancamento(entrada, { edicao = false } = {}) {
 function montarLancamentos(entrada) {
     const descricao = entrada.descricao.trim();
     const momento = agora();
-    const idOriginal = uuidv4();
+    // O prefixo identifica a sequência: "p-" = compra parcelada (o total já ocupa o limite do cartão),
+    // "m-" = repetição mensal (cada mês conta quando acontece). Transferências e lançamentos únicos não têm prefixo.
+    const prefixo = entrada.tipo === 'transferencia' ? '' : ({ parcelado: 'p-', mensal: 'm-' }[entrada.modo] || '');
+    const idOriginal = prefixo + uuidv4();
     const base = { id_original: idOriginal, sinc: false, updated_at: momento };
 
     if (entrada.tipo === 'transferencia') {
@@ -1970,6 +1981,17 @@ function dicaDaSituacao() {
         : 'Fica como pendente até você marcar como pago.';
 }
 
+// Parcelado numa conta que não é cartão de crédito: só a 1ª parcela sai agora. Avisa e oferece corrigir o tipo.
+function renderAvisoDeConta() {
+    const aviso = byId('lAvisoConta');
+    const conta = contaPorId(lanc.contaId);
+    const mostrar = !lanc.editando && lanc.tipo === 'despesa' && lanc.repeticao === 'parcelado' && Boolean(conta) && conta.tipo !== 'cartao';
+    aviso.hidden = !mostrar;
+    aviso.innerHTML = mostrar
+        ? `<span>"${esc(conta.nome)}" está cadastrada como conta comum, por isso só a 1ª parcela sai agora. Se for um cartão de crédito, mude o tipo para o valor total sair do limite.</span><button type="button" class="btn-texto" data-action="editar-conta" data-id="${esc(conta.id)}">Mudar para cartão de crédito</button>`
+        : '';
+}
+
 function renderFotoDoLancamento() {
     const origem = fotoSegura(lanc.foto);
     byId('lFotoArea').innerHTML = origem
@@ -2063,6 +2085,7 @@ function renderLancamento() {
     byId('lPago').disabled = travado;
     byId('lPagoRotulo').textContent = ROTULOS_SITUACAO[lanc.tipo].sim;
     byId('lPagoDica').textContent = dicaDaSituacao();
+    renderAvisoDeConta();
     renderFotoDoLancamento();
 
     byId('btnExcluirLanc').hidden = !lanc.editando;
@@ -2224,6 +2247,11 @@ async function salvarLancamento(emSequencia = false) {
         const mesDoLancamento = entrada.data.slice(0, 7);
         const foraDaTela = !periodoPersonalizado() && mesDoLancamento !== ui.mes;
         let texto = lanc.editando ? 'Alterações salvas.' : (agendado ? 'Lançamento agendado.' : `${ROTULOS_TIPO[entrada.tipo]} salva.`);
+        if (!lanc.editando && entrada.modo === 'parcelado') {
+            texto = contaEhCartao(entrada.contaId)
+                ? `Compra parcelada: ${formatarMoeda(entrada.valor)} saíram do limite do cartão.`
+                : `Parcelado em ${entrada.quantidade}x. Esta conta não é cartão de crédito, então só a 1ª parcela sai agora.`;
+        }
         if (emSequencia && !lanc.editando) texto += ' Pode lançar o próximo.';
         const acao = foraDaTela ? { rotulo: `Ver ${rotuloMes(mesDoLancamento).split(' ')[0].toLowerCase()}`, fn: () => irParaMes(mesDoLancamento) } : null;
 
@@ -2338,6 +2366,7 @@ async function salvarFormularioConta(evento) {
     fecharModal('modalConta');
     mostrarToast(id ? 'Conta atualizada.' : 'Conta criada.');
     if (contexto && !id) aplicarContaCriada(contexto, conta);
+    else if (pilhaModais.some(item => item.id === 'modalLancamento')) renderLancamento();
 }
 
 // ============================================================
