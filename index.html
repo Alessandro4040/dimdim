@@ -1214,6 +1214,27 @@
             text-align: center;
         }
 
+        .aviso-conta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            margin-top: 10px;
+            padding: 10px 12px;
+            border-radius: var(--raio-p);
+            background: var(--warn-soft);
+            color: var(--warn);
+            font-size: 0.88rem;
+            font-weight: 600;
+        }
+
+        .aviso-conta .btn-texto {
+            min-height: 32px;
+            padding: 4px 0;
+            color: var(--warn);
+            text-decoration: underline;
+        }
+
         .lanc-previa {
             display: flex;
             flex-direction: column;
@@ -1653,6 +1674,7 @@
                         <input type="checkbox" id="lPago" checked>
                     </label>
                     <p class="campo-dica" id="lPagoDica"></p>
+                    <div class="aviso-conta" id="lAvisoConta" hidden></div>
                 </div>
 
                 <div class="campo">
@@ -1815,6 +1837,6 @@
         <img id="zoomImg" src="" alt="Comprovante ampliado">
     </div>
 
-    <script src="./app.js?v=2026.10.12-5"></script>
+    <script src="./app.js?v=2026.10.13-6"></script>
 </body>
 </html>
