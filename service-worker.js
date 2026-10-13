@@ -1,4 +1,4 @@
-const CACHE_NAME = 'financas-v75';
+const CACHE_NAME = 'financas-v76';
 const ASSETS = [
     './',
     './index.html',
@@ -45,8 +45,11 @@ self.addEventListener('fetch', event => {
 async function buscarNaRedeOuCache(request) {
     const cache = await caches.open(CACHE_NAME);
     try {
+        // Arquivos do próprio app são sempre revalidados no servidor (o cache do navegador não segura versão antiga).
+        const mesmaOrigem = new URL(request.url).origin === self.location.origin;
+        const pedido = mesmaOrigem ? new Request(request.url, { cache: 'no-cache' }) : request;
         const resposta = await Promise.race([
-            fetch(request),
+            fetch(pedido),
             new Promise((_, rejeitar) => setTimeout(() => rejeitar(new Error('timeout')), TEMPO_LIMITE_REDE_MS))
         ]);
         if (resposta && (resposta.ok || resposta.type === 'opaque')) {
