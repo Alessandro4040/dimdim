@@ -356,6 +356,13 @@
             color: var(--hero-neg);
         }
 
+        .montante-detalhe {
+            margin-bottom: 6px;
+            color: var(--hero-soft);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
         .montante-nota {
             color: var(--hero-soft);
             font-size: 0.82rem;
@@ -424,12 +431,6 @@
         .equacao .mais { color: var(--pos); }
         .equacao .menos { color: var(--neg); }
 
-        .balanco-cartao {
-            padding: 10px 0 14px;
-            border-top: 1px solid var(--line);
-            color: var(--ink-soft);
-            font-size: 0.84rem;
-        }
 
         /* ==================== Contas ==================== */
         .conta {
@@ -1446,7 +1447,8 @@
                     <button type="button" class="icone-btn btn-valores" id="btnValores" data-action="alternar-valores" aria-pressed="false" aria-label="Ocultar valores">👁️</button>
                 </div>
                 <p class="montante-valor" id="montanteValor">R$ 0,00</p>
-                <p class="montante-nota" id="montanteNota">Soma das contas correntes, só com o que já foi pago ou recebido.</p>
+                <p class="montante-detalhe" id="montanteDetalhe" hidden></p>
+                <p class="montante-nota" id="montanteNota">Soma das contas correntes e do limite disponível dos cartões.</p>
             </section>
 
             <section class="balanco" aria-label="Balanço do mês">
@@ -1482,7 +1484,6 @@
                         <strong id="eqTrans"></strong>
                     </li>
                 </ul>
-                <p class="balanco-cartao" id="balancoCartao" hidden></p>
             </section>
 
             <button type="button" class="aviso" id="avisoPendentes" data-action="ver-pendentes" hidden></button>
@@ -1837,6 +1838,6 @@
         <img id="zoomImg" src="" alt="Comprovante ampliado">
     </div>
 
-    <script src="./app.js?v=2026.10.13-6"></script>
+    <script src="./app.js?v=2026.10.13-7"></script>
 </body>
 </html>
