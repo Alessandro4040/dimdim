@@ -16,7 +16,7 @@ const MAX_SYNC_RETRIES = 3;
 const SYNC_DEBOUNCE_MS = 2000;
 const SYNC_PERIODICO_MS = 5 * 60 * 1000;
 const SYNC_VALIDADE_MS = 2 * 60 * 1000;
-const VERSAO_APP = '2026.10.13-6';
+const VERSAO_APP = '2026.10.13-7';
 const LIMITE_LISTA = 60;
 const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const URL_AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
@@ -51,7 +51,7 @@ let timerBusca = null;
 let carregandoPdf = null;
 
 // Índices em memória: evitam percorrer todos os lançamentos a cada desenho da tela.
-let indices = { contas: new Map(), categorias: new Map(), porConta: new Map(), mesInicio: new Map() };
+let indices = { contas: new Map(), categorias: new Map(), porConta: new Map(), mesInicio: new Map(), inicioDaCompra: new Map() };
 let versaoDados = 0;
 let memoPeriodo = { chave: '', itens: [] };
 
@@ -773,10 +773,16 @@ function reconstruirIndices() {
     const contas = new Map(dados.contas.map(conta => [conta.id, conta]));
     const categorias = new Map(dados.categorias.map(categoria => [categoria.id, categoria]));
     const porConta = new Map();
+    const inicioDaCompra = new Map();
     dados.transacoes.forEach(t => {
         const lista = porConta.get(t.conta_id);
         if (lista) lista.push(t);
         else porConta.set(t.conta_id, [t]);
+        // Data da primeira parcela de cada compra parcelada: é quando o total passa a ocupar o limite.
+        if (ehParcelaDeCompra(t)) {
+            const atual = inicioDaCompra.get(t.id_original);
+            if (!atual || t.data < atual) inicioDaCompra.set(t.id_original, t.data);
+        }
     });
     // Mês em que cada conta começou: lançamento mais antigo ou mês de criação/edição.
     const mesInicio = new Map();
@@ -790,7 +796,7 @@ function reconstruirIndices() {
         if (/^\d{4}-\d{2}$/.test(criacao) && (!menor || criacao < menor)) menor = criacao;
         mesInicio.set(conta.id, menor || mesAtualISO());
     });
-    indices = { contas, categorias, porConta, mesInicio };
+    indices = { contas, categorias, porConta, mesInicio, inicioDaCompra };
     versaoDados += 1;
 }
 
@@ -848,14 +854,19 @@ function mesDeInicioDaConta(conta) {
     return indices.mesInicio.get(conta.id) || mesAtualISO();
 }
 
-// Saldo acumulado da conta até uma data: saldo inicial + tudo o que entrou e saiu até lá.
-// Antes do mês em que a conta começou, o saldo é zero. Em meses futuros (previsão)
-// também entram os lançamentos pendentes e agendados.
+// Situação de uma conta até uma data: saldo (conta corrente) ou limite disponível (cartão),
+// somando o valor inicial a tudo o que entrou e saiu até lá. Antes do mês em que a conta começou, é zero.
+// Em meses futuros (previsão) entram também os lançamentos pendentes e agendados.
+// No cartão, uma compra parcelada ocupa o limite por inteiro desde o dia da primeira parcela.
 function saldoDaContaAte(conta, ate, incluirPendentes) {
     if (mesDeInicioDaConta(conta) > ate.slice(0, 7)) return 0;
-    let total = Number(conta.saldo_inicial) || 0;
+    const cartao = conta.tipo === 'cartao';
+    let total = Number(cartao ? conta.limite : conta.saldo_inicial) || 0;
     (indices.porConta.get(conta.id) || []).forEach(t => {
-        if (t.data > ate || (!t.pago && !incluirPendentes)) return;
+        const compraParcelada = cartao && t.tipo === 'despesa' && ehParcelaDeCompra(t);
+        const dataEfetiva = compraParcelada ? (indices.inicioDaCompra.get(t.id_original) || t.data) : t.data;
+        if (dataEfetiva > ate) return;
+        if (!t.pago && !incluirPendentes && !compraParcelada) return;
         const valor = Number(t.valor) || 0;
         if (t.tipo === 'receita') total += valor;
         else if (t.tipo === 'despesa') total -= valor;
@@ -936,9 +947,8 @@ function balancoDoPeriodo() {
     const mesFinal = periodo.fim.slice(0, 7);
     const correntes = dados.contas.filter(conta => conta.tipo === 'corrente');
     const idsCorrentes = new Set(correntes.map(conta => conta.id));
-    const idsCartoes = new Set(dados.contas.filter(conta => conta.tipo === 'cartao').map(conta => conta.id));
     const novoGrupo = () => ({ total: 0, feito: 0, aberto: 0 });
-    const balanco = { inicio: 0, receitas: novoGrupo(), despesas: novoGrupo(), transferencias: 0, cartao: 0, fim: 0 };
+    const balanco = { inicio: 0, receitas: novoGrupo(), despesas: novoGrupo(), transferencias: 0, fim: 0 };
 
     correntes.forEach(conta => {
         const comeco = mesDeInicioDaConta(conta);
@@ -949,20 +959,15 @@ function balancoDoPeriodo() {
     });
 
     dados.transacoes.forEach(t => {
-        if (t.data < periodo.inicio || t.data > periodo.fim) return;
+        if (t.data < periodo.inicio || t.data > periodo.fim || !idsCorrentes.has(t.conta_id)) return;
         const valor = Number(t.valor) || 0;
-        const transferencia = t.categoria_id === CAT_TRANSFERENCIA;
-        if (idsCorrentes.has(t.conta_id)) {
-            if (transferencia) {
-                balanco.transferencias += t.tipo === 'receita' ? valor : -valor;
-                return;
-            }
-            const grupo = t.tipo === 'receita' ? balanco.receitas : balanco.despesas;
-            grupo.total += valor;
-            grupo[t.pago ? 'feito' : 'aberto'] += valor;
-        } else if (idsCartoes.has(t.conta_id) && !transferencia) {
-            balanco.cartao += t.tipo === 'despesa' ? valor : -valor;
+        if (t.categoria_id === CAT_TRANSFERENCIA) {
+            balanco.transferencias += t.tipo === 'receita' ? valor : -valor;
+            return;
         }
+        const grupo = t.tipo === 'receita' ? balanco.receitas : balanco.despesas;
+        grupo.total += valor;
+        grupo[t.pago ? 'feito' : 'aberto'] += valor;
     });
 
     [balanco.receitas, balanco.despesas].forEach(grupo => {
@@ -972,7 +977,6 @@ function balancoDoPeriodo() {
     });
     balanco.inicio = arredondar(balanco.inicio);
     balanco.transferencias = arredondar(balanco.transferencias);
-    balanco.cartao = arredondar(balanco.cartao);
     balanco.fim = arredondar(balanco.inicio + balanco.receitas.total - balanco.despesas.total + balanco.transferencias);
     return balanco;
 }
@@ -1286,31 +1290,49 @@ function detalheDoGrupo(grupo, feito, aberto) {
 
 function renderBalanco() {
     const balanco = balancoDoPeriodo();
+    const periodo = periodoDoResumo();
     const emMes = !periodoPersonalizado();
     const noMesAtual = emMes && ui.mes === mesAtualISO();
     const nomeDoMes = emMes ? rotuloMes(ui.mes).toLowerCase() : '';
+    const cartoes = dados.contas.filter(conta => conta.tipo === 'cartao');
 
-    // Montante: no mês atual é a situação real de hoje. Em outros meses é o saldo no fim daquele mês
-    // (zero antes de a conta existir; previsão nos meses futuros).
-    let montante = balanco.fim;
-    let rotuloMontante = 'Montante no fim do período';
-    let notaMontante = 'Saldo das contas correntes até o fim do período escolhido.';
+    // Montante = dinheiro nas contas correntes + limite disponível dos cartões.
+    // Mês atual: situação real de hoje. Outros meses: no fim daquele mês (zero antes de as contas existirem;
+    // previsão nos meses futuros).
+    let contas = balanco.fim;
+    let limites = 0;
     if (noMesAtual) {
-        montante = totalNasContasHoje();
+        const saldosHoje = saldosDasContas();
+        contas = totalNasContasHoje();
+        limites = arredondar(cartoes.reduce((soma, conta) => soma + saldosHoje[conta.id], 0));
+    } else {
+        limites = arredondar(cartoes.reduce((soma, conta) => soma + saldoDaContaAte(conta, periodo.fim, true), 0));
+    }
+    const montante = arredondar(contas + limites);
+
+    let rotuloMontante = 'Montante no fim do período';
+    let notaMontante = 'Contas correntes e limite dos cartões até o fim do período escolhido.';
+    if (noMesAtual) {
         rotuloMontante = 'Montante nas contas';
-        notaMontante = 'Soma das contas correntes, só com o que já foi pago ou recebido.';
+        notaMontante = 'Soma das contas correntes (só o que já foi pago ou recebido) e do limite disponível dos cartões.';
     } else if (emMes && ui.mes < mesAtualISO()) {
         rotuloMontante = `Montante no fim de ${nomeDoMes}`;
-        notaMontante = 'Saldo das contas correntes no fim desse mês.';
+        notaMontante = 'Contas correntes e limite dos cartões no fim desse mês.';
     } else if (emMes) {
         rotuloMontante = `Montante previsto para o fim de ${nomeDoMes}`;
-        notaMontante = 'Previsão: soma o que sobrou dos meses anteriores com o que está agendado.';
+        notaMontante = 'Previsão: soma o que sobrou dos meses anteriores com o que está agendado, mais o limite dos cartões.';
     }
     byId('montanteRotulo').textContent = rotuloMontante;
     byId('montanteNota').textContent = notaMontante;
     const elementoMontante = byId('montanteValor');
     elementoMontante.textContent = formatarMoeda(montante);
     elementoMontante.classList.toggle('negativo', montante < 0);
+
+    const detalhe = byId('montanteDetalhe');
+    detalhe.hidden = cartoes.length === 0;
+    detalhe.textContent = cartoes.length === 0
+        ? ''
+        : `Contas: ${formatarMoeda(contas)} · Limite dos cartões: ${formatarMoeda(limites)}`;
 
     // Balanço do mês na tela, em forma de conta.
     let rotulo = 'Saldo no fim do período';
@@ -1330,12 +1352,6 @@ function renderBalanco() {
     const temTransferencias = Math.abs(balanco.transferencias) > 0.005;
     byId('eqTransLinha').hidden = !temTransferencias;
     byId('eqTrans').textContent = `${balanco.transferencias < 0 ? '-' : '+'} ${formatarMoeda(Math.abs(balanco.transferencias))}`;
-
-    const cartao = byId('balancoCartao');
-    cartao.hidden = Math.abs(balanco.cartao) <= 0.005;
-    cartao.textContent = cartao.hidden
-        ? ''
-        : `No cartão: ${formatarMoeda(balanco.cartao)} em compras e parcelas deste período. Elas só saem das contas quando você paga a fatura.`;
 }
 
 function renderAvisos() {
@@ -1365,7 +1381,8 @@ function renderContas() {
     const saldosHoje = saldosDasContas();
     let rotuloSaldo = 'Saldo no fim do período';
     if (emMes && ui.mes < mesAtualISO()) rotuloSaldo = 'Saldo no fim do mês';
-    else if (emMes && !noMesAtual) rotuloSaldo = 'Saldo previsto';
+    else if (noMesAtual) rotuloSaldo = 'Saldo';
+    else if (emMes) rotuloSaldo = 'Saldo previsto';
 
     lista.innerHTML = dados.contas.map(conta => {
         const cartao = conta.tipo === 'cartao';
