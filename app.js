@@ -16,7 +16,7 @@ const MAX_SYNC_RETRIES = 3;
 const SYNC_DEBOUNCE_MS = 2000;
 const SYNC_PERIODICO_MS = 5 * 60 * 1000;
 const SYNC_VALIDADE_MS = 2 * 60 * 1000;
-const VERSAO_APP = '2026.11.03-1';
+const VERSAO_APP = '2026.10.13-7';
 const LIMITE_LISTA = 60;
 const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const URL_AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
@@ -279,7 +279,7 @@ function aplicarTema(tema) {
     temaAtual = tema === 'escuro' ? 'escuro' : 'claro';
     document.documentElement.setAttribute('data-theme', temaAtual);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', temaAtual === 'escuro' ? '#0e1513' : '#fbe4ea');
+    if (meta) meta.setAttribute('content', temaAtual === 'escuro' ? '#0e1513' : '#0b5566');
     const rotulo = byId('temaRotulo');
     if (rotulo) rotulo.textContent = temaAtual === 'escuro' ? 'Escuro' : 'Claro';
 }
@@ -546,7 +546,6 @@ async function iniciarApp() {
     try {
         db = await abrirBanco();
         await recarregarDados();
-        executarAtalho();
     } catch (erro) {
         console.error(erro);
         mostrarToast('Não foi possível abrir os dados salvos neste aparelho.', 'erro');
@@ -1349,8 +1348,6 @@ function renderBalanco() {
     byId('eqRecDetalhe').textContent = detalheDoGrupo(balanco.receitas, 'recebido', 'a receber');
     byId('eqDes').textContent = `- ${formatarMoeda(balanco.despesas.total)}`;
     byId('eqDesDetalhe').textContent = detalheDoGrupo(balanco.despesas, 'pago', 'a pagar');
-    byId('pkReceita').textContent = `+ ${formatarMoeda(balanco.receitas.total)}`;
-    byId('pkDespesa').textContent = formatarMoeda(balanco.despesas.total);
 
     const temTransferencias = Math.abs(balanco.transferencias) > 0.005;
     byId('eqTransLinha').hidden = !temTransferencias;
@@ -1436,20 +1433,20 @@ function renderCategorias() {
     secao.hidden = total <= 0;
     if (total <= 0) return;
 
-    const linhas = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-    const maior = linhas[0][1] || 1;
-    const cores = ['#f4b6cf', '#f8c3b5', '#f6c7b0', '#f3bcab', '#efb3dc', '#e3c3e8', '#f7d2c4', '#d9c6ee'];
-    byId('listaCategorias').innerHTML = linhas.map(([id, valor], posicao) => {
+    const linhas = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    byId('listaCategorias').innerHTML = linhas.map(([id, valor]) => {
         const categoria = categoriaPorId(id);
-        const relativo = Math.round((valor / maior) * 100);
+        const percentual = Math.round((valor / total) * 100);
         return `
             <li>
-                <button type="button" class="cat-linha" data-action="filtrar-categoria" data-id="${esc(id)}" aria-pressed="${ui.categoria === id}" style="--w: ${relativo}; --cor: ${cores[posicao % cores.length]}">
-                    <span class="cat-fundo" aria-hidden="true"></span>
-                    <span class="cat-conteudo">
-                        <span class="cat-emoji" aria-hidden="true">${esc(iconeCategoria(categoria))}</span>
-                        <strong>${esc(nomeCategoria(categoria))}</strong>
-                        <span class="valor">${formatarMoeda(valor)}</span>
+                <button type="button" class="cat-linha" data-action="filtrar-categoria" data-id="${esc(id)}" aria-pressed="${ui.categoria === id}">
+                    <span class="icone-circulo" aria-hidden="true">${esc(iconeCategoria(categoria))}</span>
+                    <span class="cat-corpo">
+                        <span class="cat-topo">
+                            <strong>${esc(nomeCategoria(categoria))} <small class="sub">${percentual}%</small></strong>
+                            <span class="valor">${formatarMoeda(valor)}</span>
+                        </span>
+                        <span class="barra" aria-hidden="true"><span style="width: ${Math.max(percentual, 3)}%"></span></span>
                     </span>
                 </button>
             </li>`;
@@ -1670,7 +1667,6 @@ function fecharModal(id) {
         resolver(null);
     }
     if (id === 'modalConta') contextoConta = null;
-    if (id === 'modalVoz') pararEscuta();
 
     if (pilhaModais.length === 0) {
         byId('overlay').classList.remove('aberto');
@@ -2596,14 +2592,6 @@ const ACOES = {
     'ir-hoje': () => irParaMes(mesAtualISO()),
     'abrir-menu': () => abrirModal('modalMenu'),
     'novo-lancamento': () => abrirLancamento({ tipo: tipoPreferido() }),
-    'abrir-voz': () => abrirVoz(),
-    'voz-ouvir': () => (voz.ouvindo ? pararEscuta() : iniciarEscuta()),
-    'voz-usar': () => usarFala(),
-    'ir-secao': elemento => {
-        if (elemento.dataset.alvo === 'topo') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-        const alvo = byId(elemento.dataset.alvo);
-        if (alvo && !alvo.hidden) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    },
     'alternar-valores': () => alternarValores(),
     'ver-mais': () => {
         ui.mostrar += LIMITE_LISTA;
@@ -2873,249 +2861,12 @@ function registrarEventos() {
 }
 
 // ============================================================
-// LANÇAR POR VOZ
-// ============================================================
-const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
-const voz = { rec: null, ouvindo: false, erro: false };
-let atalhoPendente = '';
-
-const PALAVRAS_IGNORADAS = new Set(('gastei gasto gastou paguei comprei recebi ganhei entrou caiu reais real r contos conto pila pilas centavos centavo ' +
-    'hoje ontem anteontem amanha no na nos nas em de do da dos das com um uma o a os as por para pra foi e mil dia cartao credito debito ' +
-    'fiz adicionar adicione registrar registre lancar lance despesa receita que meu minha ao aos').split(' '));
-const NUMEROS = { zero: 0, um: 1, uma: 1, dois: 2, duas: 2, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12,
-    treze: 13, catorze: 14, quatorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20, trinta: 30, quarenta: 40,
-    cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100, cento: 100, duzentos: 200, trezentos: 300, quatrocentos: 400,
-    quinhentos: 500, seiscentos: 600, setecentos: 700, oitocentos: 800, novecentos: 900 };
-const PALAVRAS_DE_CATEGORIA = [
-    [/mercado|restaurante|lanche|pizza|hamburguer|ifood|padaria|almoco|jantar|cafe|comida|acai|feira|acougue|sorvete/, 'alimentacao'],
-    [/uber|\b99\b|taxi|gasolina|combustivel|onibus|metro|estacionamento|pedagio|passagem|oficina/, 'transporte'],
-    [/cinema|netflix|spotify|jogo|\bbar\b|show|viagem|passeio|streaming|ingresso|balada/, 'lazer'],
-    [/salario|freelance|bonus/, 'salario']
-];
-
-function semAcento(texto) {
-    return String(texto ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-}
-
-function numeroPorExtenso(normalizado) {
-    let total = 0, atual = 0, achou = false;
-    for (const palavra of normalizado.split(/\s+/)) {
-        if (palavra in NUMEROS) { atual += NUMEROS[palavra]; achou = true; }
-        else if (palavra === 'mil' && achou) { total += (atual || 1) * 1000; atual = 0; }
-        else if (palavra === 'e' && achou) continue;
-        else if (achou) break;
-    }
-    const resultado = total + atual;
-    return achou && resultado > 1 ? resultado : null;
-}
-
-function valorDaFala(n) {
-    const limpo = n.replace(/\bdia\s+\d{1,2}\b/g, ' ').replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b/g, ' ');
-    const composto = limpo.match(/(\d+(?:[.,]\d+)*)\s*(mil)?\s*(?:reais|real|contos?|pilas?)\s*e\s*(\d{1,2})\b/);
-    if (composto) {
-        const base = lerDinheiro(composto[1]) ?? 0;
-        return arredondar(base * (composto[2] ? 1000 : 1) + Number(composto[3]) / 100);
-    }
-    const simples = limpo.match(/(\d+(?:[.,]\d+)*)\s*(mil)?/);
-    if (simples) {
-        const numero = lerDinheiro(simples[1]);
-        return numero === null ? null : arredondar(numero * (simples[2] ? 1000 : 1));
-    }
-    return numeroPorExtenso(limpo);
-}
-
-function dataDaFala(n) {
-    if (/\banteontem\b/.test(n)) return somarDias(hojeISO(), -2);
-    if (/\bontem\b/.test(n)) return somarDias(hojeISO(), -1);
-    if (/\bamanha\b/.test(n)) return somarDias(hojeISO(), 1);
-    const barra = n.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
-    const dia = n.match(/\bdia\s+(\d{1,2})\b/);
-    const hoje = hojeISO();
-    let iso = '';
-    if (barra) {
-        const ano = barra[3] ? (barra[3].length === 2 ? `20${barra[3]}` : barra[3]) : hoje.slice(0, 4);
-        iso = `${ano}-${pad(barra[2])}-${pad(barra[1])}`;
-    } else if (dia) {
-        iso = `${hoje.slice(0, 7)}-${pad(dia[1])}`;
-    }
-    return iso && dataValida(iso) ? iso : '';
-}
-
-function interpretarFala(texto) {
-    const n = semAcento(texto);
-    const tokens = n.split(/[^a-z0-9$]+/).filter(Boolean);
-    const tipo = /\b(recebi|ganhei|entrou|caiu|receita|salario|vendi|reembolso)\b/.test(n) ? 'receita' : 'despesa';
-    const valor = valorDaFala(n);
-    const data = dataDaFala(n);
-
-    // Conta citada na fala (ex.: "no nubank").
-    let conta = null;
-    dados.contas.forEach(c => {
-        const nome = semAcento(c.nome).trim();
-        const partes = nome.split(/\s+/).filter(p => p.length >= 3);
-        const bate = nome.length >= 2 && (n.includes(nome) || partes.some(p => tokens.includes(p)));
-        if (bate && (!conta || nome.length > semAcento(conta.nome).length)) conta = c;
-    });
-    const palavrasDaConta = conta ? new Set(semAcento(conta.nome).split(/\s+/)) : new Set();
-
-    // Descrição: o que sobra depois de tirar valor, data, conta e palavras de ligação.
-    const palavras = String(texto).split(/\s+/).map(p => p.replace(/^[^\p{L}\p{N}$]+|[^\p{L}\p{N}]+$/gu, '')).filter(Boolean)
-        .filter(p => {
-            const k = semAcento(p);
-            return !PALAVRAS_IGNORADAS.has(k) && !palavrasDaConta.has(k) && !/^(r\$)?\d[\d.,/]*$/.test(k) && !(k in NUMEROS);
-        });
-    let descricao = palavras.join(' ').slice(0, 60);
-    descricao = descricao.charAt(0).toUpperCase() + descricao.slice(1);
-    const descricaoNorm = semAcento(descricao);
-
-    // Categoria: nome citado, depois lançamentos parecidos, depois palavras-chave.
-    const candidatas = dados.categorias.filter(c => c.id !== CAT_TRANSFERENCIA && (c.tipo === tipo || c.tipo === 'outros' || !c.tipo));
-    let categoria = candidatas.find(c => semAcento(nomeCategoria(c)).length >= 3 && n.includes(semAcento(nomeCategoria(c))));
-    if (!categoria) {
-        const parecido = lancamentosParecidos(tipo).find(t => {
-            const antigo = semAcento(descricaoSemParcela(t.descricao));
-            return antigo.length >= 3 && candidatas.some(c => c.id === t.categoria_id) &&
-                (n.includes(antigo) || (descricaoNorm.length >= 3 && antigo.includes(descricaoNorm)));
-        });
-        if (parecido) {
-            categoria = candidatas.find(c => c.id === parecido.categoria_id);
-            if (!conta && contaPorId(parecido.conta_id)) conta = contaPorId(parecido.conta_id);
-        }
-    }
-    if (!categoria) {
-        const regra = PALAVRAS_DE_CATEGORIA.find(([regex]) => regex.test(n));
-        if (regra) categoria = candidatas.find(c => semAcento(nomeCategoria(c)).startsWith(regra[1]));
-    }
-    if (!categoria) categoria = candidatas.find(c => semAcento(nomeCategoria(c)) === 'outros');
-    if (!descricao) descricao = categoria ? nomeCategoria(categoria) : ROTULOS_TIPO[tipo];
-
-    return { tipo, valor, data, descricao, categoriaId: categoria ? categoria.id : '', contaId: conta ? conta.id : '' };
-}
-
-function atualizarVoz(mensagem) {
-    byId('btnMic').classList.toggle('ouvindo', voz.ouvindo);
-    byId('btnMic').setAttribute('aria-label', voz.ouvindo ? 'Parar de ouvir' : 'Ouvir');
-    if (mensagem !== undefined) byId('vStatus').textContent = mensagem;
-}
-
-function mostrarErroVoz(texto) {
-    const erro = byId('vErro');
-    erro.textContent = texto;
-    erro.hidden = !texto;
-}
-
-function abrirVoz() {
-    mostrarErroVoz('');
-    byId('vTexto').value = '';
-    byId('vDireto').checked = lerLocal('vozDireto') === '1';
-    voz.ouvindo = false;
-    abrirModal('modalVoz');
-    if (Reconhecimento) {
-        iniciarEscuta();
-    } else {
-        atualizarVoz('Este navegador não ouve sozinho. Digite ou use o microfone do teclado.');
-        setTimeout(() => byId('vTexto').focus(), 80);
-    }
-}
-
-function iniciarEscuta() {
-    if (!Reconhecimento || voz.ouvindo) return;
-    mostrarErroVoz('');
-    const rec = new Reconhecimento();
-    rec.lang = 'pt-BR';
-    rec.interimResults = true;
-    rec.continuous = false;
-    voz.rec = rec;
-    voz.erro = false;
-    voz.ouvindo = true;
-    byId('vTexto').value = '';
-    atualizarVoz('Ouvindo… diga o valor e no que foi.');
-    rec.onresult = evento => {
-        let texto = '';
-        for (let i = 0; i < evento.results.length; i++) texto += evento.results[i][0].transcript;
-        byId('vTexto').value = texto.trim();
-    };
-    rec.onerror = evento => {
-        voz.erro = true;
-        if (evento.error === 'not-allowed' || evento.error === 'service-not-allowed') {
-            mostrarErroVoz('O microfone não foi liberado. Digite aqui ou use o microfone do teclado.');
-        } else if (evento.error === 'no-speech') {
-            mostrarErroVoz('Não ouvi nada. Toque no microfone e tente de novo.');
-        }
-    };
-    rec.onend = () => {
-        voz.ouvindo = false;
-        atualizarVoz('Toque no microfone para falar de novo.');
-        const aberto = byId('modalVoz').classList.contains('aberto');
-        if (aberto && !voz.erro && byId('vTexto').value.trim()) usarFala();
-    };
-    try {
-        rec.start();
-    } catch (erro) {
-        voz.ouvindo = false;
-        atualizarVoz('Não consegui ligar o microfone. Digite o lançamento.');
-    }
-}
-
-function pararEscuta() {
-    if (voz.rec && voz.ouvindo) { try { voz.rec.stop(); } catch (erro) { /* já parou */ } }
-}
-
-function usarFala() {
-    const texto = byId('vTexto').value.trim();
-    if (!texto) { mostrarErroVoz('Diga ou digite o lançamento primeiro.'); return; }
-    const r = interpretarFala(texto);
-    if (!r.valor || r.valor <= 0) {
-        mostrarErroVoz('Não entendi o valor. Diga, por exemplo: "gastei 45 reais no mercado".');
-        return;
-    }
-    const direto = byId('vDireto').checked;
-    gravarLocal('vozDireto', direto ? '1' : '0');
-    fecharModal('modalVoz');
-
-    abrirLancamento({ tipo: r.tipo, valor: r.valor, descricao: r.descricao });
-    if (r.categoriaId) lanc.categoriaId = r.categoriaId;
-    if (r.contaId) lanc.contaId = r.contaId;
-    if (r.data) {
-        lanc.data = r.data;
-        lanc.dataModo = modoDaData(r.data);
-        byId('lData').value = r.data;
-        ajustarPagoAutomatico();
-    }
-    renderLancamento();
-    if (direto && lanc.categoriaId && lanc.contaId) salvarLancamento(false);
-}
-
-function registrarVoz() {
-    byId('vTexto').addEventListener('keydown', evento => {
-        if (evento.key === 'Enter') { evento.preventDefault(); usarFala(); }
-    });
-}
-
-// Atalhos: index.html?voz=1 abre direto a tela de voz; ?novo=1 abre o novo lançamento.
-function lerAtalhoDaUrl() {
-    const parametros = new URLSearchParams(window.location.search);
-    atalhoPendente = parametros.has('voz') ? 'voz' : (parametros.has('novo') ? 'novo' : '');
-    if (atalhoPendente) window.history.replaceState(null, '', window.location.pathname);
-}
-
-function executarAtalho() {
-    const atalho = atalhoPendente;
-    atalhoPendente = '';
-    if (!atalho || !authToken) return;
-    if (atalho === 'voz') abrirVoz();
-    else abrirLancamento({ tipo: tipoPreferido() });
-}
-
-// ============================================================
 // INÍCIO
 // ============================================================
 function iniciar() {
     aplicarTema(temaAtual);
     atualizarBotaoValores();
     registrarEventos();
-    registrarVoz();
-    lerAtalhoDaUrl();
 
     if (authToken) {
         mostrarApp();
