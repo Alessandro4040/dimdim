@@ -8,9 +8,12 @@
     "scope": "./",
     "display": "standalone",
     "orientation": "portrait",
-    "background_color": "#f3f5f2",
-    "theme_color": "#0b5566",
-    "categories": ["finance", "productivity"],
+    "background_color": "#fbe4ea",
+    "theme_color": "#fbe4ea",
+    "categories": [
+        "finance",
+        "productivity"
+    ],
     "icons": [
         {
             "src": "./money-icon.png",
@@ -23,6 +26,32 @@
             "sizes": "512x512",
             "type": "image/png",
             "purpose": "maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Falar um lançamento",
+            "short_name": "Voz",
+            "url": "./index.html?voz=1",
+            "icons": [
+                {
+                    "src": "./money-icon.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Novo lançamento",
+            "short_name": "Novo",
+            "url": "./index.html?novo=1",
+            "icons": [
+                {
+                    "src": "./money-icon.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
         }
     ]
 }
