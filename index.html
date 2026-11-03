@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Finanças Familiar</title>
-    <meta name="theme-color" content="#0b5566">
+    <meta name="theme-color" content="#fbe4ea">
     <meta name="color-scheme" content="light dark">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -1399,6 +1399,82 @@
                 transition-duration: 0.001ms !important;
             }
         }
+
+        /* ==================== Tema "Parker": rosa suave, categorias em barras, atalho de voz ==================== */
+        :root {
+            --bg: #fbe4ea;
+            --surface: rgba(255, 255, 255, 0.62);
+            --surface-2: rgba(255, 255, 255, 0.5);
+            --ink: #2a1f24;
+            --ink-soft: #7a6770;
+            --line: rgba(120, 60, 80, 0.13);
+            --brand: #2f4f31;
+            --brand-ink: #ffffff;
+            --brand-soft: rgba(47, 79, 49, 0.12);
+            --hero-bg: rgba(255, 255, 255, 0.55);
+            --hero-ink: #2a1f24;
+            --hero-soft: #7a6770;
+            --hero-neg: #bf3a27;
+            --raio-m: 18px;
+            --raio-g: 26px;
+        }
+        :root:not([data-theme="escuro"]) body {
+            background: linear-gradient(180deg, #f6d9ee 0%, #fbd5d9 40%, #fadfd2 100%) fixed;
+        }
+        :root:not([data-theme="escuro"]) .topo { background: transparent; }
+        :root:not([data-theme="escuro"]) .modal,
+        :root:not([data-theme="escuro"]) .login-caixa .campo input { background: #fff7f9; }
+        :root:not([data-theme="escuro"]) .btn-valores { border-color: var(--line); background: rgba(255, 255, 255, 0.55); color: var(--ink); }
+        :root:not([data-theme="escuro"]) .lanc-frente { background: transparent; }
+        .montante, .balanco, .conta, .lanc-lista, .meta-corpo { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+        .montante { border: 1px solid var(--line); }
+        .montante-valor { font-size: 2rem; }
+        .conteudo { display: flex; flex-direction: column; }
+        .conteudo > * { order: 10; }
+        .pk-resumo { order: 0; }
+        #secaoCategorias { order: 1; margin-top: 18px; }
+        .conteudo > .aviso { order: 2; }
+        .conteudo > .faixa-filtros { order: 3; }
+        .secao, .balanco, .montante { scroll-margin-top: 84px; }
+
+        .pk-resumo { margin-top: 6px; padding: 4px 6px; }
+        .pk-linha { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+        .pk-rot { font-weight: 700; color: var(--ink-soft); }
+        .pk-rec { color: var(--pos); font-weight: 800; font-variant-numeric: tabular-nums; }
+        .pk-des { margin-top: 10px; }
+        .pk-des .pk-rot { color: var(--ink); font-size: 1.05rem; }
+        .pk-des strong { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+
+        #secaoCategorias .secao-topo h2 { color: var(--ink-soft); font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; }
+        #listaCategorias { gap: 10px; }
+        .cat-linha { position: relative; overflow: hidden; min-height: 60px; padding: 0; border: 0; border-radius: 18px; background: rgba(255, 255, 255, 0.35); }
+        .cat-fundo { position: absolute; inset: 0 auto 0 0; width: calc(42% + var(--w) * 0.58%); border-radius: 18px; background: var(--cor); transition: width 0.4s ease; }
+        .cat-conteudo { position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; }
+        .cat-conteudo strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cat-emoji { font-size: 1.35rem; }
+        .cat-linha[aria-pressed="true"] { outline: 2px solid var(--brand); background: rgba(255, 255, 255, 0.5); }
+
+        /* Barra de baixo: navegação, microfone e botão + */
+        .barra-base { position: fixed; right: 0; bottom: calc(14px + var(--area-base)); left: 0; z-index: 30; display: flex; justify-content: center; padding: 0 16px; pointer-events: none; }
+        .barra-in { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 520px; pointer-events: auto; }
+        .pk-nav { display: flex; gap: 2px; padding: 5px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(90, 30, 60, 0.12); }
+        .pk-nav-btn, .pk-mic { display: grid; place-items: center; width: 46px; height: 46px; border: 0; border-radius: 50%; background: transparent; color: var(--ink); }
+        .pk-nav-btn:active { background: var(--surface-2); }
+        .pk-nav-btn svg, .pk-mic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .pk-espaco { flex: 1; }
+        .pk-mic { width: 52px; height: 52px; border: 1px solid var(--line); background: var(--surface); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 8px 24px rgba(90, 30, 60, 0.12); }
+        .fab { justify-content: center; width: 60px; min-height: 60px; padding: 0; border-radius: 50%; }
+        .fab-mais { margin: 0; font-size: 2rem; font-weight: 400; }
+        .toast { bottom: calc(96px + var(--area-base)); }
+
+        /* Falar o lançamento */
+        .voz-centro { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 0 4px; }
+        .voz-mic { display: grid; place-items: center; width: 88px; height: 88px; border: 0; border-radius: 50%; background: var(--brand); color: var(--brand-ink); }
+        .voz-mic svg { width: 38px; height: 38px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .voz-mic.ouvindo { animation: pulso 1.2s ease-out infinite; background: var(--neg); }
+        @keyframes pulso { 0% { box-shadow: 0 0 0 0 rgba(191, 58, 39, 0.45); } 100% { box-shadow: 0 0 0 26px rgba(191, 58, 39, 0); } }
+        #vStatus { color: var(--ink-soft); font-weight: 600; text-align: center; }
+        .campo .interruptor { margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -1441,6 +1517,11 @@
         </header>
 
         <main class="conteudo">
+            <section class="pk-resumo" aria-label="Resumo do período">
+                <div class="pk-linha"><span class="pk-rot">💵 Receita</span><strong class="pk-rec" id="pkReceita">+ R$ 0,00</strong></div>
+                <div class="pk-linha pk-des"><span class="pk-rot">💸 Despesas</span><strong id="pkDespesa">R$ 0,00</strong></div>
+            </section>
+
             <section class="montante" aria-label="Montante nas contas">
                 <div class="montante-topo">
                     <p class="montante-rotulo" id="montanteRotulo">Montante nas contas</p>
@@ -1503,7 +1584,7 @@
 
             <section class="secao" id="secaoCategorias" aria-labelledby="tituloCategorias" hidden>
                 <div class="secao-topo">
-                    <h2 id="tituloCategorias">Para onde vai o dinheiro</h2>
+                    <h2 id="tituloCategorias">Categorias</h2>
                     <small class="sub">Toque para filtrar</small>
                 </div>
                 <ul class="lista" id="listaCategorias"></ul>
@@ -1531,12 +1612,18 @@
             </section>
         </main>
 
-        <div class="fab-area">
-            <button type="button" class="fab" data-action="novo-lancamento">
-                <span class="fab-mais" aria-hidden="true">+</span>
-                Novo lançamento
-            </button>
-        </div>
+        <nav class="barra-base" aria-label="Navegação e novo lançamento">
+            <div class="barra-in">
+                <div class="pk-nav">
+                    <button type="button" class="pk-nav-btn" data-action="ir-secao" data-alvo="topo" aria-label="Início"><svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg></button>
+                    <button type="button" class="pk-nav-btn" data-action="ir-secao" data-alvo="tituloLancamentos" aria-label="Lançamentos"><svg viewBox="0 0 24 24"><path d="M4 8h15M15 4l4 4-4 4"/><path d="M20 16H5M9 12l-4 4 4 4"/></svg></button>
+                    <button type="button" class="pk-nav-btn" data-action="ir-secao" data-alvo="secaoCategorias" aria-label="Categorias"><svg viewBox="0 0 24 24"><path d="M12 3v9h9"/><path d="M21 12A9 9 0 1 1 12 3"/></svg></button>
+                </div>
+                <span class="pk-espaco"></span>
+                <button type="button" class="pk-mic" data-action="abrir-voz" aria-label="Lançar por voz"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                <button type="button" class="fab" data-action="novo-lancamento" aria-label="Novo lançamento"><span class="fab-mais" aria-hidden="true">+</span></button>
+            </div>
+        </nav>
     </div>
 
     <div class="overlay" id="overlay" data-action="clicar-fora"></div>
@@ -1692,6 +1779,33 @@
         </form>
     </div>
 
+    <!-- ==================== Lançar por voz ==================== -->
+    <div class="modal" id="modalVoz" role="dialog" aria-modal="true" aria-labelledby="vTitulo">
+        <div class="modal-cab">
+            <h2 id="vTitulo">Falar o lançamento</h2>
+            <button type="button" class="icone-btn" data-action="fechar-modal" aria-label="Fechar">✕</button>
+        </div>
+        <div class="modal-corpo">
+            <div class="voz-centro">
+                <button type="button" class="voz-mic" id="btnMic" data-action="voz-ouvir" aria-label="Ouvir"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+                <p id="vStatus"></p>
+            </div>
+            <div class="campo">
+                <label for="vTexto">O que você disse</label>
+                <input type="text" id="vTexto" autocomplete="off" placeholder="Ex.: gastei 45 reais no mercado ontem">
+                <p class="campo-dica">Dá para falar ou digitar. Diga o valor, o que foi e, se quiser, o dia e a conta. Para receitas: "recebi 3000 de salário".</p>
+                <p class="campo-erro" id="vErro" role="alert" hidden></p>
+            </div>
+            <div class="campo">
+                <label class="interruptor"><span>Salvar sem conferir</span><input type="checkbox" id="vDireto"></label>
+                <p class="campo-dica">Só salva direto quando entender valor, categoria e conta.</p>
+            </div>
+        </div>
+        <div class="modal-acoes">
+            <button type="button" class="btn" data-action="voz-usar">Criar lançamento</button>
+        </div>
+    </div>
+
     <!-- ==================== Conta / cartão ==================== -->
     <div class="modal" id="modalConta" role="dialog" aria-modal="true" aria-labelledby="cTitulo">
         <div class="modal-cab">
@@ -1838,6 +1952,6 @@
         <img id="zoomImg" src="" alt="Comprovante ampliado">
     </div>
 
-    <script src="./app.js?v=2026.10.13-7"></script>
+    <script src="./app.js?v=2026.11.03-1"></script>
 </body>
 </html>
