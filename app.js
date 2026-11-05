@@ -16,7 +16,7 @@ const MAX_SYNC_RETRIES = 3;
 const SYNC_DEBOUNCE_MS = 2000;
 const SYNC_PERIODICO_MS = 5 * 60 * 1000;
 const SYNC_VALIDADE_MS = 2 * 60 * 1000;
-const VERSAO_APP = '2026.10.13-7';
+const VERSAO_APP = '2026.11.04-1';
 const LIMITE_LISTA = 60;
 const URL_JSPDF = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 const URL_AUTOTABLE = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
@@ -1314,7 +1314,7 @@ function renderBalanco() {
     let notaMontante = 'Contas correntes e limite dos cartões até o fim do período escolhido.';
     if (noMesAtual) {
         rotuloMontante = 'Montante nas contas';
-        notaMontante = 'Soma das contas correntes (só o que já foi pago ou recebido) e do limite disponível dos cartões.';
+        notaMontante = '';
     } else if (emMes && ui.mes < mesAtualISO()) {
         rotuloMontante = `Montante no fim de ${nomeDoMes}`;
         notaMontante = 'Contas correntes e limite dos cartões no fim desse mês.';
@@ -1324,6 +1324,7 @@ function renderBalanco() {
     }
     byId('montanteRotulo').textContent = rotuloMontante;
     byId('montanteNota').textContent = notaMontante;
+    byId('montanteNota').hidden = !notaMontante;
     const elementoMontante = byId('montanteValor');
     elementoMontante.textContent = formatarMoeda(montante);
     elementoMontante.classList.toggle('negativo', montante < 0);
@@ -1343,11 +1344,24 @@ function renderBalanco() {
     valor.textContent = formatarMoeda(balanco.fim);
     valor.classList.toggle('negativo', balanco.fim < 0);
 
-    byId('eqInicio').textContent = formatarMoeda(balanco.inicio);
-    byId('eqRec').textContent = `+ ${formatarMoeda(balanco.receitas.total)}`;
-    byId('eqRecDetalhe').textContent = detalheDoGrupo(balanco.receitas, 'recebido', 'a receber');
-    byId('eqDes').textContent = `- ${formatarMoeda(balanco.despesas.total)}`;
-    byId('eqDesDetalhe').textContent = detalheDoGrupo(balanco.despesas, 'pago', 'a pagar');
+    // Receitas = sobra do período anterior + tudo o que já foi recebido.
+    // Despesas = tudo o que já foi pago. O que ainda está agendado fica na previsão do fim do mês.
+    const receitasNoCampo = arredondar(balanco.inicio + balanco.receitas.feito);
+    byId('eqRec').textContent = formatarMoeda(receitasNoCampo);
+    const partesRec = [`${formatarMoeda(balanco.receitas.feito)} recebidos`];
+    partesRec.push(`${formatarMoeda(balanco.inicio)} de ${emMes ? 'sobra do mês passado' : 'sobra anterior'}`);
+    byId('eqRecDetalhe').textContent = partesRec.join(' + ');
+    byId('eqDes').textContent = formatarMoeda(balanco.despesas.feito);
+    byId('eqDesDetalhe').textContent = balanco.despesas.feito > 0 ? 'Somente o que já foi pago' : 'Nada pago neste período';
+
+    const aReceber = balanco.receitas.aberto;
+    const aPagar = balanco.despesas.aberto;
+    const previsao = byId('previsaoDetalhe');
+    const partesPrev = [];
+    if (aReceber > 0) partesPrev.push(`${formatarMoeda(aReceber)} a receber`);
+    if (aPagar > 0) partesPrev.push(`${formatarMoeda(aPagar)} a pagar`);
+    previsao.hidden = partesPrev.length === 0;
+    previsao.textContent = partesPrev.length ? `Já considera ${partesPrev.join(' e ')}.` : '';
 
     const temTransferencias = Math.abs(balanco.transferencias) > 0.005;
     byId('eqTransLinha').hidden = !temTransferencias;
@@ -1384,7 +1398,7 @@ function renderContas() {
     else if (noMesAtual) rotuloSaldo = 'Saldo';
     else if (emMes) rotuloSaldo = 'Saldo previsto';
 
-    lista.innerHTML = dados.contas.map(conta => {
+    const htmlConta = conta => {
         const cartao = conta.tipo === 'cartao';
         const compras = cartao ? gastosDoCartaoNoPeriodo(conta, periodo) : 0;
         // Mês atual: situação real de hoje. Outros meses: saldo no fim do mês (zero antes da conta existir)
@@ -1417,20 +1431,30 @@ function renderContas() {
                 </button>
                 ${cartao ? `<div class="conta-extras"><button type="button" class="mini mini-link" data-action="pagar-fatura" data-id="${esc(conta.id)}">Pagar fatura</button></div>` : ''}
             </li>`;
-    }).join('');
+    };
+    const soContas = dados.contas.filter(c => c.tipo !== 'cartao');
+    const soCartoes = dados.contas.filter(c => c.tipo === 'cartao');
+    const grupo = (titulo, itens) => itens.length === 0
+        ? ''
+        : `<li class="conta-grupo" aria-hidden="true">${titulo}</li>${itens.map(htmlConta).join('')}`;
+    lista.innerHTML = grupo('🏦 Contas', soContas) + grupo('💳 Cartões', soCartoes);
 }
 
 function renderCategorias() {
     const secao = byId('secaoCategorias');
     const porCategoria = new Map();
     let total = 0;
-    lancamentosDoPeriodo().forEach(t => {
+    // Ignora o filtro de categoria aqui para a lista continuar completa e dar para trocar ou desfazer o filtro.
+    const { inicio, fim } = limitesDoPeriodo();
+    dados.transacoes.filter(t => t.data >= inicio && t.data <= fim && (!ui.busca || String(t.descricao).toLowerCase().includes(ui.busca))).forEach(t => {
         if (t.tipo !== 'despesa' || t.categoria_id === CAT_TRANSFERENCIA) return;
         const valor = Number(t.valor) || 0;
         porCategoria.set(t.categoria_id, (porCategoria.get(t.categoria_id) || 0) + valor);
         total += valor;
     });
     secao.hidden = total <= 0;
+    byId('btnLimparCat').hidden = !ui.categoria;
+    byId('dicaCategorias').textContent = ui.categoria ? 'Filtrando' : 'Toque para filtrar';
     if (total <= 0) return;
 
     const linhas = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
@@ -2625,6 +2649,12 @@ const ACOES = {
     'filtro-visao': elemento => {
         ui.visao = elemento.dataset.visao;
         ui.mostrar = LIMITE_LISTA;
+        renderizar();
+    },
+    'limpar-categoria': () => {
+        ui.categoria = '';
+        ui.mostrar = LIMITE_LISTA;
+        sincronizarCamposDeFiltro();
         renderizar();
     },
     'filtrar-categoria': elemento => {
