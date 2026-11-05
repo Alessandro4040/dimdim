@@ -376,7 +376,8 @@
 
         .balanco {
             margin-top: 14px;
-            padding: 16px 18px 4px;
+            padding: 6px 18px 0;
+            overflow: hidden;
             border: 1px solid var(--line);
             border-radius: var(--raio-g);
             background: var(--surface);
@@ -401,7 +402,53 @@
         }
 
         .equacao {
-            margin-top: 10px;
+            margin-top: 0;
+        }
+
+        .equacao li:first-child {
+            border-top: 0;
+        }
+
+        .previsao {
+            margin: 0 -18px;
+            padding: 14px 18px 16px;
+            border-top: 1px solid var(--line);
+            border-radius: 0 0 var(--raio-g) var(--raio-g);
+            background: var(--surface-2);
+        }
+
+        .previsao-detalhe {
+            color: var(--ink-soft);
+            font-size: 0.84rem;
+        }
+
+        .conta-grupo {
+            margin: 6px 4px 0;
+            color: var(--ink-soft);
+            font-size: 0.82rem;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .conta-grupo:first-child {
+            margin-top: 0;
+        }
+
+        .topo-cat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-limpar-cat {
+            min-height: 36px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 999px;
+            background: var(--neg-soft);
+            color: var(--neg);
+            font-weight: 800;
         }
 
         .equacao li {
@@ -1448,33 +1495,24 @@
                 </div>
                 <p class="montante-valor" id="montanteValor">R$ 0,00</p>
                 <p class="montante-detalhe" id="montanteDetalhe" hidden></p>
-                <p class="montante-nota" id="montanteNota">Soma das contas correntes e do limite disponível dos cartões.</p>
+                <p class="montante-nota" id="montanteNota" hidden></p>
             </section>
 
             <section class="balanco" aria-label="Balanço do mês">
-                <p class="balanco-rotulo" id="balancoRotulo"></p>
-                <p class="balanco-valor" id="saldoTotal">R$ 0,00</p>
                 <ul class="equacao">
-                    <li>
-                        <div>
-                            <span>Começou o mês com</span>
-                            <small>O que já estava nas contas</small>
-                        </div>
-                        <strong id="eqInicio">R$ 0,00</strong>
-                    </li>
                     <li>
                         <div>
                             <span>Receitas</span>
                             <small id="eqRecDetalhe"></small>
                         </div>
-                        <strong class="mais" id="eqRec">+ R$ 0,00</strong>
+                        <strong class="mais" id="eqRec">R$ 0,00</strong>
                     </li>
                     <li>
                         <div>
                             <span>Despesas</span>
                             <small id="eqDesDetalhe"></small>
                         </div>
-                        <strong class="menos" id="eqDes">- R$ 0,00</strong>
+                        <strong class="menos" id="eqDes">R$ 0,00</strong>
                     </li>
                     <li id="eqTransLinha" hidden>
                         <div>
@@ -1484,6 +1522,11 @@
                         <strong id="eqTrans"></strong>
                     </li>
                 </ul>
+                <div class="previsao">
+                    <p class="balanco-rotulo" id="balancoRotulo"></p>
+                    <p class="balanco-valor" id="saldoTotal">R$ 0,00</p>
+                    <p class="previsao-detalhe" id="previsaoDetalhe" hidden></p>
+                </div>
             </section>
 
             <button type="button" class="aviso" id="avisoPendentes" data-action="ver-pendentes" hidden></button>
@@ -1504,7 +1547,10 @@
             <section class="secao" id="secaoCategorias" aria-labelledby="tituloCategorias" hidden>
                 <div class="secao-topo">
                     <h2 id="tituloCategorias">Para onde vai o dinheiro</h2>
-                    <small class="sub">Toque para filtrar</small>
+                    <div class="topo-cat">
+                        <small class="sub" id="dicaCategorias">Toque para filtrar</small>
+                        <button type="button" class="btn-limpar-cat" id="btnLimparCat" data-action="limpar-categoria" hidden>✕ Limpar filtro</button>
+                    </div>
                 </div>
                 <ul class="lista" id="listaCategorias"></ul>
             </section>
@@ -1838,6 +1884,6 @@
         <img id="zoomImg" src="" alt="Comprovante ampliado">
     </div>
 
-    <script src="./app.js?v=2026.10.13-7"></script>
+    <script src="./app.js?v=2026.11.04-1"></script>
 </body>
 </html>
